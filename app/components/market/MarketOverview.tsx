@@ -52,7 +52,7 @@ export function MarketOverview() {
           </div>
           <div>
             <p className="text-sm text-muted-foreground">Market Cap Change (24h)</p>
-            <p className={`text-lg font-bold ${marketData.marketCapChange24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+            <p className={`text-lg font-bold ${marketData.marketCapChange24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {formatPercentage(marketData.marketCapChange24h)}
             </p>
           </div>

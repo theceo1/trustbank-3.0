@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { MarketRateService } from '@/app/lib/services/market-rate';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,10 +14,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const rate = await QuidaxService.getSwapRate({
+    const rate = await MarketRateService.getRate({
       amount: body.amount,
-      from_currency: body.type === 'buy' ? 'ngn' : body.currency.toLowerCase(),
-      to_currency: body.type === 'buy' ? body.currency.toLowerCase() : 'ngn'
+      currency_pair: `${body.currency.toLowerCase()}_ngn`,
+      type: body.type
     });
 
     return NextResponse.json(rate);

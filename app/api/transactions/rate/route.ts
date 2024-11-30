@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { rateLimiter } from "@/app/lib/middleware/rateLimiter";
-import { QuidaxService } from "@/app/lib/services/quidax";
+import { MarketRateService } from "@/app/lib/services/market-rate";
 
 export async function GET(request: Request) {
   const rateLimitResult = await rateLimiter(request);
@@ -19,7 +19,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const rate = await QuidaxService.getRate({
+    const rate = await MarketRateService.getRate({
       amount,
       currency_pair: `${currency.toLowerCase()}_ngn`,
       type

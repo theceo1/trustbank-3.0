@@ -13,6 +13,8 @@ import { PaymentMethodType } from '@/app/types/payment';
 import { formatCurrency } from '@/app/lib/utils';
 import { Loader2 } from 'lucide-react';
 import { FeeService } from '@/app/lib/services/fees';
+import { formatNumber } from '@/app/lib/utils/format';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 interface TransactionPreviewProps {
   type: 'buy' | 'sell';
@@ -75,89 +77,82 @@ export default function TransactionPreview({
   }, [amount, fees.total, type]);
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Transaction Preview</CardTitle>
-        <CardDescription>
-          Please review your {type} order details
-        </CardDescription>
-      </CardHeader>
-      
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex justify-between text-sm">
-            <span>Amount</span>
-            <span className="font-medium">
-              {formatCurrency(amount, 'NGN')}
-            </span>
-          </div>
-          
-          <div className="flex justify-between text-sm">
-            <span>Crypto Amount</span>
-            <span className="font-medium">
-              {cryptoAmount} {cryptoCurrency}
-            </span>
-          </div>
-
-          <div className="flex justify-between text-sm">
-            <span>Rate</span>
-            <span className="font-medium">
-              {formatCurrency(rate, 'NGN')}/{cryptoCurrency}
-            </span>
-          </div>
-
-          <Separator className="my-2" />
-
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Exchange Fee</span>
-              <span>{formattedFees.quidax}</span>
+    <Dialog open={true} onOpenChange={() => onCancel?.()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Confirm Trade</DialogTitle>
+          <DialogDescription>
+            Please review your {type} order details
+          </DialogDescription>
+        </DialogHeader>
+        
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span>Amount</span>
+              <span className="font-medium">
+                ₦{formatNumber(amount)}
+              </span>
             </div>
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Service Fee</span>
-              <span>{formattedFees.platform}</span>
+            
+            <div className="flex justify-between text-sm">
+              <span>Crypto Amount</span>
+              <span className="font-medium">
+                {formatNumber(cryptoAmount)} {cryptoCurrency.toUpperCase()}
+              </span>
             </div>
-            <div className="flex justify-between text-sm text-muted-foreground">
-              <span>Processing Fee</span>
-              <span>{formattedFees.processing}</span>
+
+            <div className="flex justify-between text-sm">
+              <span>Exchange Rate</span>
+              <span className="font-medium">
+                ₦{formatNumber(rate)}/$
+              </span>
             </div>
-          </div>
 
-          <Separator className="my-2" />
+            <Separator className="my-2" />
 
-          <div className="flex justify-between font-medium">
-            <span>Total {type === 'buy' ? 'Pay' : 'Receive'}</span>
-            <span className="text-lg">
-              {formatCurrency(total, 'NGN')}
-            </span>
+            <div className="space-y-1">
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Exchange Fee</span>
+                <span>{formattedFees.quidax}</span>
+              </div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Service Fee</span>
+                <span>{formattedFees.platform}</span>
+              </div>
+              <div className="flex justify-between text-sm text-muted-foreground">
+                <span>Processing Fee</span>
+                <span>{formattedFees.processing}</span>
+              </div>
+            </div>
+
+            <Separator className="my-2" />
+
+            <div className="flex justify-between font-medium">
+              <span>Total {type === 'buy' ? 'Pay' : 'Receive'}</span>
+              <span className="text-lg">
+                {formatCurrency(total, 'NGN')}
+              </span>
+            </div>
           </div>
         </div>
-      </CardContent>
 
-      <CardFooter className="flex gap-2">
-        <Button
-          variant="outline"
-          onClick={onCancel}
-          className="w-full"
-          disabled={isLoading}
-        >
-          Cancel
-        </Button>
-        <Button
-          onClick={onConfirm}
-          className="w-full"
-          disabled={isLoading}
-        >
-          {isLoading ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Processing
-            </>
-          ) : (
-            `Confirm ${type}`
-          )}
-        </Button>
-      </CardFooter>
-    </Card>
+        <DialogFooter>
+          <Button variant="outline" onClick={onCancel} disabled={isLoading}>
+            Cancel
+          </Button>
+          <Button onClick={onConfirm} disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Processing
+              </>
+            ) : (
+              'Proceed to Payment'
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

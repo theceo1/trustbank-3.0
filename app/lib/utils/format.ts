@@ -11,10 +11,11 @@ export const formatCurrency = (
     }).format(value);
   };
   
-  export const formatNumber = (value: number, compact = false): string => {
-    return new Intl.NumberFormat('en-US', {
-      notation: compact ? 'compact' : 'standard',
-      maximumFractionDigits: 2
+  export const formatNumber = (value: number, options: Intl.NumberFormatOptions = {}): string => {
+    return new Intl.NumberFormat('en-NG', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 8,
+      ...options
     }).format(value);
   };
   

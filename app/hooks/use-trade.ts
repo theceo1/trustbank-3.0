@@ -9,6 +9,7 @@ import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
 import { KYCService } from '@/app/lib/services/kyc';
 import { TradeErrorHandler } from '@/app/lib/services/tradeErrorHandler';
 import { PaymentMethodType } from '../types/payment';
+import { MarketRateService } from '@/app/lib/services/market-rate';
 
 const RATE_EXPIRY_TIME = 30000; // 30 seconds
 const RATE_REFRESH_BUFFER = 5000; // 5 seconds before expiry
@@ -33,31 +34,44 @@ export function useTrade() {
     setTradeState(prev => ({ ...prev, ...updates }));
   }, []);
 
-  const fetchRate = useCallback(async (force = false) => {
-    if (!tradeState.amount || Number(tradeState.amount) <= 0) {
-      updateTradeState({ rate: null, rateExpiry: null });
-      return;
-    }
-
-    if (!force && tradeState.rate && tradeState.rateExpiry && Date.now() < tradeState.rateExpiry - RATE_REFRESH_BUFFER) {
-      return;
-    }
+  const fetchRate = useCallback(async (silent = false) => {
+    if (!tradeState.amount || !tradeState.cryptoCurrency) return;
 
     try {
-      const response = await UnifiedTradeService.getRate({
-        amount: Number(tradeState.amount),
-        currency_pair: `${tradeState.cryptoCurrency}_usd`,
-        type: tradeState.tradeType
-      });
+      if (!silent) {
+        setTradeState(prev => ({ ...prev, isLoading: true }));
+      }
 
-      updateTradeState({
-        rate: response,
+      const response = await fetch(
+        `/api/transactions/rate?` + 
+        new URLSearchParams({
+          currency: tradeState.cryptoCurrency,
+          amount: tradeState.amount.toString(),
+          type: tradeState.tradeType
+        })
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch rate');
+      }
+
+      const data = await response.json();
+      setTradeState(prev => ({
+        ...prev,
+        rate: data,
         rateExpiry: Date.now() + RATE_EXPIRY_TIME
-      });
+      }));
     } catch (error) {
-      TradeErrorHandler.handleError(error, 'Rate fetch failed', toast);
+      toast({
+        id: `trade-rate-error-${Date.now()}`,
+        title: "Error",
+        description: "Failed to fetch rate. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setTradeState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [tradeState.amount, tradeState.cryptoCurrency, tradeState.tradeType, tradeState.rate, tradeState.rateExpiry, updateTradeState, toast]);
+  }, [tradeState.amount, tradeState.cryptoCurrency, tradeState.tradeType, toast]);
 
   // Auto-refresh rate management
   useEffect(() => {

@@ -1,16 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { WebSocketService } from '@/app/lib/services/websocket';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { MarketRateService } from '@/app/lib/services/market-rate';
 
 interface UseRateUpdatesProps {
   cryptoCurrency: string;
   onRateExpired?: () => void;
-}
-
-interface RateParams {
-  currency_pair: string;
-  amount?: number;
-  type?: 'buy' | 'sell';
 }
 
 export function useRateUpdates({ cryptoCurrency, onRateExpired }: UseRateUpdatesProps) {
@@ -26,7 +19,7 @@ export function useRateUpdates({ cryptoCurrency, onRateExpired }: UseRateUpdates
     setError(null);
 
     try {
-      const rateResponse = await QuidaxService.getRate({
+      const rateResponse = await MarketRateService.getRate({
         amount: 1,
         currency_pair: `${cryptoCurrency.toLowerCase()}_ngn`,
         type: 'buy'
@@ -43,14 +36,10 @@ export function useRateUpdates({ cryptoCurrency, onRateExpired }: UseRateUpdates
 
   useEffect(() => {
     fetchInitialRate();
-
     const RATE_EXPIRY_TIME = 5 * 60 * 1000;
+    const REFRESH_INTERVAL = 30000; // 30 seconds
 
-    const pair = `${cryptoCurrency.toLowerCase()}_ngn`;
-    const unsubscribe = WebSocketService.subscribe(pair, (data) => {
-      setRate(data.rate);
-      setLastUpdateTime(Date.now());
-    });
+    const refreshInterval = setInterval(fetchInitialRate, REFRESH_INTERVAL);
 
     const expiryCheck = setInterval(() => {
       const timeSinceUpdate = Date.now() - lastUpdateTime;
@@ -61,7 +50,7 @@ export function useRateUpdates({ cryptoCurrency, onRateExpired }: UseRateUpdates
     }, 60000);
 
     return () => {
-      unsubscribe();
+      clearInterval(refreshInterval);
       clearInterval(expiryCheck);
     };
   }, [cryptoCurrency, fetchInitialRate, lastUpdateTime, onRateExpired]);

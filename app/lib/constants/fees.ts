@@ -1,8 +1,9 @@
 import { PaymentMethodType } from '@/app/types/payment';
 
 export const FEES = {
-  QUIDAX_RATE: 0.014, // 1.4%
-  PLATFORM_RATE: 0.016, // 1.6%
+  QUIDAX: 0.014, // 1.4%
+  PLATFORM: 0.016, // 1.6%
+  PROCESSING: 0.01, // 1% for payment processing
   
   PAYMENT_METHODS: {
     bank_transfer: {

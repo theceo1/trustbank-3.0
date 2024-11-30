@@ -1,5 +1,5 @@
 //app/lib/services/quidax.ts
-import { CreateTradeParams, QuidaxTradeResponse, QuidaxRateParams, TradeDetails, OrderStatus, TradeType, TradeRateResponse } from '@/app/types/trade';
+import { CreateTradeParams, QuidaxTradeResponse, QuidaxRateParams, TradeDetails, OrderStatus, TradeType, TradeRateResponse, GetRateParams } from '@/app/types/trade';
 import { createHmac } from 'crypto';
 import { CONFIG } from './config';
 import { FEES } from '../constants/fees';
@@ -46,8 +46,8 @@ export class QuidaxService {
     return response;
   }
 
-  private static baseUrl = process.env.NEXT_PUBLIC_QUIDAX_API_URL;
-  private static apiKey = process.env.QUIDAX_SECRET_KEY;
+  private static baseUrl = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static apiKey = process.env.QUIDAX_SECRET_KEY || '';
   private static webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
 
   static async getSwapRate(params: {
@@ -123,35 +123,23 @@ export class QuidaxService {
     }
   }
 
-  static async getRate(params: QuidaxRateParams) {
+  static async getRate(params: GetRateParams) {
     try {
       const response = await fetch(
-        `${this.baseUrl}/instant_orders/rate?` + 
-        new URLSearchParams({
-          amount: params.amount.toString(),
-          currency_pair: params.currency_pair,
-          type: params.type
-        }), {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Accept': 'application/json'
+        `${this.baseUrl}/instant_orders/rate?amount=${params.amount}&currency_pair=${params.currency_pair}&type=${params.type}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json'
+          }
         }
-      });
+      );
 
       if (!response.ok) {
         throw new Error(`Rate fetch failed: ${response.statusText}`);
       }
 
-      const data = await response.json();
-      return {
-        rate: Number(data.data.rate),
-        total: Number(data.data.total),
-        fees: {
-          quidax: Number(data.data.fees?.quidax || 0),
-          platform: Number(data.data.fees?.platform || 0),
-          processing: Number(data.data.fees?.processing || 0)
-        }
-      };
+      return await response.json();
     } catch (error) {
       console.error('Get rate error:', error);
       throw error;

@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { QuidaxService } from '@/app/lib/services/quidax';
-import { MarketStats as MarketStatsType } from '@/app/types/market';
+import { formatCurrency } from '@/app/lib/utils';
 
 interface DisplayMarketData {
-  last_price: string;
+  last_price: number;
   price_change_24h: number;
 }
 
@@ -14,18 +13,16 @@ export default function MarketStats() {
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
-        const data = await QuidaxService.getMarketStats('btc_ngn');
-        if (!data) {
-          throw new Error('No market data received');
+        const response = await fetch('/api/market/stats');
+        if (!response.ok) {
+          throw new Error('Failed to fetch market data');
         }
         
-        // Transform the MarketStats data into DisplayMarketData
-        const displayData: DisplayMarketData = {
-          last_price: data.ticker.last,
-          price_change_24h: Number(data.ticker.change)
-        };
-        
-        setMarketData(displayData);
+        const data = await response.json();
+        setMarketData({
+          last_price: data.last_price,
+          price_change_24h: data.price_change_24h
+        });
         setError(null);
       } catch (err) {
         setError('Failed to load market data');
@@ -52,12 +49,12 @@ export default function MarketStats() {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-gray-600">Last Price</p>
-          <p className="text-xl font-bold">₦{marketData.last_price}</p>
+          <p className="text-xl font-bold">{formatCurrency(marketData.last_price, 'NGN')}</p>
         </div>
         <div>
           <p className="text-gray-600">24h Change</p>
           <p className={`text-xl font-bold ${marketData.price_change_24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {marketData.price_change_24h}%
+            {marketData.price_change_24h.toFixed(2)}%
           </p>
         </div>
       </div>

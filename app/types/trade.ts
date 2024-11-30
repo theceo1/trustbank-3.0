@@ -65,6 +65,7 @@ export interface TradeRateRequest {
 
 export interface TradeRateResponse {
   rate: number;
+  usdRate?: number;
   total: number;
   fees: {
     quidax: number;    // 1.4%
@@ -121,4 +122,10 @@ export interface TradeRate {
   rate: number;
   total: number;
   expiresAt?: number;
+}
+
+export interface GetRateParams {
+  amount: number;
+  currency_pair: string;
+  type: 'buy' | 'sell';
 }

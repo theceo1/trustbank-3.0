@@ -64,8 +64,8 @@ export function StandardTradeForm({
 
       {rate && (
         <div className="text-sm text-muted-foreground">
-          <p>Rate: 1 {currency.toUpperCase()} = ${formatCurrency(rate.rate)}</p>
-          <p>Total: ${formatCurrency(rate.total)}</p>
+          <p>Rate: 1 {currency.toUpperCase()} = {formatCurrency(rate.rate)}</p>
+          <p>Total: {formatCurrency(rate.total)}</p>
         </div>
       )}
     </div>

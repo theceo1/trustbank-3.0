@@ -19,10 +19,14 @@ import { TradeTypeSelector } from './TradeTypeSelector';
 import { SwapForm } from './SwapForm';
 import { StandardTradeForm } from './StandardTradeForm';
 import { PaymentMethodType } from '@/app/types/payment';
+import { MarketRateService } from '@/app/lib/services/market-rate';
 
 interface TradeFormProps {
   initialType?: TradeType;
 }
+
+const RATE_EXPIRY_TIME = 30000; // 30 seconds
+const RATE_REFRESH_BUFFER = 5000; // 5 seconds before expiry
 
 export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   const { user } = useUser();
@@ -70,19 +74,22 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
     }
     
     try {
-      const rateData = await QuidaxService.getRate({
+      setIsLoading(true);
+      const rate = await MarketRateService.getRate({
         amount: Number(tradeState.amount),
         currency_pair: `${tradeState.fromCurrency.toLowerCase()}_ngn`,
-        type: tradeState.type
+        type: tradeState.type as 'buy' | 'sell'
       });
       
       setTradeState(prev => ({
         ...prev,
-        rate: rateData
+        rate,
+        rateExpiry: Date.now() + RATE_EXPIRY_TIME
       }));
     } catch (error) {
-      console.error('Rate fetch error:', error);
-      setTradeState(prev => ({ ...prev, rate: null }));
+      handleError(error, 'Failed to fetch rate');
+    } finally {
+      setIsLoading(false);
     }
   }, [tradeState.amount, tradeState.type, tradeState.fromCurrency]);
 
@@ -128,23 +135,28 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   };
 
   const handleTradeConfirm = async () => {
-    if (!tradeState.pendingTrade) return;
+    if (!await checkKYCAndProceed()) return;
     
     try {
-      setIsLoading(true);
-      const trade = await UnifiedTradeService.createTrade(tradeState.pendingTrade);
-      const paymentFlow = await PaymentFlowController.initiate(trade);
-
-      if (paymentFlow.type === 'external') {
-        window.location.href = paymentFlow.redirect;
-      } else {
-        router.push(paymentFlow.redirect);
+      setTradeState(prev => ({ ...prev, isLoading: true }));
+      const tradeDetails = createTradeDetails();
+      
+      // Create the trade record
+      const trade = await UnifiedTradeService.createTrade(tradeDetails);
+      
+      if (trade) {
+        // Redirect to payment flow
+        router.push(`/trade/payment/${trade.id}`);
       }
-    } catch (error) {
-      handleError(error, 'Failed to process trade');
+    } catch (error: any) {
+      toast({
+        id: "trade-failed",
+        title: "Trade Failed",
+        description: error.message || "Failed to create trade",
+        variant: "destructive"
+      });
     } finally {
-      setIsLoading(false);
-      setShowTradeDetails(false);
+      setTradeState(prev => ({ ...prev, isLoading: false }));
     }
   };
 

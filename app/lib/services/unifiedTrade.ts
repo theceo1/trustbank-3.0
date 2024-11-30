@@ -10,6 +10,7 @@ import {
   QuidaxRateParams
 } from '@/app/types/trade';
 import { handleError } from '@/app/lib/utils/errorHandler';
+import { MarketRateService } from './market-rate';
 
 export class UnifiedTradeService {
   static async createTrade(params: TradeParams): Promise<TradeDetails> {
@@ -200,5 +201,17 @@ export class UnifiedTradeService {
     } catch (error) {
       throw handleError(error, 'Failed to update trade status');
     }
+  }
+
+  static async getRateForTrade(params: {
+    amount: number;
+    currency: string;
+    type: 'buy' | 'sell';
+  }) {
+    return await MarketRateService.getRate({
+      amount: params.amount,
+      currency_pair: `${params.currency.toLowerCase()}_ngn`,
+      type: params.type
+    });
   }
 }

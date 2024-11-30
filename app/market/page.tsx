@@ -159,7 +159,7 @@ export default function MarketPage() {
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-2xl font-bold">{selectedCrypto}/USDT</h2>
-                <span className={`px-2 py-1 rounded-full text-sm ${isConnected ? 'bg-green-500/10 text-green-500' : 'bg-yellow-500/10 text-yellow-500'}`}>
+                <span className={`px-2 py-1 rounded-full text-sm ${isConnected ? 'bg-green-500/10 text-green-600' : 'bg-yellow-500/10 text-yellow-600'}`}>
                   {isConnected ? 'Live' : 'Connecting...'}
                 </span>
               </div>
