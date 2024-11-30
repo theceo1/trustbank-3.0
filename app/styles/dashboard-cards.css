@@ -1,0 +1,19 @@
+@media (max-width: 640px) {
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+  
+    .dashboard-card {
+      @apply p-3;
+    }
+  
+    .dashboard-card-content {
+      @apply text-sm;
+    }
+  
+    .dashboard-card-title {
+      @apply text-base;
+    }
+  }

@@ -1,0 +1,17 @@
+version: '1.0'
+buckets:
+  - name: avatars
+    public: true
+    file_size_limit: 50000000
+    allowed_mime_types:
+      - image/png
+      - image/jpeg
+      - image/gif
+  
+  - name: files
+    public: false
+    file_size_limit: 50000000
+    allowed_mime_types:
+      - application/pdf
+      - application/vnd.ms-excel
+      - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet 
