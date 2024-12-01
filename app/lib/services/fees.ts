@@ -17,8 +17,8 @@ export class FeeService {
   }> {
     const { amount } = params;
     return {
-      quidax: amount * FEES.QUIDAX_RATE,
-      platform: amount * FEES.PLATFORM_RATE,
+      quidax: amount * FEES.QUIDAX,
+      platform: amount * FEES.PLATFORM,
       processing: this.getProcessingFees('bank_transfer', amount)
     };
   }

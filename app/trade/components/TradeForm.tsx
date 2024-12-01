@@ -101,8 +101,9 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
 
   const handleTradeSubmit = async () => {
     if (!user) {
-      toast.error("Authentication Required", {
+      toast({
         id: "auth-required",
+        title: "Authentication Required",
         description: "Please login to continue trading"
       });
       router.push('/login');
@@ -114,8 +115,9 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
       const kycStatus = await checkKYCStatus();
       
       if (!kycStatus) {
-        toast.error("KYC Required", {
+        toast({
           id: "kyc-required",
+          title: "KYC Required",
           description: "Please complete your KYC verification to start trading"
         });
         router.push('/kyc');
@@ -164,8 +166,9 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
         router.push(`/trade/payment/${trade.id}`);
       }
     } catch (error: any) {
-      toast.error("Trade Failed", {
+      toast({
         id: "trade-failed",
+        title: "Trade Failed",
         description: error.message || "Failed to create trade"
       });
     } finally {
@@ -177,8 +180,9 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
     const kycStatus = await checkKYCStatus();
     
     if (!kycStatus) {
-      toast.error("KYC Required", {
+      toast({
         id: "kyc-check-failed",
+        title: "KYC Required",
         description: "Please complete your KYC verification to proceed"
       });
       router.push('/kyc');

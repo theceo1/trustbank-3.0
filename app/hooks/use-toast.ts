@@ -2,40 +2,38 @@
 
 import { toast as sonnerToast } from 'sonner';
 
-type ToastOptions = {
+type ToastProps = {
   id?: string;
+  title?: string;
   description?: string;
   variant?: 'default' | 'destructive';
 };
 
+interface ExtendedToast {
+  (props: ToastProps): void;
+  error(title: string, options?: Omit<ToastProps, 'title'>): void;
+  success(title: string, options?: Omit<ToastProps, 'title'>): void;
+  warning(title: string, options?: Omit<ToastProps, 'title'>): void;
+  info(title: string, options?: Omit<ToastProps, 'title'>): void;
+}
+
 export function useToast() {
-  const toast = {
-    // For direct toast calls with full options
-    ...sonnerToast,
-    
-    // For error toasts
-    error: (title: string, options?: ToastOptions) => {
-      sonnerToast.error(title, {
-        id: options?.id,
-        description: options?.description,
-      });
-    },
+  const toast = sonnerToast as unknown as ExtendedToast;
 
-    // For success toasts
-    success: (title: string, options?: ToastOptions) => {
-      sonnerToast.success(title, {
-        id: options?.id,
-        description: options?.description,
-      });
-    },
+  toast.error = (title: string, options?: Omit<ToastProps, 'title'>) => {
+    sonnerToast.error(title, options);
+  };
 
-    // For warning toasts
-    warning: (title: string, options?: ToastOptions) => {
-      sonnerToast.warning(title, {
-        id: options?.id,
-        description: options?.description,
-      });
-    }
+  toast.success = (title: string, options?: Omit<ToastProps, 'title'>) => {
+    sonnerToast.success(title, options);
+  };
+
+  toast.warning = (title: string, options?: Omit<ToastProps, 'title'>) => {
+    sonnerToast.warning(title, options);
+  };
+
+  toast.info = (title: string, options?: Omit<ToastProps, 'title'>) => {
+    sonnerToast.info(title, options);
   };
 
   return { toast };
