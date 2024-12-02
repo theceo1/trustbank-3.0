@@ -60,6 +60,8 @@ export class KYCService {
 
   static async verifyNIN(userId: string, nin: string, selfieImage: string): Promise<boolean> {
     try {
+      const base64Image = selfieImage.split(',')[1];
+      
       const response = await fetch('/api/verify', {
         method: 'POST',
         headers: {
@@ -67,31 +69,39 @@ export class KYCService {
         },
         body: JSON.stringify({
           nin,
-          selfieImage
+          selfieImage: base64Image,
+          metadata: {
+            user_id: userId,
+            verification_type: 'nin'
+          }
         })
       });
 
       const data = await response.json();
       
-      if (!data.success) {
-        throw new Error('NIN verification failed');
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'NIN verification failed');
       }
 
-      // Update user's KYC status
+      // Update user's KYC status in user_profiles table
       const { error } = await this.supabase
-        .from('profiles')
+        .from('user_profiles')
         .update({
-          kyc_tier: 'tier1',
-          kyc_status: 'verified',
+          kyc_level: 1,
+          kyc_status: 'pending',
+          verification_ref: data.reference,
           kyc_documents: {
             nin: nin,
-            verified_at: new Date().toISOString(),
+            submitted_at: new Date().toISOString(),
             verification_data: data.data
           }
         })
-        .eq('user_id', userId);
+        .eq('id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Profile update error:', error);
+        throw new Error('Failed to update verification status');
+      }
 
       return true;
     } catch (error) {
@@ -122,14 +132,13 @@ export class KYCService {
 
   static async getKYCInfo(userId: string): Promise<KYCInfo> {
     try {
-      // First check if the columns exist
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
+      const { data: profileData, error: profileError } = await this.supabase
+        .from('user_profiles')
+        .select('kyc_tier, kyc_status, kyc_documents')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (profileError) {
+      if (profileError && profileError.code !== 'PGRST116') {
         console.error('KYC fetch error:', profileError);
         return {
           currentTier: 'unverified',
@@ -138,11 +147,39 @@ export class KYCService {
         };
       }
 
-      // Return default values if columns don't exist
+      if (!profileData) {
+        // Create initial profile if it doesn't exist
+        const { data: newProfile, error: createError } = await this.supabase
+          .from('user_profiles')
+          .insert([{
+            user_id: userId,
+            kyc_tier: 'unverified',
+            kyc_status: 'pending',
+            kyc_documents: {}
+          }])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Profile creation error:', createError);
+          return {
+            currentTier: 'unverified',
+            status: 'pending',
+            documents: {}
+          };
+        }
+
+        return {
+          currentTier: newProfile.kyc_tier,
+          status: newProfile.kyc_status,
+          documents: newProfile.kyc_documents
+        };
+      }
+
       return {
-        currentTier: profileData?.kyc_tier || 'unverified',
-        status: profileData?.kyc_status || 'pending',
-        documents: profileData?.kyc_documents || {}
+        currentTier: profileData.kyc_tier,
+        status: profileData.kyc_status,
+        documents: profileData.kyc_documents
       };
     } catch (error) {
       console.error('KYC service error:', error);
@@ -225,6 +262,126 @@ export class KYCService {
         status: 'unverified',
         reason: 'Failed to verify KYC status'
       };
+    }
+  }
+
+  static async getVerificationHistory(userId: string) {
+    const { data, error } = await this.supabase
+      .from('verification_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching verification history:', error);
+      return [];
+    }
+
+    return data;
+  }
+
+  static async verifyBVN(userId: string, bvn: string): Promise<boolean> {
+    try {
+      const response = await fetch('/api/verify/bvn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          bvn,
+          metadata: {
+            user_id: userId,
+            verification_type: 'bvn'
+          }
+        })
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'BVN verification failed');
+      }
+
+      // Update user's KYC status
+      const { error } = await this.supabase
+        .from('user_profiles')
+        .update({
+          kyc_level: 2,
+          kyc_status: 'pending',
+          verification_ref: data.reference,
+          kyc_documents: {
+            bvn: bvn,
+            submitted_at: new Date().toISOString(),
+            verification_data: data.data
+          }
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Profile update error:', error);
+        throw new Error('Failed to update verification status');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('BVN verification error:', error);
+      throw error;
+    }
+  }
+
+  static async verifyPhotoID(
+    userId: string, 
+    data: {
+      idType: 'passport' | 'drivers_license';
+      selfieImage: string;
+      idImage: string;
+    }
+  ): Promise<boolean> {
+    try {
+      const response = await fetch('/api/verify/photo-id', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ...data,
+          metadata: {
+            user_id: userId,
+            verification_type: 'photo_id'
+          }
+        })
+      });
+
+      const responseData = await response.json();
+      
+      if (!response.ok || !responseData.success) {
+        throw new Error(responseData.message || 'Photo ID verification failed');
+      }
+
+      // Update user's KYC status
+      const { error } = await this.supabase
+        .from('user_profiles')
+        .update({
+          kyc_level: 3,
+          kyc_status: 'pending',
+          verification_ref: responseData.reference,
+          kyc_documents: {
+            id_type: data.idType,
+            submitted_at: new Date().toISOString(),
+            verification_data: responseData.data
+          }
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Profile update error:', error);
+        throw new Error('Failed to update verification status');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Photo ID verification error:', error);
+      throw error;
     }
   }
 }

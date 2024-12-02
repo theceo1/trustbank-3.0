@@ -1,14 +1,25 @@
-//app/hooks/use-toast.ts
-import * as React from "react"
+// hooks/use-toast.ts
+'use client';
 
-import { Toast } from "@/app/components/ui/toast";
-import { useToast as useToastPrimitive } from "@/app/components/ui/use-toast";
+import { toast } from '@/components/ui/toast';
 
-export interface ToastProps extends Omit<Toast, 'action'> {
-  action?: React.ReactElement;
-}
+type ToastProps = {
+  id?: string;
+  title: string;
+  description?: string;
+  variant?: 'default' | 'destructive' | 'warning';
+};
 
-export function useToast() {
-  const { toast } = useToastPrimitive();
-  return { toast };
-}
+export const useToast = () => {
+  const showToast = (props: ToastProps) => {
+    if (props.variant === 'destructive') {
+      return toast.error(props.title, props.description);
+    } else if (props.variant === 'warning') {
+      return toast.warning(props.title, props.description);
+    } else {
+      return toast.success(props.title, props.description);
+    }
+  };
+
+  return { toast: showToast };
+};

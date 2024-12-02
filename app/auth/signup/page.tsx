@@ -40,10 +40,9 @@ export default function SignUp() {
     
     if (!acceptedTerms) {
       toast({
-        id: "terms-required",
         title: "Terms Required",
         description: "Please accept the terms and conditions to continue",
-        variant: "destructive",
+        variant: "destructive"
       });
       return;
     }
@@ -68,18 +67,17 @@ export default function SignUp() {
       router.push('/dashboard');
       
       toast({
-        id: "account-created",
         title: "Account created",
         description: "Welcome! Complete your ID verification to start trading.",
+        variant: "default"
       });
     } catch (error) {
       console.error('Signup error:', error);
       setError(error instanceof Error ? error.message : 'Failed to create account');
       toast({
-        id: "account-creation-error",
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to create account",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setIsLoading(false);

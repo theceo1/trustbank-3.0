@@ -4,7 +4,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase/client';
-import { Database } from '@/types/supabase';
+import { useToast } from '@/hooks/use-toast';
 
 // Update interface to match the database structure
 interface AdminRole {
@@ -52,6 +52,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const router = useRouter();
+  const { toast } = useToast();
 
   const logout = async () => {
     const { error } = await supabase.auth.signOut();
@@ -77,19 +78,19 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
           setIsAdmin(false);
           setAdminUser(null);
           setIsLoading(false);
+          router.push('/auth/login?redirect=/admin/dashboard');
           return;
         }
 
-        // First check admin_access_cache
-        const { data: accessData, error: accessError } = await supabase
+        // First check cache
+        const { data: cacheData } = await supabase
           .from('admin_access_cache')
-          .select('is_admin')
+          .select('is_admin, permissions')
           .eq('user_id', session.user.id)
           .single();
 
-        if (!accessError && accessData?.is_admin) {
-          // If cached as admin, get full admin details
-          const { data: adminData, error: adminError } = await supabase
+        if (cacheData?.is_admin) {
+          const { data: adminData } = await supabase
             .from('admin_users')
             .select(`
               id,
@@ -101,60 +102,44 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
               )
             `)
             .eq('user_id', session.user.id)
-            .single() as { data: AdminDataResponse | null, error: any };
+            .single();
 
-          if (!adminError && adminData && adminData.is_active) {
-            // Fix: Handle the role data structure correctly
-            const roleData: AdminRole = Array.isArray(adminData.role) 
-              ? {
-                  name: adminData.role[0]?.name || '',
-                  permissions: adminData.role[0]?.permissions || {}
+          if (adminData?.is_active) {
+            const roleData = Array.isArray(adminData.role) 
+              ? adminData.role[0] 
+              : adminData.role;
+
+            if (roleData) {
+              setIsAdmin(true);
+              setAdminUser({
+                id: adminData.id,
+                user_id: adminData.user_id,
+                is_active: adminData.is_active,
+                role: {
+                  name: roleData.name,
+                  permissions: roleData.permissions
                 }
-              : adminData.role 
-                ? {
-                    name: adminData.role.name || '',
-                    permissions: adminData.role.permissions || {}
-                  }
-                : {
-                    name: '',
-                    permissions: {}
-                  };
-            
-            setIsAdmin(true);
-            setAdminUser({
-              id: adminData.id,
-              user_id: adminData.user_id,
-              is_active: adminData.is_active,
-              role: roleData
-            });
-            
-            if (window.location.pathname === '/' || window.location.pathname === '/dashboard') {
-              router.push('/admin/dashboard');
+              });
+              
+              if (window.location.pathname === '/auth/login' || window.location.pathname === '/dashboard') {
+                router.push('/admin/dashboard');
+              }
+              return;
             }
-            return;
           }
         }
 
-        setIsAdmin(false);
-        setAdminUser(null);
+        // If not admin, redirect to dashboard
+        router.push('/dashboard');
       } catch (error) {
         console.error('Admin check error:', error);
-        setIsAdmin(false);
-        setAdminUser(null);
+        router.push('/dashboard');
       } finally {
         setIsLoading(false);
       }
     };
 
     checkAdminStatus();
-
-    const { data: authListener } = supabase.auth.onAuthStateChange(() => {
-      checkAdminStatus();
-    });
-
-    return () => {
-      authListener?.subscription.unsubscribe();
-    };
   }, [router]);
 
   return (

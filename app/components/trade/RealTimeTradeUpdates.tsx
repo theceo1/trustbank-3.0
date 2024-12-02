@@ -28,16 +28,14 @@ export function RealTimeTradeUpdates({ tradeId, onUpdate }: RealTimeTradeUpdates
           // Show toast notification based on status
           if (newStatus === 'completed') {
             toast({
-              id: "trade-completed",
               title: 'Trade Completed',
-              description: 'Your trade has been processed successfully',
+              description: 'Your trade has been processed successfully'
             });
           } else if (newStatus === 'failed') {
             toast({
-              id: "trade-failed",
               title: 'Trade Failed',
               description: 'There was an issue processing your trade',
-              variant: 'destructive',
+              variant: 'destructive'
             });
           }
         }

@@ -10,7 +10,9 @@ import { motion } from 'framer-motion';
 import Webcam from 'react-webcam';
 import { ArrowRight } from 'lucide-react';
 import BackButton from '@/components/ui/back-button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Shield, CheckCircle, AlertCircle } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 export default function VerificationPage() {
   const router = useRouter();
@@ -84,77 +86,76 @@ export default function VerificationPage() {
     router.push(tier.route);
   };
 
+  const fadeInUp = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.5 }
+  };
+
   return (
-    <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 pt-20">
+    <div className="container max-w-4xl mx-auto px-4 py-8">
       <BackButton />
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+      <motion.div 
+        className="text-center mb-8"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
       >
-        <h1 className="text-2xl font-bold mb-6">Account Verification</h1>
-        <div className="grid gap-6 md:grid-cols-3">
-          {tiers.map((tier) => (
-            <Card key={tier.key} className="relative">
+        <h1 className="text-3xl font-bold mb-2">Identity Verification</h1>
+        <p className="text-gray-600">Complete verification to unlock platform features</p>
+      </motion.div>
+
+      <div className="grid gap-6 md:grid-cols-3">
+        {tiers.map((tier, index) => (
+          <motion.div
+            key={tier.key}
+            initial="initial"
+            animate="animate"
+            transition={{ delay: index * 0.2 }}
+            {...fadeInUp}
+          >
+            <Card className="h-full relative overflow-hidden">
+              {kycInfo?.currentTier === tier.key && (
+                <div className="absolute top-2 right-2">
+                  <CheckCircle className="text-green-500 h-6 w-6" />
+                </div>
+              )}
+              
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className={KYC_TIERS[tier.key as keyof typeof KYC_TIERS].color}>
-                    {tier.name}
-                  </span>
-                  {kycInfo?.currentTier === tier.key && (
-                    <span className="text-sm text-green-500">✓ Verified</span>
-                  )}
-                </CardTitle>
-                <p className="text-sm text-muted-foreground">{tier.description}</p>
+                <Shield className="h-8 w-8 mb-2 text-green-600" />
+                <h3 className="text-xl font-semibold">{tier.name}</h3>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Requirements:</h4>
-                    <ul className="text-sm space-y-1 list-disc list-inside">
-                      {tier.requirements.map((req, index) => (
-                        <li key={index}>{req}</li>
-                      ))}
-                    </ul>
-                  </div>
 
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Transaction Limits:</h4>
-                    <ul className="text-sm space-y-1">
-                      <li>Daily: ₦{KYC_TIERS[tier.key as keyof typeof KYC_TIERS].dailyLimit.toLocaleString()}</li>
-                      <li>Monthly: {
-                        tier.key === 'tier3' 
-                          ? 'Unlimited' 
-                          : `₦${KYC_TIERS[tier.key as keyof typeof KYC_TIERS].monthlyLimit.toLocaleString()}`
-                      }</li>
-                    </ul>
-                  </div>
-
-                  <Button 
-                    onClick={() => handleStartVerification(tier)}
-                    className="w-full mt-4"
-                    variant={kycInfo?.currentTier === tier.key ? "outline" : "default"}
-                    disabled={
-                      (tier.key === "tier2" && (!kycInfo || kycInfo.currentTier === "unverified")) ||
-                      (tier.key === "tier3" && (!kycInfo || kycInfo.currentTier !== "tier2")) ||
-                      kycInfo?.currentTier === tier.key
-                    }
-                  >
-                    {kycInfo?.currentTier === tier.key ? (
-                      "Already Verified"
-                    ) : (
-                      <>
-                        Start Verification
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </>
-                    )}
-                  </Button>
+              <CardContent className="space-y-4">
+                <Progress 
+                  value={kycInfo?.currentTier === tier.key ? 100 : 0} 
+                  className="h-2"
+                />
+                <p className="text-sm text-gray-600">{tier.description}</p>
+                <div className="space-y-2">
+                  <h4 className="font-medium">Requirements:</h4>
+                  <ul className="text-sm space-y-1">
+                    {tier.requirements.map((req, i) => (
+                      <li key={i} className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-500" />
+                        {req}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               </CardContent>
+
+                  <CardFooter>
+                <Button
+                  onClick={() => handleStartVerification(tier)}
+                  className="w-full bg-green-600 hover:bg-green-300 text-white hover:text-black transition-all duration-300"
+                >
+                  {kycInfo?.currentTier === tier.key ? 'Verified' : 'Start Verification'}
+                </Button>
+              </CardFooter>
             </Card>
-          ))}
-        </div>
-      </motion.div>
+          </motion.div>
+        ))}
+      </div>
     </div>
   );
 }

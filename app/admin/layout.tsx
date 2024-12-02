@@ -1,3 +1,4 @@
+// app/admin/layout.tsx
 "use client";
 
 import { useEffect } from "react";
@@ -5,26 +6,34 @@ import { useRouter } from "next/navigation";
 import { useAdminAuth } from "./context/AdminAuthContext";
 import AdminHeader from "./components/AdminHeader";
 import AdminSidebar from "./components/AdminSidebar";
+import { useToast } from "@/hooks/use-toast";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAdmin, isLoading, adminUser } = useAdminAuth();
+  const { isAdmin, isLoading } = useAdminAuth();
   const router = useRouter();
+  const { toast } = useToast();
+
+  console.log('Not admin, redirecting to home');
 
   useEffect(() => {
     if (!isLoading && !isAdmin) {
-      console.log('Not admin, redirecting to home');
-      router.push('/');
+      toast({
+        title: "Access Denied",
+        description: "Admin privileges required",
+        variant: "destructive"
+      });
+      router.push('/dashboard');
     }
-  }, [isAdmin, isLoading, router]);
+  }, [isAdmin, isLoading, router, toast]);
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <div>Loading...</div>
+        <div className="animate-pulse">Loading...</div>
       </div>
     );
   }

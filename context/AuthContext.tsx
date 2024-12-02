@@ -6,7 +6,7 @@ import { User } from '@supabase/supabase-js';
 import supabase from '@/lib/supabase/client';
 import { KYCInfo } from '@/app/types/kyc';
 
-export type AuthContextType = {
+export interface AuthContextType {
   user: User | null;
   signUp: (email: string, password: string) => Promise<{ user: User | null; error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ user: User | null; error: Error | null }>;
@@ -14,7 +14,7 @@ export type AuthContextType = {
   signInWithGoogle: () => Promise<any>;
   loading: boolean;
   kycInfo?: KYCInfo;
-};
+}
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -87,12 +87,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider value={{ 
       user, 
-      loading, 
-      signIn, 
-      signOut, 
-      signUp, 
-      signInWithGoogle,
-      kycInfo 
+      loading,
+      kycInfo,
+      signUp,
+      signIn,
+      signOut,
+      signInWithGoogle
     }}>
       {children}
     </AuthContext.Provider>

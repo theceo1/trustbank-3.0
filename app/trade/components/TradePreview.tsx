@@ -109,7 +109,7 @@ export function TradePreview({
             <Button
               onClick={onConfirm}
               disabled={isLoading}
-              className="h-12 bg-gradient-to-r from-primary to-primary/90"
+              className="h-12 bg-gradient-to-r from-green-600 to-green-500"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
@@ -118,7 +118,7 @@ export function TradePreview({
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
-                  Confirm
+                  Proceed to Payment
                   <ArrowRight className="h-4 w-4" />
                 </span>
               )}

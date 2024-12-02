@@ -1,32 +1,47 @@
-import { Button } from "@/components/ui/button";
 import { TradeType } from "@/app/types/trade";
-import { Copy, Send, Wallet, ArrowLeftRight } from 'lucide-react';
-
+import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
+import { ShoppingCart, Banknote, ArrowLeftRight, Send } from "lucide-react";
 interface TradeSelectorProps {
   value: TradeType;
   onChange: (type: TradeType) => void;
 }
 
 export function TradeTypeSelector({ value, onChange }: TradeSelectorProps) {
-  const types: { type: TradeType; label: string; icon: JSX.Element }[] = [
-    { type: 'buy', label: 'Buy', icon: <Wallet className="h-4 w-4" /> },
-    { type: 'sell', label: 'Sell', icon: <Copy className="h-4 w-4" /> },
-    { type: 'swap', label: 'Swap', icon: <ArrowLeftRight className="h-4 w-4" /> },
-    { type: 'send', label: 'Send', icon: <Send className="h-4 w-4" /> }
+  const tradeTypes = [
+    { type: 'buy', label: 'Buy', icon: ShoppingCart },
+    { type: 'sell', label: 'Sell', icon: Banknote },
+    { type: 'swap', label: 'Swap', icon: ArrowLeftRight },
+    { type: 'send', label: 'Send', icon: Send }
   ];
 
   return (
-    <div className="flex gap-2">
-      {types.map(({ type, label, icon }) => (
-        <Button
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
+      {tradeTypes.map(({ type, label, icon: Icon }) => (
+        <motion.button
           key={type}
-          variant={value === type ? "default" : "outline"}
-          onClick={() => onChange(type)}
-          className="flex-1"
+          onClick={() => onChange(type as TradeType)}
+          className={cn(
+            "relative flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-all",
+            "hover:bg-white dark:hover:bg-gray-700",
+            "focus:outline-none focus:ring-2 focus:ring-primary/50",
+            value === type ? 
+              "bg-green-600 text-white shadow-lg" : 
+              "text-gray-600 dark:text-gray-300"
+          )}
+          whileHover={{ scale: 1.02 }}
+          whileTap={{ scale: 0.98 }}
         >
-          {icon}
-          <span className="ml-2">{label}</span>
-        </Button>
+          <Icon className="h-4 w-4" />
+          {label}
+          {value === type && (
+            <motion.div
+              layoutId="activeIndicator"
+              className="absolute inset-0 bg-green-600 rounded-md -z-10"
+              transition={{ type: "spring", duration: 0.5 }}
+            />
+          )}
+        </motion.button>
       ))}
     </div>
   );

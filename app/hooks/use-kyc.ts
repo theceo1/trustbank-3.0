@@ -1,8 +1,13 @@
+// app/hooks/use-kyc.ts
+'use client';
+
 import { useState } from 'react';
-import { useToast } from '@/app/components/ui/use-toast';
+import { useToast } from '@/hooks/use-toast';
+import { useRouter } from 'next/navigation';
 
 export function useKYC() {
   const { toast } = useToast();
+  const router = useRouter();
   const [isVerifying, setIsVerifying] = useState(false);
 
   const checkKYCStatus = async () => {
@@ -12,19 +17,21 @@ export function useKYC() {
       const data = await response.json();
 
       if (!data.verified) {
-        toast({ 
-          id: 'kyc-required',
+        toast({
           title: "KYC Required",
           description: "Please complete your KYC verification to proceed",
           variant: "destructive"
         });
+        
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+        router.push('/profile/verification');
         return false;
       }
 
       return true;
     } catch (error) {
       toast({
-        id: 'kyc-error',
         title: "Error",
         description: "Failed to verify KYC status",
         variant: "destructive"

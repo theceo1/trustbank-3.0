@@ -12,14 +12,12 @@ export function Header() {
       await signOut();
       router.push('/auth/login');
       toast({
-        id: 'signout-success',
         title: "Success",
         description: "Signed out successfully"
       });
     } catch (error) {
       console.error('Error signing out:', error);
-      toast({   
-        id: 'signout-error',
+      toast({
         title: "Error",
         description: "Failed to sign out. Please try again.",
         variant: "destructive"

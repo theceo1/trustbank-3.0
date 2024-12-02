@@ -47,17 +47,17 @@ export async function middleware(req: NextRequest) {
     // Check if user is admin for /admin routes
     if (pathname.startsWith('/admin')) {
       if (!session?.user?.id) {
-        return NextResponse.redirect(new URL('/auth/login', req.url));
+        return NextResponse.redirect(new URL('/auth/login?redirect=/admin/dashboard', req.url));
       }
 
-      const { data: adminUser, error } = await supabase
+      const { data: adminUser } = await supabase
         .from('admin_users')
         .select('*, role:admin_roles(name, permissions)')
         .eq('user_id', session.user.id)
         .single();
 
-      if (error || !adminUser || !adminUser.is_active) {
-        return NextResponse.redirect(new URL('/', req.url));
+      if (!adminUser?.is_active) {
+        return NextResponse.redirect(new URL('/dashboard', req.url));
       }
     }
 

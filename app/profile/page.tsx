@@ -17,7 +17,8 @@ import {
   Key,
   Wallet,
   Copy,
-  Share
+  Share,
+  Share2
 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
@@ -31,6 +32,9 @@ import { KYCTierInfo } from "../components/profile/KYCTierInfo";
 import { KYCService } from "../lib/services/kyc";
 import { useQuery } from "@tanstack/react-query";
 import { KYCInfo } from "@/app/types/kyc";
+import { generateReferralCode } from "@/utils/referral";
+import { ProfileService } from "../lib/services/profile";
+import { Badge } from "@/components/ui/badge";
 
 export const dynamic = 'force-dynamic';
 
@@ -101,32 +105,28 @@ export default function ProfilePage() {
   useEffect(() => {
     const fetchUserData = async () => {
       try {
+        setIsLoading(true);
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUserData(user as ExtendedUser);
-          
-          // Fetch only existing columns
-          const { data: profileData, error: profileError } = await supabase
-            .from('user_profiles')
-            .select('referral_code, referral_count')
-            .eq('user_id', user.id)
-            .single();
+        
+        if (!user) {
+          router.push('/auth/login');
+          return;
+        }
 
-          if (profileError) {
-            console.error('Profile fetch error:', profileError);
-            return;
-          }
-          
-          if (profileData) {
-            setReferralCount(profileData.referral_count || 0);
-            setUserData(prev => ({
-              ...prev!,
-              user_metadata: {
-                ...prev!.user_metadata,
-                referral_code: profileData.referral_code
-              }
-            }));
-          }
+        const profile = await ProfileService.getProfile(user.id);
+        
+        if (profile) {
+          setUserData(user as ExtendedUser);
+          setReferralCount(profile.referral_count || 0);
+          setUserData(prev => ({
+            ...prev!,
+            user_metadata: {
+              ...prev!.user_metadata,
+              name: profile.full_name,
+              referral_code: profile.referral_code,
+              is_verified: profile.is_verified
+            }
+          }));
         }
       } catch (error) {
         console.error('Error fetching user data:', error);
@@ -140,8 +140,9 @@ export default function ProfilePage() {
         setIsLoading(false);
       }
     };
+
     fetchUserData();
-  }, [toast]);
+  }, [router, toast]);
 
   const handleSignOut = async () => {
     try {
@@ -189,165 +190,138 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="container mx-auto py-6 px-4 sm:px-6 lg:px-8 pt-20 space-y-8">
-        {/* Profile Header Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-        >
-          <Card className="w-full bg-card">
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div className="h-16 w-16 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-                    <UserIcon className="h-8 w-8 text-green-600 dark:text-green-400" />
+    <div className="container mx-auto px-4 py-8 mt-16 space-y-6 max-w-7xl">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-sm p-6">
+        <div className="flex flex-col space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold">
+                Welcome, {userData?.user_metadata?.name || userData?.email?.split('@')[0] || 'User'}
+              </h1>
+              <p className="text-gray-500">
+                Manage your account settings and preferences
+              </p>
+            </div>
+            <div className="flex items-center space-x-2">
+              {userData?.user_metadata?.is_verified && (
+                <Badge variant="default" className="bg-green-100 text-green-800">
+                  Verified Account
+                </Badge>
+              )}
+            </div>
+          </div>
+          <ProfileHeader />
+        </div>
+      </div>
+      
+      {/* Profile Stats */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="grid grid-cols-1 md:grid-cols-3 gap-6"
+      >
+        <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-gray-900">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Referral Code</p>
+                <h3 className="text-2xl font-bold">{userData?.user_metadata?.referral_code || '...'}</h3>
+              </div>
+              <Button
+                onClick={copyReferralCode}
+                variant="outline"
+                className="hover:bg-green-50"
+              >
+                <Copy className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-gray-900">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">Referrals</p>
+                <h3 className="text-2xl font-bold">{referralCount}</h3>
+              </div>
+              <Button
+                onClick={() => {
+                  if (userData?.user_metadata?.referral_code) {
+                    navigator.share({
+                      title: 'Join trustBank',
+                      text: `Use my referral code: ${userData.user_metadata.referral_code}`,
+                      url: window.location.origin
+                    }).catch(console.error);
+                  }
+                }}
+                className="bg-green-600 hover:bg-green-500"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-gray-900">
+          <CardContent className="p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-500">KYC Status</p>
+                <h3 className="text-2xl font-bold capitalize">{kycInfo?.status || 'Unverified'}</h3>
+              </div>
+              <Link href="/profile/verification">
+                <Button className="bg-green-600 hover:bg-green-500">
+                  <Shield className="w-4 h-4" />
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+
+      {/* Menu Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+      >
+        {menuItems.map((item, index) => (
+          <Link key={item.href} href={item.href}>
+            <Card className="hover:shadow-lg transition-shadow cursor-pointer bg-gradient-to-br from-green-50 to-white dark:from-green-900/20 dark:to-gray-900">
+              <CardContent className="p-6">
+                <div className="flex items-center space-x-4">
+                  <div className={`p-3 rounded-full bg-green-100 dark:bg-green-900/30 ${item.color}`}>
+                    {item.icon}
                   </div>
                   <div>
-                    <h1 className="text-2xl font-bold tracking-tight">{userData?.user_metadata?.name || 'User'}</h1>
-                    <p className="text-muted-foreground">{userData?.email}</p>
+                    <h3 className="font-semibold">{item.title}</h3>
+                    <p className="text-sm text-gray-500">{item.description}</p>
                   </div>
                 </div>
-                <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-                  <Link href="/profile/verification">
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      <Shield className="w-4 h-4 mr-2" />
-                      Verify Account
-                    </Button>
-                  </Link>
-                  <Link href="/profile/account-settings">
-                    <Button variant="outline" className="w-full sm:w-auto">
-                      <Settings className="w-4 h-4 mr-2" />
-                      Settings
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </motion.div>
 
-        {/* Referral Section */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+      {/* Sign Out Button */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.4 }}
+        className="flex justify-center mt-8"
+      >
+        <Button
+          onClick={handleSignOut}
+          variant="outline"
+          className="bg-red-50 hover:bg-red-100 text-red-600 border-red-200"
         >
-          <Card className="w-full bg-card">
-            <CardHeader>
-              <CardTitle className="text-xl">Referral Program</CardTitle>
-              <CardDescription>Share trustBank with friends and family</CardDescription>
-            </CardHeader>
-            <CardContent className="p-6">
-              <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <p className="text-sm font-medium">Your Referral Code:</p>
-                    <code className="bg-muted px-2 py-1 rounded text-sm font-mono">
-                      {userData?.user_metadata?.referral_code || 'Loading...'}
-                    </code>
-                    <Button 
-                      variant="ghost" 
-                      size="sm"
-                      onClick={copyReferralCode}
-                      className="h-8"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    Total Referrals: {referralCount}
-                  </p>
-                </div>
-                <Button 
-                  onClick={() => {
-                    if (userData?.user_metadata?.referral_code) {
-                      navigator.share({
-                        title: 'Join trustBank',
-                        text: `Use my referral code: ${userData.user_metadata.referral_code}`,
-                        url: window.location.origin
-                      }).catch(console.error);
-                    }
-                  }}
-                  className="bg-green-600 hover:bg-green-500"
-                >
-                  <Share className="w-4 h-4 mr-2" />
-                  Share Referral Code
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* KYC Status Banner */}
-        {kycInfo && !kycLoading && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <KYCTierInfo
-              currentTier={kycInfo.currentTier}
-              verificationStatus={kycInfo.status}
-              completedRequirements={[]}
-            />
-          </motion.div>
-        )}
-
-        {/* Menu Grid */}
-        <AnimatePresence>
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            transition={{ duration: 0.5 }}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            {menuItems.map((item, index) => (
-              <motion.div
-                key={item.href}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <Link href={item.href}>
-                  <Card className="group hover:shadow-lg transition-all duration-300 border-2 hover:border-green-500/20">
-                    <CardContent className="p-6">
-                      <div className="flex items-start space-x-4">
-                        <div className={`p-3 rounded-lg ${item.color} bg-opacity-10 group-hover:scale-110 transition-transform duration-300`}>
-                          {item.icon}
-                        </div>
-                        <div className="flex-1">
-                          <h3 className="font-semibold text-lg mb-1">{item.title}</h3>
-                          <p className="text-sm text-muted-foreground">{item.description}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              </motion.div>
-            ))}
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Sign Out Button */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          className="flex justify-center mt-12"
-        >
-          <Button 
-            onClick={handleSignOut} 
-            variant="destructive" 
-            size="lg"
-            className="px-8 hover:scale-105 transition-transform duration-300"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
-        </motion.div>
-      </div>
+          <LogOut className="w-4 h-4 mr-2" />
+          Sign Out
+        </Button>
+      </motion.div>
     </div>
   );
 }

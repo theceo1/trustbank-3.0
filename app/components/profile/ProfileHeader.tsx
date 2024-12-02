@@ -37,16 +37,17 @@ export default function ProfileHeader() {
 
       try {
         const profile = await ProfileService.getProfile(user.id);
-        setProfile(profile);
-        
-        // Fetch referral count if needed
-        if (profile.referral_code) {
-          const { count } = await supabase
-            .from('user_profiles')
-            .select('*', { count: 'exact' })
-            .eq('referred_by', profile.referral_code);
-            
-          setReferralCount(count || 0);
+        if (profile) {
+          setProfile(profile);
+          
+          if (profile.referral_code) {
+            const { count } = await supabase
+              .from('user_profiles')
+              .select('*', { count: 'exact' })
+              .eq('referred_by', profile.referral_code);
+              
+            setReferralCount(count || 0);
+          }
         }
       } catch (error) {
         console.error('Error:', error);

@@ -1,110 +1,85 @@
 import { createClient } from '@supabase/supabase-js';
-import * as dotenv from 'dotenv';
+import dotenv from 'dotenv';
 import { resolve } from 'path';
-import { User } from '@supabase/supabase-js';
 
-// Load environment variables from .env.local file
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
-if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
-  throw new Error('NEXT_PUBLIC_SUPABASE_URL is required');
-}
-
-if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required');
-}
-
-// Create Supabase client with service role key
 const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.SUPABASE_SERVICE_ROLE_KEY,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-async function createAdmin(email: string, password: string) {
+async function setupAdminTables() {
   try {
-    // First try to list all users and find by email
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
-    
-    if (listError) {
-      console.error('List Error:', listError);
-      throw listError;
-    }
-
-    let userId: string;
-    const existingUser = (users as User[]).find(user => user.email === email);
-
-    if (existingUser) {
-      userId = existingUser.id;
-      await supabase.auth.admin.updateUserById(userId, {
-        password: password
-      });
-    } else {
-      const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-
-      if (authError) {
-        console.error('Auth Error:', authError);
-        throw authError;
-      }
-
-      if (!authUser.user) {
-        throw new Error('No user created');
-      }
-
-      userId = authUser.user.id;
-    }
-
-    // Get admin role ID
-    const { data: roleData, error: roleError } = await supabase
+    // Get the existing admin role
+    const { data: roleData, error: roleQueryError } = await supabase
       .from('admin_roles')
       .select('id')
       .eq('name', 'admin')
       .single();
 
-    if (roleError) {
-      console.error('Role Error:', roleError);
-      throw roleError;
+    let adminRoleId;
+
+    if (!roleData) {
+      // Create admin role if it doesn't exist
+      const { data: newRole, error: roleError } = await supabase
+        .from('admin_roles')
+        .insert([{
+          name: 'admin',
+          permissions: ['manage_users', 'view_reports', 'manage_settings']
+        }])
+        .select()
+        .single();
+
+      if (roleError) {
+        console.error('Error creating admin role:', roleError);
+        return;
+      }
+      adminRoleId = newRole.id;
+    } else {
+      adminRoleId = roleData.id;
     }
 
-    // Create or update admin user record
-    const { error: adminError } = await supabase
+    // Create admin user entry
+    const { error: userError } = await supabase
       .from('admin_users')
       .upsert({
-        user_id: userId,
-        role_id: roleData.id,
-        is_active: true,
-        last_login_at: new Date().toISOString()
+        user_id: process.env.ADMIN_USER_ID,
+        role_id: adminRoleId,
+        is_active: true
       }, {
-        onConflict: 'user_id',
-        ignoreDuplicates: false
+        onConflict: 'user_id'
       });
 
-    if (adminError) {
-      console.error('Admin Error:', adminError);
-      throw adminError;
+    if (userError) {
+      console.error('Error creating admin user:', userError);
+      return;
     }
 
-    console.log('Admin user created/updated successfully');
+    // Update admin access cache
+    const { error: cacheError } = await supabase
+      .from('admin_access_cache')
+      .upsert({
+        user_id: process.env.ADMIN_USER_ID,
+        is_admin: true,
+        permissions: {
+          can_manage_users: true,
+          can_view_reports: true,
+          can_manage_settings: true
+        }
+      }, {
+        onConflict: 'user_id'
+      });
+
+    if (cacheError) {
+      console.error('Error updating admin access cache:', cacheError);
+      return;
+    }
+
+    console.log('Admin setup completed successfully');
   } catch (error) {
-    console.error('Error creating/updating admin:', error);
-    process.exit(1);
+    console.error('Setup failed:', error);
   }
 }
 
-// Get command line arguments
-const [email, password] = process.argv.slice(2);
-if (email && password) {
-  createAdmin(email, password);
-} else {
-  console.error('Please provide email and password');
-  process.exit(1);
-}
+setupAdminTables();

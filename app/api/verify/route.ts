@@ -1,45 +1,66 @@
 //app/api/verify/route.ts
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+
+const DOJAH_API_URL = `${process.env.NEXT_PUBLIC_DOJAH_API_URL}/api/v1/kyc/nin/verify`;
+
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: '10mb'
+    }
+  }
+};
 
 export async function POST(request: Request) {
   try {
-    const { nin, selfieImage } = await request.json();
+    const { nin, selfieImage, metadata } = await request.json();
     
-    if (!process.env.DOJAH_API_KEY || !process.env.DOJAH_APP_ID) {
-      throw new Error('Missing Dojah API credentials');
+    if (!selfieImage) {
+      throw new Error('Selfie image is required');
     }
 
-    const endpoint = 'https://api.dojah.io/api/v1/kyc/nin/verify';
-    const requestBody = {
-      nin,
-      selfie_image: selfieImage.replace(/^data:image\/jpeg;base64,/, '')
-    };
+    // Validate base64 image size
+    const sizeInBytes = Buffer.from(selfieImage, 'base64').length;
+    if (sizeInBytes > 5 * 1024 * 1024) { // 5MB limit
+      throw new Error('Selfie image is too large. Please try again with a smaller image.');
+    }
 
-    const response = await fetch(endpoint, {
+    const response = await fetch(DOJAH_API_URL, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.DOJAH_API_KEY}`,
-        'AppId': process.env.DOJAH_APP_ID,
-        'Accept': 'application/json',
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'AppId': process.env.DOJAH_APP_ID!,
+        'Authorization': process.env.DOJAH_API_KEY!
       },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify({
+        nin,
+        selfie_image: selfieImage,
+        metadata
+      })
     });
 
-    const responseData = await response.json();
-    
-    const isVerified = responseData.entity?.selfie_verification?.match === true && 
-                       responseData.entity?.selfie_verification?.confidence_value >= 90;
+    const data = await response.json();
+    console.log('Dojah API Response:', data);
+
+    if (!response.ok) {
+      throw new Error(data.error?.message || data.error || 'Identity verification failed. Please try again.');
+    }
 
     return NextResponse.json({ 
-      success: isVerified,
-      data: responseData.entity 
+      success: true, 
+      data: data.entity,
+      reference: data.reference_id
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('NIN verification error:', error);
-    return NextResponse.json({ error: 'Verification failed' }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      message: error.message === 'Invalid image uploaded for selfie_image'
+        ? 'Invalid selfie image. Please ensure your face is clearly visible and try again.'
+        : error.message === 'Your Secret Key could not be Authorized'
+          ? 'Service temporarily unavailable. Please try again later.'
+          : error.message || 'Verification failed'
+    }, { status: 500 });
   }
 }

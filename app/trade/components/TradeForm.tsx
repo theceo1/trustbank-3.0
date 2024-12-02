@@ -1,25 +1,24 @@
+// app/trade/components/TradeForm.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useUser } from '@/app/hooks/use-user';
-import { Button } from '@/components/ui/button';
-import { TradePreview } from './TradePreview';
-import { PaymentMethodSelector } from './PaymentMethodSelector';
-import { QuidaxService } from '@/app/lib/services/quidax';
-import { useToast } from '@/hooks/use-toast';
-import { TradeDetails, TradeType, TradeRateResponse } from '@/app/types/trade';
-import { UnifiedTradeService } from '@/app/lib/services/unified-trade';
 import { useKYC } from '@/app/hooks/use-kyc';
-import { handleError } from '@/app/lib/utils/errorHandler';
-import { Copy, Send, Wallet, ArrowLeftRight } from 'lucide-react';
-import { PaymentFlowController } from '@/app/trade/lib/paymentFlowController';
-import { FeeService } from '@/app/lib/services/fees';
-import { TradeTypeSelector } from './TradeTypeSelector';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from '@/components/ui/button';
+import { Loader2, ArrowRight } from 'lucide-react';
+import { TradePreview } from './TradePreview';
 import { SwapForm } from './SwapForm';
 import { StandardTradeForm } from './StandardTradeForm';
+import { TradeTypeSelector } from './TradeTypeSelector';
+import { TradeDetails, TradeType, TradeRateResponse } from '@/app/types/trade';
 import { PaymentMethodType } from '@/app/types/payment';
 import { MarketRateService } from '@/app/lib/services/market-rate';
+import { UnifiedTradeService } from '@/app/lib/services/unified-trade';
+import { KYCService } from '@/app/lib/services/kyc';
+import { FeeService } from '@/app/lib/services/fees';
+import { handleError } from '@/app/lib/utils/errorHandler';
 
 interface TradeFormProps {
   initialType?: TradeType;
@@ -100,16 +99,6 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   }, [fetchRate]);
 
   const handleTradeSubmit = async () => {
-    if (!user) {
-      toast({
-        id: "auth-required",
-        title: "Authentication Required",
-        description: "Please login to continue trading"
-      });
-      router.push('/login');
-      return;
-    }
-    
     try {
       setIsLoading(true);
       const kycStatus = await checkKYCStatus();
@@ -117,33 +106,48 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
       if (!kycStatus) {
         toast({
           id: "kyc-required",
-          title: "KYC Required",
-          description: "Please complete your KYC verification to start trading"
+          title: "KYC Verification Required",
+          description: "Please complete your identity verification to trade this amount",
+          variant: "destructive"
         });
-        router.push('/kyc');
+        
+        // Short delay before redirect to ensure toast is visible
+        setTimeout(() => {
+          router.push('/profile/verification');
+        }, 1500);
+        return;
+      }
+
+      // Check KYC eligibility
+      const eligibility = await KYCService.isEligibleForTrade(user!.id);
+
+      if (!eligibility.eligible) {
+        toast({
+          id: "kyc-tier-limit",
+          title: "Trade Not Allowed",
+          description: eligibility.reason || "Please upgrade your KYC tier to proceed with this trade",
+          variant: "destructive"
+        });
+        
+        setTimeout(() => {
+          router.push('/verification/upgrade');
+        }, 1500);
         return;
       }
 
       const fees = await FeeService.calculateFees({
-        user_id: user.id,
+        user_id: user!.id,
         currency: tradeState.fromCurrency,
         amount: Number(tradeState.amount)
       });
 
-      const tradeDetails = {
-        user_id: user.id,
-        type: tradeState.type,
-        currency: tradeState.fromCurrency,
-        amount: Number(tradeState.amount),
-        rate: tradeState.rate!.rate,
-        total: tradeState.rate!.total,
-        fees,
-        payment_method: tradeState.paymentMethod,
-        status: 'pending'
-      };
-
-      setShowTradeDetails(true);
-      setPendingTrade(tradeDetails as unknown as TradeDetails);
+      const tradeDetails = createTradeDetails();
+      
+      setTradeState(prev => ({
+        ...prev,
+        showPreview: true,
+        pendingTrade: tradeDetails
+      }));
     } catch (error) {
       handleError(error, 'Failed to prepare trade');
     } finally {
@@ -152,44 +156,29 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   };
 
   const handleTradeConfirm = async () => {
-    if (!await checkKYCAndProceed()) return;
-    
     try {
-      setTradeState(prev => ({ ...prev, isLoading: true }));
-      const tradeDetails = createTradeDetails();
+      setIsLoading(true);
       
-      // Create the trade record
-      const trade = await UnifiedTradeService.createTrade(tradeDetails);
+      const trade = await UnifiedTradeService.createTrade(tradeState.pendingTrade!);
       
       if (trade) {
-        // Redirect to payment flow
+        toast({
+          id: "trade-initiated",
+          title: "Trade Initiated",
+          description: "Proceeding to payment"
+        });
         router.push(`/trade/payment/${trade.id}`);
       }
-    } catch (error: any) {
+    } catch (error) {
       toast({
         id: "trade-failed",
         title: "Trade Failed",
-        description: error.message || "Failed to create trade"
+        description: error instanceof Error ? error.message : "Failed to create trade",
+        variant: "destructive"
       });
     } finally {
-      setTradeState(prev => ({ ...prev, isLoading: false }));
+      setIsLoading(false);
     }
-  };
-
-  const checkKYCAndProceed = async (): Promise<boolean> => {
-    const kycStatus = await checkKYCStatus();
-    
-    if (!kycStatus) {
-      toast({
-        id: "kyc-check-failed",
-        title: "KYC Required",
-        description: "Please complete your KYC verification to proceed"
-      });
-      router.push('/kyc');
-      return false;
-    }
-    
-    return true;
   };
 
   const SUPPORTED_CURRENCIES = [
@@ -228,7 +217,14 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="w-full max-w-md mx-auto space-y-6 p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl shadow-xl">
+      <div className="space-y-2">
+        {/* <h2 className="text-2xl font-bold tracking-tight">Trade Crypto</h2> */}
+        <p className="text-sm text-muted-foreground">
+          Buy, sell, swap or send cryptocurrency instantly
+        </p>
+      </div>
+
       <TradeTypeSelector 
         value={tradeState.type} 
         onChange={handleTradeTypeChange} 
@@ -255,21 +251,32 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
         />
       )}
 
-      {tradeState.showPreview ? (
+      <Button
+        onClick={handleTradeSubmit}
+        disabled={!tradeState.rate || tradeState.isLoading}
+        className="w-full h-12 bg-gradient-to-r from-green-600 to-green-500"
+      >
+        {tradeState.isLoading ? (
+          <span className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Processing
+          </span>
+        ) : (
+          <span className="flex items-center gap-2">
+            Review Trade
+            <ArrowRight className="h-4 w-4" />
+          </span>
+        )}
+      </Button>
+
+      {tradeState.showPreview && tradeState.pendingTrade && (
         <TradePreview
-          tradeDetails={tradeState.pendingTrade!}
+          tradeDetails={tradeState.pendingTrade}
           onConfirm={handleTradeConfirm}
           onCancel={() => setTradeState(prev => ({ ...prev, showPreview: false }))}
           isLoading={tradeState.isLoading}
+          isOpen={tradeState.showPreview}
         />
-      ) : (
-        <Button
-          onClick={handleTradeSubmit}
-          disabled={!tradeState.rate || tradeState.isLoading}
-          className="w-full"
-        >
-          Confirm Trade
-        </Button>
       )}
     </div>
   );

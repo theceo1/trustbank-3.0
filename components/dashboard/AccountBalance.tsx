@@ -65,7 +65,6 @@ export default function AccountBalance() {
                   total_deposits: 0,
                   total_withdrawals: 0,
                   pending_balance: 0,
-                  currency: '₦',
                   last_transaction_at: new Date().toISOString()
                 }
               ])
@@ -114,9 +113,8 @@ export default function AccountBalance() {
             setBalance({
               ...payload.new,
               total: payload.new.balance,
-              available: payload.new.balance - (payload.new.pending_balance || 0),
-              pending: payload.new.pending_balance || 0,
-              currency: '₦'
+              available: payload.new.balance - (payload.new.pending || 0),
+              pending: payload.new.pending || 0
             });
           }
         }
