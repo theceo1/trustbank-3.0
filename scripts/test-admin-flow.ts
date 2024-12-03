@@ -32,6 +32,7 @@ async function testAdminFlow() {
     const { data: roleData, error: roleError } = await supabase
       .from('admin_roles')
       .select('*')
+      .eq('name', 'super_admin')
       .single();
 
     console.log('Admin role data:', roleData);

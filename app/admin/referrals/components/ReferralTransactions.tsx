@@ -1,3 +1,4 @@
+//app/admin/referrals/components/ReferralTransactions.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -38,7 +39,7 @@ import {
 } from "lucide-react";
 import supabase from "@/lib/supabase/client";
 import { format } from "date-fns";
-import { TransactionsSkeleton } from "../../components/TransactionsSkeleton";
+import { TransactionsSkeleton } from "@/app/components/skeletons/TransactionsSkeleton";
 import { TransactionService } from "@/app/lib/services/transaction";
 import { ReferralTransaction } from "@/app/types/transactions";
 import { TransactionStatusBadge } from "@/app/components/ui/transaction-status-badge";

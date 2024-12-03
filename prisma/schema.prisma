@@ -1,70 +1,264 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+  schemas   = ["auth", "public"]
 }
 
+// Public Schema Models
 model Trade {
-  id              String         @id @default(cuid())
-  userId          String
-  type            String
-  status          String
-  amount          Float
-  currency        String
-  quidax_reference String?
-  metadata        Json?
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  user            User          @relation(fields: [userId], references: [id])
+  id                             String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                        String                @db.Uuid
+  type                           String
+  currency                       String
+  amount                         Decimal               @db.Decimal
+  rate                           Decimal               @db.Decimal
+  status                         String                @default("pending")
+  payment_method                 String
+  quidax_reference               String?
+  payment_url                    String?
+  createdAt                      DateTime?             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                      DateTime?             @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  fees                           Json?                 @default("{\"network\": 0, \"service\": 0}")
+  metadata                       Json?                 @default("{}")
+  updated_by                     String?               @db.Uuid
+  deleted_at                     DateTime?             @db.Timestamptz(6)
+  total                          Decimal?              @default(0) @db.Decimal
+  crypto_amount                  Decimal?              @db.Decimal
+  fiat_amount                    Decimal?              @db.Decimal
+  reference                      String?
+  external_reference             String?
+  payment_status                 String?               @default("pending")
+  payment_details                Json?                 @default("{}")
+  trade_details                  Json?                 @default("{}")
+  users_trades_updated_byTousers users?                @relation("trades_updated_byTousers", fields: [updated_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_trades_user_idTousers    users                 @relation("trades_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  wallet_transactions            wallet_transactions[]
 
-  @@index([userId])
+  @@index([createdAt], map: "idx_trades_created_at")
+  @@index([external_reference], map: "idx_trades_external_reference")
+  @@index([reference], map: "idx_trades_reference")
+  @@index([status], map: "idx_trades_status")
+  @@index([user_id], map: "idx_trades_user_id")
+  @@index([user_id, status], map: "idx_trades_user_status")
+  @@map("trades")
+  @@schema("public")
 }
 
 model User {
-  id            String         @id @default(cuid())
-  email         String         @unique
-  name          String?
-  trades        Trade[]
-  wallets       Wallet[]
-  transactions  Transaction[]
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  id         String   @id @default(cuid()) @db.Uuid
+  email      String   @unique
+  first_name String?
+  last_name  String?
+  quidax_id  String?
+  createdAt  DateTime @default(dbgenerated("timezone('utc'::text, now())")) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @default(dbgenerated("timezone('utc'::text, now())")) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  auth_user  users    @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  admin_user          AdminUser?
+  admin_activity_logs AdminActivityLog[]
+  admin_access_cache  AdminAccessCache?
+
+  @@map("users")
+  @@schema("public")
 }
 
 model Wallet {
-  id          String    @id @default(cuid())
-  userId      String
-  currency    String
-  balance     Float     @default(0)
-  locked      Float     @default(0)
-  provider    String
-  address     String?
-  metadata    Json?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  user        User      @relation(fields: [userId], references: [id])
+  id                  String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  balance             Decimal   @default(0) @db.Decimal
+  pending_balance     Decimal   @default(0) @db.Decimal
+  total_deposits      Decimal   @default(0) @db.Decimal
+  total_withdrawals   Decimal   @default(0) @db.Decimal
+  last_transaction_at DateTime? @default(now()) @db.Timestamptz(6)
+  createdAt           DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user                users     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([userId, currency])
   @@index([userId])
+  @@map("wallets")
+  @@schema("public")
 }
 
 model Transaction {
-  id                    String    @id @default(cuid())
-  userId                String
-  type                  String
-  status                String
-  amount                Float
-  currency              String
-  provider              String
-  providerTransactionId String?
-  metadata              Json?
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
-  user                  User      @relation(fields: [userId], references: [id])
+  id                String              @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  userId            String?             @map("user_id") @db.Uuid
+  wallet_id         String?             @db.Uuid
+  type              transaction_type
+  amount            Decimal             @db.Decimal
+  status            transaction_status? @default(pending)
+  currency          String?             @default("NGN")
+  description       String?
+  payment_method    String?
+  reference         String?             @unique
+  external_id       String?
+  fiat_amount       Decimal?            @db.Decimal
+  fiat_currency     String?             @default("NGN")
+  crypto_amount     Decimal?            @db.Decimal
+  crypto_currency   String?
+  rate              Decimal?            @db.Decimal
+  payment_reference String?
+  createdAt         DateTime?           @default(dbgenerated("timezone('utc'::text, now())")) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime?           @default(dbgenerated("timezone('utc'::text, now())")) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  user              users?              @relation(fields: [userId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  @@index([userId])
-  @@index([providerTransactionId])
+  @@index([createdAt], map: "idx_transactions_created_at")
+  @@index([external_id], map: "idx_transactions_external_id")
+  @@index([userId], map: "idx_transactions_user_id")
+  @@index([userId, type], map: "idx_transactions_user_type")
+  @@index([wallet_id], map: "idx_transactions_wallet_id")
+  @@map("transactions")
+  @@schema("public")
+}
+
+// Auth Schema Models
+model users {
+  instance_id                     String?                 @db.Uuid
+  id                              String                  @id @db.Uuid
+  aud                             String?                 @db.VarChar(255)
+  role                            String?                 @db.VarChar(255)
+  email                           String?                 @db.VarChar(255)
+  encrypted_password              String?                 @db.VarChar(255)
+  email_confirmed_at              DateTime?               @db.Timestamptz(6)
+  invited_at                      DateTime?               @db.Timestamptz(6)
+  confirmation_token              String?                 @db.VarChar(255)
+  confirmation_sent_at            DateTime?               @db.Timestamptz(6)
+  recovery_token                  String?                 @db.VarChar(255)
+  recovery_sent_at                DateTime?               @db.Timestamptz(6)
+  email_change_token_new          String?                 @db.VarChar(255)
+  email_change                    String?                 @db.VarChar(255)
+  email_change_sent_at            DateTime?               @db.Timestamptz(6)
+  last_sign_in_at                 DateTime?               @db.Timestamptz(6)
+  raw_app_meta_data               Json?
+  raw_user_meta_data              Json?
+  is_super_admin                  Boolean?
+  created_at                      DateTime?               @db.Timestamptz(6)
+  updated_at                      DateTime?               @db.Timestamptz(6)
+  phone                           String?                 @unique
+  phone_confirmed_at              DateTime?               @db.Timestamptz(6)
+  phone_change                    String?                 @default("")
+  phone_change_token              String?                 @default("") @db.VarChar(255)
+  phone_change_sent_at            DateTime?               @db.Timestamptz(6)
+  confirmed_at                    DateTime?               @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
+  email_change_token_current      String?                 @default("") @db.VarChar(255)
+  email_change_confirm_status     Int?                    @default(0) @db.SmallInt
+  banned_until                    DateTime?               @db.Timestamptz(6)
+  reauthentication_token          String?                 @default("") @db.VarChar(255)
+  reauthentication_sent_at        DateTime?               @db.Timestamptz(6)
+  is_sso_user                     Boolean                 @default(false)
+  deleted_at                      DateTime?               @db.Timestamptz(6)
+  is_anonymous                    Boolean                 @default(false)
+  identities                      identities[]
+  mfa_factors                     mfa_factors[]
+  one_time_tokens                 one_time_tokens[]
+  sessions                        sessions[]
+  account_settings                account_settings?
+  admin_access_cache              admin_access_cache?
+  admin_users                     admin_users?
+  analytics_events                analytics_events[]
+  balances                        balances[]
+  billing_history                 billing_history[]
+  crypto_transactions             crypto_transactions[]
+  export_logs                     export_logs[]
+  kyc_documents                   kyc_documents[]
+  kyc_status_tracking             kyc_status_tracking[]
+  kyc_verifications               kyc_verifications?
+  notifications                   notifications[]
+  payment_methods                 payment_methods[]
+  profiles                        profiles?
+  quidax_accounts                 quidax_accounts?
+  security_settings               security_settings[]
+  stats                           stats[]
+  trades_trades_updated_byTousers Trade[]                 @relation("trades_updated_byTousers")
+  trades_trades_user_idTousers    Trade[]                 @relation("trades_user_idTousers")
+  transactions                    Transaction[]
+  user_activity_logs              user_activity_logs[]
+  user_profiles                   user_profiles?
+  user                            User?
+  verification_attempts           verification_attempts[]
+  verification_logs               verification_logs[]
+  wallet_transactions             wallet_transactions[]
+  wallets                         Wallet[]
+
+  @@index([instance_id])
+  @@index([is_anonymous])
+  @@schema("auth")
+}
+
+model AdminRole {
+  id          String      @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  name        String      @unique
+  permissions Json        @default("{}")
+  created_at  DateTime    @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime    @default(now()) @updatedAt @db.Timestamptz(6)
+  admin_users AdminUser[]
+
+  @@map("admin_roles")
+  @@schema("public")
+}
+
+model AdminUser {
+  id         String    @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String    @db.Uuid
+  role_id    String    @db.Uuid
+  is_active  Boolean   @default(true)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role       AdminRole @relation(fields: [role_id], references: [id])
+
+  @@unique([user_id])
+  @@index([role_id])
+  @@map("admin_users")
+  @@schema("public")
+}
+
+model AdminActivityLog {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  action     String
+  entity     String
+  entity_id  String?
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       User     @relation(fields: [user_id], references: [id])
+
+  @@index([created_at])
+  @@index([user_id])
+  @@map("admin_activity_logs")
+  @@schema("public")
+}
+
+model AdminAccessCache {
+  user_id      String   @id @db.Uuid
+  is_admin     Boolean  @default(false)
+  permissions  Json     @default("{}")
+  last_checked DateTime @default(now()) @db.Timestamptz(6)
+  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("admin_access_cache")
+  @@schema("public")
+}
+
+// Add other models and enums as needed...
+
+enum transaction_type {
+  trade
+  swap
+  withdrawal
+  deposit
+  order
+}
+
+enum transaction_status {
+  pending
+  completed
+  failed
+  cancelled
+  reversed
+  rejected
 }

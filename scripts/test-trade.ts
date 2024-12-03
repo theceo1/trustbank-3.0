@@ -4,7 +4,8 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import debug from 'debug';
-import { TestQuidaxService } from './services/test-quidax';
+import { QuidaxService } from '../scripts/services/quidax';
+import axios from 'axios';
 
 const log = debug('trade:test');
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
@@ -54,207 +55,211 @@ async function ensureUserExists(supabase: any, userId: string, email: string) {
 // Define the payment method type
 type PaymentMethod = 'card' | 'bank_transfer' | 'wallet';
 
-async function testTrade() {
+// Add new type for trade direction
+type TradeDirection = 'buy' | 'sell';
+
+// Add test configuration
+const TEST_CONFIG = {
+  mode: 'live', // 'mock' or 'live'
+  mockSupabase: false, // Set to true if you want to mock Supabase calls
+  logLevel: 'debug' // 'debug' or 'info'
+};
+
+// Change TEST_MODE to false for real API calls
+const TEST_MODE = false;
+
+// Change amount to 1 USDT
+const TRADE_AMOUNT = '1';
+
+// Add constant for the known Quidax account with balance
+const QUIDAX_ACCOUNT_ID = 'eb8f4741-c8f3-4e67-9e74-351a1f26dd74';
+
+async function testTrade(direction: TradeDirection = 'sell') {
   try {
+    log('Starting live trade test for USDT sell...');
+    
     // First verify parent account
     log('Verifying parent account...');
-    const parentAccount = await TestQuidaxService.verifyParentAccount();
+    const parentAccount = await QuidaxService.verifyParentAccount();
     log('Parent account verified:', parentAccount);
 
-    // Continue with rest of test...
-    log('Starting trade test...');
+    // Sign in as admin
+    const { data: { session }, error: signInError } = await supabase.auth.signInWithPassword({
+      email: 'admin001@trustbank.tech',
+      password: 'SecureAdminPass123!'
+    });
+
+    if (signInError) throw signInError;
+    log('Admin signed in successfully');
+
+    // Ensure user exists in the database
+    await ensureUserExists(supabase, session!.user.id, 'admin001@trustbank.tech');
+
+    // Use the known Quidax account ID
+    let quidaxUser;
     try {
-      // Sign in as admin
-      const { data: { session }, error: signInError } = await supabase.auth.signInWithPassword({
-        email: 'admin001@trustbank.tech',
-        password: 'SecureAdminPass123!'
-      });
-
-      if (signInError) throw signInError;
-      log('Admin signed in successfully');
-
-      // Ensure user exists in the database
-      await ensureUserExists(supabase, session!.user.id, 'admin001@trustbank.tech');
-
-      // Create Quidax sub-account
-      let quidaxUser;
-      try {
-        quidaxUser = await TestQuidaxService.createSubAccount({
-          email: 'admin001@trustbank.tech',
-          first_name: 'Admin',
-          last_name: 'User'
-        });
-        log('Created Quidax sub-account:', quidaxUser);
-      } catch (error: any) {
-        log('Failed to create Quidax sub-account:', error);
-        throw error;
-      }
-
-      // Store Quidax ID in your database
-      try {
-        log('Updating user with Quidax ID:', {
-          userId: session!.user.id,
-          quidaxId: quidaxUser.id
-        });
-        
-        const { data: updateData, error: updateError } = await supabase
-          .from('users')
-          .update({ 
-            quidax_id: quidaxUser.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', session!.user.id)
-          .select()
-          .single();
-
-        if (updateError) {
-          log('Supabase update error:', updateError);
-          throw updateError;
-        }
-
-        log('Successfully updated user:', updateData);
-
-      } catch (error: any) {
-        log('Failed to update user with Quidax ID:', {
-          error: error,
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        throw error;
-      }
-
-      // Use the Quidax user ID for subsequent calls
-      let quotationResponse;
-      try {
-        log('Requesting temporary quotation...');
-        quotationResponse = await TestQuidaxService.getTemporaryQuotation({
-          user_id: quidaxUser.id,
-          from_currency: 'ngn',
-          to_currency: 'btc',
-          from_amount: '1000000'
-        });
-        log('Got temporary quotation:', quotationResponse);
-      } catch (error: any) {
-        log('Failed to get temporary quotation:', error);
-        throw error;
-      }
-
-      // Add this before the payment methods loop
-      log('Initiating deposit to wallet...');
-      const deposit = await TestQuidaxService.initiateDeposit({
-        user_id: quidaxUser.id,
-        currency: 'ngn',
-        amount: '1000000'
-      });
-      log('Deposit initiated:', deposit);
-
-      // Wait for deposit confirmation (in production, you'd implement webhook handling)
-      log('Waiting for deposit confirmation...');
-      await new Promise(resolve => setTimeout(resolve, 5000));
-
-      // Check updated balance
-      const updatedBalance = await TestQuidaxService.checkWalletBalance(quidaxUser.id, 'ngn');
-      log('Updated wallet balance:', updatedBalance);
-
-      // Test with different payment methods
-      const paymentMethods = ['card', 'bank_transfer', 'wallet'] as const;
-
-      for (const paymentMethod of paymentMethods) {
-        try {
-          log(`\n=== Testing with ${paymentMethod} payment ===\n`);
-          
-          log('Creating instant swap...');
-          const instantSwap = await TestQuidaxService.createInstantSwap({
-            user_id: quidaxUser.id,
-            from_currency: 'ngn',
-            to_currency: 'btc',
-            from_amount: '1000000',
-            payment_method: paymentMethod
-          });
-          log('Created instant swap:', instantSwap);
-
-          // Add a small delay before confirmation
-          log('Waiting before confirmation...');
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // Define params with the correct type
-          const params = {
-            user_id: quidaxUser.id,
-            from_currency: 'ngn',
-            to_currency: 'btc',
-            from_amount: '1000000',
-            payment_method: 'wallet' as PaymentMethod // Type assertion here
-          };
-
-          // Check wallet balance before confirming swap
-          const walletBalance = await TestQuidaxService.checkWalletBalance(quidaxUser.id, 'ngn');
-          console.log('Current wallet balance:', walletBalance);
-
-          if (parseFloat(walletBalance.balance) < parseFloat(params.from_amount)) {
-            console.error('Insufficient balance to confirm swap.');
-            return;
+      const response = await axios.get(
+        `${process.env.QUIDAX_API_URL}/users/${QUIDAX_ACCOUNT_ID}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
+            'Content-Type': 'application/json'
           }
-
-          // Proceed with confirming the swap if balance is sufficient
-          log('Confirming instant swap...');
-          const confirmedSwap = await TestQuidaxService.confirmInstantSwap({
-            user_id: quidaxUser.id,
-            quotation_id: instantSwap.data.id,
-            payment_method: paymentMethod // This is already correctly typed from the loop
-          });
-
-          log('Confirmed instant swap:', confirmedSwap);
-
-          // Create test trade record
-          const tradeData = {
-            user_id: session?.user.id,
-            type: 'buy',
-            amount: quotationResponse.to_amount,
-            currency: 'btc',
-            rate: quotationResponse.quoted_price,
-            total: quotationResponse.from_amount,
-            payment_method: paymentMethod,
-            status: 'processing',
-            reference: `BUY-${Date.now()}`,
-            quidax_reference: confirmedSwap.id,
-            created_at: new Date().toISOString()
-          };
-
-          log('Creating trade record with data:', tradeData);
-          const { data: trade, error: tradeError } = await supabase
-            .from('trades')
-            .insert(tradeData)
-            .select()
-            .single();
-
-          if (tradeError) {
-            log(`Trade creation error for ${paymentMethod}:`, tradeError);
-            continue;
-          }
-
-          log(`Test trade created successfully with ${paymentMethod}:`, trade);
-        } catch (error: any) {
-          log(`Failed to process trade with ${paymentMethod}:`, error);
-          continue;
         }
-      }
-
+      );
+      quidaxUser = response.data.data;
+      log('Retrieved Quidax account:', quidaxUser);
     } catch (error: any) {
-      log('Test failed:', {
-        error,
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        config: error.config
-      });
-      process.exit(1);
+      log('Failed to get Quidax account:', error);
+      throw error;
     }
+
+    // Update user with Quidax ID if needed
+    try {
+      const { data: updateData, error: updateError } = await supabase
+        .from('users')
+        .update({ 
+          quidax_id: QUIDAX_ACCOUNT_ID,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', session!.user.id)
+        .select()
+        .single();
+
+      if (updateError) throw updateError;
+      log('Successfully updated user:', updateData);
+    } catch (error: any) {
+      log('Failed to update user with Quidax ID:', error);
+      throw error;
+    }
+
+    // Check USDT balance and get wallet info
+    log('Checking USDT wallet...');
+    const walletInfo = await QuidaxService.checkWalletBalance(QUIDAX_ACCOUNT_ID, 'usdt');
+    log('Wallet info:', walletInfo);
+
+    const currentBalance = parseFloat(walletInfo.balance);
+    log('Current USDT balance:', currentBalance);
+
+    // Set trade amount based on available balance (slightly less than total to account for fees)
+    const TRADE_AMOUNT = '0.3';
+
+    if (currentBalance < parseFloat(TRADE_AMOUNT)) {
+      throw new Error(`Insufficient USDT balance. Current balance: ${currentBalance} USDT. Required: ${TRADE_AMOUNT} USDT.`);
+    }
+
+    // Create swap quotation
+    log('Creating swap quotation...');
+    const swapQuotationResponse = await QuidaxService.createSwapQuotation(
+      QUIDAX_ACCOUNT_ID,
+      {
+        from_currency: 'usdt',
+        to_currency: 'ngn',
+        from_amount: TRADE_AMOUNT
+      }
+    );
+    log('Swap quotation response:', JSON.stringify(swapQuotationResponse, null, 2));
+
+    // Add a shorter delay
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    // Confirm swap quotation
+    log('Confirming swap quotation...');
+    log('User ID:', QUIDAX_ACCOUNT_ID);
+    log('Quotation ID:', swapQuotationResponse.id);
+    
+    const confirmedSwap = await QuidaxService.confirmSwapQuotation(
+      QUIDAX_ACCOUNT_ID,
+      swapQuotationResponse.id
+    );
+    log('Swap confirmation response:', JSON.stringify(confirmedSwap, null, 2));
+
+    // Create trade record
+    const tradeData = {
+      user_id: session?.user.id,
+      type: 'sell',
+      amount: TRADE_AMOUNT,
+      currency: 'USDT',
+      rate: swapQuotationResponse.quoted_price,
+      total: swapQuotationResponse.to_amount,
+      payment_method: 'wallet',
+      status: 'completed',
+      reference: `SELL-USDT-${Date.now()}`,
+      quidax_reference: confirmedSwap.id,
+      created_at: new Date().toISOString()
+    };
+
+    log('Creating trade record:', tradeData);
+    const { data: trade, error: tradeError } = await supabase
+      .from('trades')
+      .insert(tradeData)
+      .select()
+      .single();
+
+    if (tradeError) throw tradeError;
+    log('Trade record created:', trade);
+
+    return trade;
+
   } catch (error: any) {
-    log('Test failed:', error);
+    log('Test failed. Error details:', {
+      message: error.message,
+      response: error.response?.data,
+      status: error.response?.status
+    });
     throw error;
   }
 }
 
-testTrade(); 
+async function checkTransactionStatus(quidaxReference: string, interval: number = 5000, maxAttempts: number = 20) {
+  let attempts = 0;
+  let transactionStatus = 'pending';
+
+  while (transactionStatus === 'pending' && attempts < maxAttempts) {
+    try {
+      log(`Checking transaction status for reference: ${quidaxReference} (Attempt ${attempts + 1})`);
+      
+      const response = await axios.get(
+        `${process.env.QUIDAX_API_URL}/users/me/swap_transactions/${quidaxReference}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      const transaction = response.data?.data;
+      transactionStatus = transaction?.status || 'pending';
+      log('Current transaction status:', transactionStatus);
+
+      if (transactionStatus === 'completed') {
+        log('Transaction completed successfully:', transaction);
+        return transaction;
+      }
+
+    } catch (error: any) {
+      log('Error checking transaction status:', error.response?.data || error);
+    }
+
+    attempts++;
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+
+  if (transactionStatus !== 'completed') {
+    throw new Error('Transaction did not complete within the expected time frame.');
+  }
+}
+
+// Run the test and check transaction status
+testTrade('sell')
+  .then(async (trade) => {
+    log('Test completed successfully, checking transaction status...');
+    await checkTransactionStatus(trade.quidax_reference);
+    log('Transaction status check completed.');
+    process.exit(0);
+  })
+  .catch((error) => {
+    log('Test failed:', error.response?.data || error);
+    process.exit(1);
+  }); 

@@ -243,40 +243,24 @@ export class TestQuidaxService {
     from_currency: string;
     to_currency: string;
     from_amount: string;
-    payment_method: 'card' | 'bank_transfer' | 'wallet';
+    payment_method: string;
   }) {
-    try {
-      console.log('Creating instant swap with params:', params);
-      
-      // Simplified payload matching the successful request
-      const response = await axios.post(
-        `${this.baseUrl}/users/me/swap_quotation`,
-        {
-          from_currency: params.from_currency.toLowerCase(),
-          to_currency: params.to_currency.toLowerCase(),
-          from_amount: params.from_amount
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.secretKey}`,
-            'Content-Type': 'application/json'
-          }
+    const response = await axios.post(
+      `${process.env.QUIDAX_API_URL}/users/${params.user_id}/instant_orders`,
+      {
+        bid: params.to_currency,
+        ask: params.from_currency,
+        amount: params.from_amount,
+        payment_method: params.payment_method
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
+          'Content-Type': 'application/json'
         }
-      );
-
-      console.log('Instant swap creation response:', response.data);
-      return response.data.data;
-    } catch (error: any) {
-      const errorDetails = {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        data: error.config?.data
-      };
-      console.error('Create instant swap error:', errorDetails);
-      throw error;
-    }
+      }
+    );
+    return response.data;
   }
 
   static async checkWalletBalance(userId: string, currency: string) {
@@ -428,5 +412,101 @@ export class TestQuidaxService {
       console.error('Initiate deposit error:', error);
       throw error;
     }
+  }
+
+  static async createInstantSellSwap(params: {
+    user_id: string;
+    from_currency: string;
+    to_currency: string;
+    from_amount: string;
+  }) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/users/me/swap_quotation`,
+        {
+          from_currency: params.from_currency.toLowerCase(),
+          to_currency: params.to_currency.toLowerCase(),
+          from_amount: params.from_amount,
+          type: 'instant'
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Create instant sell swap error:', error.response?.data || error);
+      throw error;
+    }
+  }
+
+  static async getSwapTransactions(userId: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/users/${userId}/swap_transactions`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Get swap transactions error:', error);
+      throw error;
+    }
+  }
+
+  static async getSwapTransaction(userId: string, swapTransactionId: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/users/${userId}/swap_transactions/${swapTransactionId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Get swap transaction error:', error);
+      throw error;
+    }
+  }
+
+  static async getDepositAddress(userId: string, currency: string) {
+    const response = await axios.get(
+      `${process.env.QUIDAX_API_URL}/users/${userId}/wallets/${currency}/address`,
+      {
+        headers: {
+          'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
+  }
+
+  static async getDeposits(userId: string, params: {
+    currency: string;
+    state?: string;
+    order_by?: 'asc' | 'desc';
+  }) {
+    const response = await axios.get(
+      `${process.env.QUIDAX_API_URL}/users/${userId}/deposits`,
+      {
+        params,
+        headers: {
+          'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data;
   }
 }

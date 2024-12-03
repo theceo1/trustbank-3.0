@@ -1,4 +1,4 @@
-export const logger = {
+const logger = {
     info: (message: string, ...args: any[]) => {
       console.log(`[INFO] ${message}`, ...args);
     },
@@ -9,3 +9,5 @@ export const logger = {
       console.warn(`[WARN] ${message}`, ...args);
     }
   };
+
+export { logger };

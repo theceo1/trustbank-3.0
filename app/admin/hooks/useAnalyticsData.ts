@@ -1,3 +1,4 @@
+// app/admin/hooks/useAnalyticsData.ts
 import { useState, useEffect } from 'react';
 import { DateRange } from 'react-day-picker';
 import { AnalyticsData } from '@/app/admin/types/analytics';

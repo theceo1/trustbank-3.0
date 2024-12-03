@@ -1,3 +1,4 @@
+// scripts/create-admin-user.ts
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import debug from 'debug';

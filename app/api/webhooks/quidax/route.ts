@@ -1,43 +1,41 @@
 //app/api/webhooks/quidax/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { TradeTransaction } from '@/app/lib/services/tradeTransaction';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { WebhookLogger } from '@/app/lib/services/webhookLogger';
+import { QuidaxWebhookService } from '@/app/lib/services/quidax-webhook.service';
+import crypto from 'crypto';
 
-export async function POST(request: NextRequest) {
-  const supabase = createRouteHandlerClient({ cookies });
-  const payload = await request.json();
+function verifySignature(payload: string, headers: Headers) {
+  const signature = headers.get('quidax-signature');
+  if (!signature || !process.env.QUIDAX_WEBHOOK_SECRET) return false;
 
+  const [timestampSection, signatureSection] = signature.split(',');
+  const [, timestamp] = timestampSection.split('=');
+  const [, sig] = signatureSection.split('=');
+
+  const computedSignature = crypto
+    .createHmac('sha256', process.env.QUIDAX_WEBHOOK_SECRET)
+    .update(`${timestamp}.${payload}`)
+    .digest('hex');
+
+  return sig === computedSignature;
+}
+
+export async function POST(req: NextRequest) {
   try {
-    const { reference, status, event } = payload;
-
-    // 1. Get trade details
-    const { data: trade } = await supabase
-      .from('trades')
-      .select('*')
-      .eq('quidax_reference', reference)
-      .single();
-
-    if (!trade) {
-      return NextResponse.json({ error: 'Trade not found' }, { status: 404 });
+    const payload = await req.text();
+    
+    if (!verifySignature(payload, req.headers)) {
+      return new NextResponse('Invalid signature', { status: 401 });
     }
 
-    // 2. Update trade status
-    if (event === 'instant_swap.completed') {
-      await supabase
-        .from('trades')
-        .update({
-          status: 'completed',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', trade.id);
-    } else if (event === 'instant_swap.failed') {
-      await TradeTransaction.revertTradeOnFailure(trade.id);
-    }
+    await WebhookLogger.logWebhook('quidax', JSON.parse(payload));
+    
+    const webhookService = new QuidaxWebhookService();
+    await webhookService.handleWebhook(JSON.parse(payload));
 
-    return NextResponse.json({ success: true });
+    return new NextResponse('OK', { status: 200 });
   } catch (error) {
-    console.error('Webhook error:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    console.error('Webhook processing error:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 }

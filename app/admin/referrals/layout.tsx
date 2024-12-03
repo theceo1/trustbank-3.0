@@ -1,3 +1,4 @@
+// app/admin/referrals/layout.tsx
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Metadata } from "next";
 

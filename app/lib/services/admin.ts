@@ -1,3 +1,4 @@
+// app/lib/services/admin.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/app/types/database';
 
@@ -28,7 +29,7 @@ export class AdminService {
       if (cacheData) {
         return {
           isAdmin: cacheData.is_admin,
-          permissions: cacheData.permissions
+          permissions: cacheData.permissions as Record<string, Record<string, boolean>>
         };
       }
 
@@ -42,7 +43,7 @@ export class AdminService {
           )
         `)
         .eq('user_id', userId)
-        .single() as { data: AdminDataResponse | null, error: any };
+        .single();
 
       const isAdmin = adminData?.is_active ?? false;
       const permissions = adminData?.admin_roles?.[0]?.permissions ?? {};

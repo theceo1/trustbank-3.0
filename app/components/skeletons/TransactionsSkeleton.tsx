@@ -1,30 +1,26 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
-export default function TransactionsSkeleton() {
+export function TransactionsSkeleton() {
   return (
     <Card>
       <CardHeader>
-        <Skeleton className="h-6 w-[180px]" />
+        <Skeleton className="h-8 w-[200px]" />
       </CardHeader>
-      <CardContent className="space-y-4">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} className="flex justify-between items-center">
-            <div className="flex items-center gap-4">
-              <Skeleton className="h-8 w-8 rounded-full" />
+      <CardContent>
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex justify-between items-center">
               <div className="space-y-2">
-                <Skeleton className="h-4 w-[120px]" />
-                <Skeleton className="h-3 w-[100px]" />
+                <Skeleton className="h-4 w-[250px]" />
+                <Skeleton className="h-4 w-[150px]" />
               </div>
+              <Skeleton className="h-6 w-[100px]" />
             </div>
-            <div className="text-right space-y-2">
-              <Skeleton className="h-4 w-[100px]" />
-              <Skeleton className="h-3 w-[80px]" />
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </CardContent>
     </Card>
   );

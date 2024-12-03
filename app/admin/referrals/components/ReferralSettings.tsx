@@ -1,3 +1,4 @@
+// app/admin/referrals/components/ReferralSettings.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";

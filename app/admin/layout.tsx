@@ -7,17 +7,17 @@ import { useAdminAuth } from "./context/AdminAuthContext";
 import AdminHeader from "./components/AdminHeader";
 import AdminSidebar from "./components/AdminSidebar";
 import { useToast } from "@/hooks/use-toast";
+import { LoadingSpinner } from "./components/LoadingSpinner";
+import { AdminRoleGuard } from "./components/AdminRoleGuard";
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { isAdmin, isLoading } = useAdminAuth();
+  const { isAdmin, isLoading, adminUser } = useAdminAuth();
   const router = useRouter();
   const { toast } = useToast();
-
-  console.log('Not admin, redirecting to home');
 
   useEffect(() => {
     if (!isLoading && !isAdmin) {
@@ -32,8 +32,8 @@ export default function AdminLayout({
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <LoadingSpinner size="lg" />
       </div>
     );
   }
@@ -43,12 +43,12 @@ export default function AdminLayout({
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen bg-gray-50">
       <AdminHeader />
       <div className="flex pt-16">
         <AdminSidebar />
         <main className="flex-1 ml-64 p-8">
-          {children}
+          <AdminRoleGuard>{children}</AdminRoleGuard>
         </main>
       </div>
     </div>
