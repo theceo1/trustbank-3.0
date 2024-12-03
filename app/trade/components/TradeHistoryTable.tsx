@@ -38,10 +38,11 @@ export function TradeHistoryTable({ trades }: TradeHistoryTableProps) {
         {trades.map((trade) => {
           const fees = TradeUtils.calculateFees(trade.amount, trade.rate);
           const totalFees = fees.serviceFee + fees.networkFee;
+          const tradeDate = trade.created_at ? new Date(trade.created_at) : new Date();
           return (
             <TableRow key={trade.id}>
               <TableCell>
-                {format(new Date(trade.created_at), 'MMM d, yyyy HH:mm')}
+                {format(tradeDate, 'MMM d, yyyy HH:mm')}
               </TableCell>
               <TableCell className="capitalize">{trade.type}</TableCell>
               <TableCell>

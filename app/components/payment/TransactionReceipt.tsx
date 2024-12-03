@@ -30,7 +30,7 @@ export function TransactionReceipt({ trade, onDownload }: TransactionReceiptProp
         <div className="space-y-4 border-t border-b py-4">
           <div className="flex justify-between">
             <span className="text-gray-600">Date</span>
-            <span>{formatDate(trade.created_at)}</span>
+            <span>{formatDate(trade.created_at!)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Amount</span>
@@ -45,7 +45,7 @@ export function TransactionReceipt({ trade, onDownload }: TransactionReceiptProp
         </div>
 
         <div className="flex justify-center">
-          <QRCode value={trade.reference} size={120} />
+          <QRCode value={trade.reference!} size={120} />
         </div>
 
         <Button

@@ -34,7 +34,7 @@ export default function TransactionDetails({ transaction, open, onOpenChange }: 
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-2 text-sm">
             <div className="text-muted-foreground">Amount (NGN)</div>
-            <div>{formatCurrency(transaction.amount, 'NGN')}</div>
+            <div>{formatCurrency(transaction.amount)}</div>
 
             {isCryptoTransaction(transaction) && (
               <>
@@ -42,7 +42,7 @@ export default function TransactionDetails({ transaction, open, onOpenChange }: 
                 <div>{transaction.crypto_amount} {transaction.crypto_currency}</div>
 
                 <div className="text-muted-foreground">Rate</div>
-                <div>{formatCurrency(transaction.rate, 'NGN')}/{transaction.crypto_currency}</div>
+                <div>{formatCurrency(transaction.rate)}/{transaction.crypto_currency}</div>
               </>
             )}
           </div>

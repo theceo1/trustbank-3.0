@@ -131,7 +131,7 @@ export default function TransactionPreview({
             <div className="flex justify-between font-medium">
               <span>Total {type === 'buy' ? 'Pay' : 'Receive'}</span>
               <span className="text-lg">
-                {formatCurrency(total, 'NGN')}
+                {formatCurrency(total)}
               </span>
             </div>
           </div>

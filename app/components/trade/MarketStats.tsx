@@ -49,7 +49,7 @@ export default function MarketStats() {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <p className="text-gray-600">Last Price</p>
-          <p className="text-xl font-bold">{formatCurrency(marketData.last_price, 'NGN')}</p>
+          <p className="text-xl font-bold">{formatCurrency(marketData.last_price)}</p>
         </div>
         <div>
           <p className="text-gray-600">24h Change</p>

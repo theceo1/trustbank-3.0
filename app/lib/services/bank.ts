@@ -6,7 +6,7 @@ export class BankService {
     const response = await QuidaxService.initializeBankTransfer({
       amount: trade.amount,
       currency: trade.currency,
-      reference: trade.reference
+      reference: trade.reference!
     });
 
     return {

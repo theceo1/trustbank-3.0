@@ -41,11 +41,11 @@ export function TransactionPreview({
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Amount</span>
-            <span className="font-medium">{formatCurrency(amount, 'NGN')}</span>
+            <span className="font-medium">{formatCurrency(amount)}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Rate</span>
-            <span className="font-medium">{formatCurrency(rate, 'NGN')}/{cryptoCurrency}</span>
+            <span className="font-medium">{formatCurrency(rate)}/{cryptoCurrency}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Crypto Amount</span>
@@ -58,11 +58,11 @@ export function TransactionPreview({
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Network Fee</span>
-            <span>{formatCurrency(fees.network, 'NGN')}</span>
+            <span>{formatCurrency(fees.network)}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Service Fee</span>
-            <span>{formatCurrency(fees.service, 'NGN')}</span>
+            <span>{formatCurrency(fees.service)}</span>
           </div>
         </div>
 
@@ -70,7 +70,7 @@ export function TransactionPreview({
 
         <div className="flex justify-between font-medium">
           <span>Total {type === 'buy' ? 'Payment' : 'Receivable'}</span>
-          <span>{formatCurrency(finalAmount, 'NGN')}</span>
+          <span>{formatCurrency(finalAmount)}</span>
         </div>
       </CardContent>
     </Card>

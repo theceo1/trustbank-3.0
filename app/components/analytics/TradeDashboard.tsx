@@ -29,7 +29,7 @@ export function TradeDashboard({ userId }: { userId: string }) {
 
       <MetricCard
         title="Success Rate"
-        value={isLoading ? undefined : `${data?.successRate}%`}
+        value={isLoading ? undefined : `${data?.successRate ?? 0}%`}
         trend={data?.successRateTrend}
         icon="chart-up"
         loading={isLoading}
@@ -37,7 +37,7 @@ export function TradeDashboard({ userId }: { userId: string }) {
 
       <MetricCard
         title="Total Volume"
-        value={isLoading ? undefined : formatCurrency(data?.totalVolume)}
+        value={formatCurrency(data?.totalVolume ?? 0)}
         trend={data?.volumeTrend}
         icon="dollar-sign"
         loading={isLoading}
@@ -45,7 +45,7 @@ export function TradeDashboard({ userId }: { userId: string }) {
 
       <MetricCard
         title="Average Trade"
-        value={isLoading ? undefined : formatCurrency(data?.averageTradeSize)}
+        value={formatCurrency(data?.averageTradeSize)}
         trend={data?.sizeTrend}
         icon="trending-up"
         loading={isLoading}

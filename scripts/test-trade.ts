@@ -51,6 +51,9 @@ async function ensureUserExists(supabase: any, userId: string, email: string) {
   return existingUser;
 }
 
+// Define the payment method type
+type PaymentMethod = 'card' | 'bank_transfer' | 'wallet';
+
 async function testTrade() {
   try {
     // First verify parent account
@@ -138,6 +141,23 @@ async function testTrade() {
         throw error;
       }
 
+      // Add this before the payment methods loop
+      log('Initiating deposit to wallet...');
+      const deposit = await TestQuidaxService.initiateDeposit({
+        user_id: quidaxUser.id,
+        currency: 'ngn',
+        amount: '1000000'
+      });
+      log('Deposit initiated:', deposit);
+
+      // Wait for deposit confirmation (in production, you'd implement webhook handling)
+      log('Waiting for deposit confirmation...');
+      await new Promise(resolve => setTimeout(resolve, 5000));
+
+      // Check updated balance
+      const updatedBalance = await TestQuidaxService.checkWalletBalance(quidaxUser.id, 'ngn');
+      log('Updated wallet balance:', updatedBalance);
+
       // Test with different payment methods
       const paymentMethods = ['card', 'bank_transfer', 'wallet'] as const;
 
@@ -159,12 +179,32 @@ async function testTrade() {
           log('Waiting before confirmation...');
           await new Promise(resolve => setTimeout(resolve, 2000));
 
+          // Define params with the correct type
+          const params = {
+            user_id: quidaxUser.id,
+            from_currency: 'ngn',
+            to_currency: 'btc',
+            from_amount: '1000000',
+            payment_method: 'wallet' as PaymentMethod // Type assertion here
+          };
+
+          // Check wallet balance before confirming swap
+          const walletBalance = await TestQuidaxService.checkWalletBalance(quidaxUser.id, 'ngn');
+          console.log('Current wallet balance:', walletBalance);
+
+          if (parseFloat(walletBalance.balance) < parseFloat(params.from_amount)) {
+            console.error('Insufficient balance to confirm swap.');
+            return;
+          }
+
+          // Proceed with confirming the swap if balance is sufficient
           log('Confirming instant swap...');
           const confirmedSwap = await TestQuidaxService.confirmInstantSwap({
             user_id: quidaxUser.id,
-            quotation_id: instantSwap.id,
-            payment_method: paymentMethod
+            quotation_id: instantSwap.data.id,
+            payment_method: paymentMethod // This is already correctly typed from the loop
           });
+
           log('Confirmed instant swap:', confirmedSwap);
 
           // Create test trade record

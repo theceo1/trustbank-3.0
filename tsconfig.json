@@ -28,7 +28,11 @@
         "./*"
       ]
     },
-    "types": ["d3-path", "node"]
+    "types": [
+      "d3-path",
+      "node"
+    ],
+    "strictNullChecks": true
   },
   "include": [
     "next-env.d.ts",

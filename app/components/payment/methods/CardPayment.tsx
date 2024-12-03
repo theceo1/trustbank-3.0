@@ -10,6 +10,16 @@ export default function CardPayment({ trade, onComplete }: PaymentProcessorProps
   const { toast } = useToast();
 
   const handlePayment = async () => {
+    if (!trade.id || !trade.reference) {
+      toast({
+        id: 'payment-invalid',
+        title: "Invalid Trade",
+        description: "Trade details are incomplete",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsProcessing(true);
     try {
       // Initialize card payment with Quidax

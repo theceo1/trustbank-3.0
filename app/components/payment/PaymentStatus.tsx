@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle, XCircle } from "lucide-react";
 
 export function PaymentStatus() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params?.id as string;
   const [status, setStatus] = useState('pending');
   const [paymentDetails, setPaymentDetails] = useState<any>(null);
 

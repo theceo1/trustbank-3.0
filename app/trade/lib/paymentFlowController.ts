@@ -5,6 +5,10 @@ import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
 
 export class PaymentFlowController {
   static async initiate(tradeDetails: TradeDetails) {
+    if (!tradeDetails.reference) {
+      throw new Error('Trade reference is required');
+    }
+
     // Map fees to expected structure
     const mappedFees = {
       service: tradeDetails.fees.platform + tradeDetails.fees.quidax,

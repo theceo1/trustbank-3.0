@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Trade {
+  id              String         @id @default(cuid())
+  userId          String
+  type            String
+  status          String
+  amount          Float
+  currency        String
+  quidax_reference String?
+  metadata        Json?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  user            User          @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model User {
+  id            String         @id @default(cuid())
+  email         String         @unique
+  name          String?
+  trades        Trade[]
+  wallets       Wallet[]
+  transactions  Transaction[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+}
+
+model Wallet {
+  id          String    @id @default(cuid())
+  userId      String
+  currency    String
+  balance     Float     @default(0)
+  locked      Float     @default(0)
+  provider    String
+  address     String?
+  metadata    Json?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@unique([userId, currency])
+  @@index([userId])
+}
+
+model Transaction {
+  id                    String    @id @default(cuid())
+  userId                String
+  type                  String
+  status                String
+  amount                Float
+  currency              String
+  provider              String
+  providerTransactionId String?
+  metadata              Json?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+  user                  User      @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([providerTransactionId])
+}

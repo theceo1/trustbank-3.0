@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 
 export default function PaymentStatus() {
-  const { id } = useParams();
+  const params = useParams();
+  const id = params?.id as string;
   const [status, setStatus] = useState('pending');
 
   useEffect(() => {

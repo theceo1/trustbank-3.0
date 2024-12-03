@@ -8,9 +8,10 @@ export function TradeStatusCheck() {
   const { currentTrade, checkTradeStatus } = useTrade();
 
   useEffect(() => {
-    if (currentTrade?.id && ['pending', 'processing'].includes(currentTrade.status)) {
+    const tradeId = currentTrade?.id;
+    if (tradeId && currentTrade?.status && ['pending', 'processing'].includes(currentTrade.status)) {
       const interval = setInterval(() => {
-        checkTradeStatus(currentTrade.id);
+        checkTradeStatus(tradeId);
       }, 5000); // Check every 5 seconds
 
       return () => clearInterval(interval);

@@ -1,7 +1,7 @@
-import { type Toast } from '@/components/ui/toast';
+import { type ToastProps } from '@/app/components/ui/toast';
 
 export class TradeErrorHandler {
-  static handleError(error: any, context: string, showToast: (props: Toast) => void) {
+  static handleError(error: any, context: string, showToast: (props: ToastProps) => void) {
     console.error(`${context}:`, error);
 
     if (error.name === 'RateExpiredError') {

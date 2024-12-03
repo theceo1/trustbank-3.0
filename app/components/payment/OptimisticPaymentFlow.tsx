@@ -33,7 +33,7 @@ export function OptimisticPaymentFlow({ trade, onComplete }: OptimisticPaymentFl
     optimisticData: {
       status: 'processing',
       trade_id: trade.id!,
-      reference: trade.reference
+      reference: trade.reference!
     },
     onSuccess: (data: PaymentResult) => {
       setStatus('completed');

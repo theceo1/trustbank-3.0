@@ -15,7 +15,7 @@ export function TradeReceipt({ trade }: TradeReceiptProps) {
       <CardContent className="space-y-4">
         <div className="flex justify-between py-2 border-b">
           <span className="text-muted-foreground">Transaction ID</span>
-          <span className="font-medium">{trade.id.slice(0, 8)}</span>
+          <span className="font-medium">{trade.id?.slice(0, 8)}</span>
         </div>
         <div className="flex justify-between py-2 border-b">
           <span className="text-muted-foreground">Type</span>
@@ -39,7 +39,7 @@ export function TradeReceipt({ trade }: TradeReceiptProps) {
         </div>
         <div className="flex justify-between py-2">
           <span className="text-muted-foreground">Date</span>
-          <span className="font-medium">{formatDate(trade.created_at || '')}</span>
+          <span className="font-medium">{formatDate(trade.created_at!)}</span>
         </div>
       </CardContent>
     </Card>

@@ -24,6 +24,11 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
     { value: 'month', label: 'This Month' },
   ];
 
+  const handleTradeClick = (tradeId: string | undefined) => {
+    if (!tradeId) return;
+    setExpandedTradeId(expandedTradeId === tradeId ? null : tradeId);
+  };
+
   return (
     <div className="space-y-6">
       {/* Metrics Overview */}
@@ -62,9 +67,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -20 }}
                     className="px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => setExpandedTradeId(
-                      expandedTradeId === trade.id ? null : trade.id
-                    )}
+                    onClick={() => handleTradeClick(trade.id)}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -78,7 +81,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
                             {trade.type === 'buy' ? 'Bought' : 'Sold'} {trade.currency.toUpperCase()}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {formatDate(trade.created_at)}
+                            {formatDate(trade.created_at!)}
                           </p>
                         </div>
                       </div>

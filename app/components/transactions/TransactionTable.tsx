@@ -36,6 +36,10 @@ export default function TransactionTable({ transactions, onViewDetails }: Transa
     return tx.type === 'buy' || tx.type === 'sell';
   };
 
+  const formatAmount = (amount: number, currency: string = 'NGN') => {
+    return `${currency} ${formatCurrency(amount)}`;
+  };
+
   const sortedAndFilteredTransactions = useMemo(() => {
     return transactions
       .filter(tx => {
@@ -99,11 +103,11 @@ export default function TransactionTable({ transactions, onViewDetails }: Transa
             <TableRow key={tx.id}>
               <TableCell>{format(new Date(tx.created_at), 'MMM d, yyyy HH:mm')}</TableCell>
               <TableCell className="capitalize">{tx.type}</TableCell>
-              <TableCell>{formatCurrency(tx.amount, tx.currency || 'NGN')}</TableCell>
+              <TableCell>{formatAmount(tx.amount, tx.currency)}</TableCell>
               {isCryptoTransaction(tx) && (
                 <>
                   <TableCell>{tx.crypto_amount} {tx.crypto_currency}</TableCell>
-                  <TableCell>{formatCurrency(tx.rate, 'NGN')}</TableCell>
+                  <TableCell>{formatAmount(tx.rate)}</TableCell>
                 </>
               )}
               <TableCell>

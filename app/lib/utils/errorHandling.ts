@@ -1,7 +1,7 @@
-import { type Toast } from '@/components/ui/toast';
+import { type ToastProps } from '@/app/components/ui/toast';
 import { QuidaxError } from '@/app/lib/services/quidax';
 
-export const handleError = (error: unknown, defaultMessage: string, showToast: (props: Toast) => void) => {
+export const handleError = (error: unknown, defaultMessage: string, showToast: (props: ToastProps) => void) => {
   if (error instanceof QuidaxError) {
     showToast({
       id: "transaction-error",

@@ -108,10 +108,12 @@ export default function VerificationPage() {
         {tiers.map((tier, index) => (
           <motion.div
             key={tier.key}
-            initial="initial"
-            animate="animate"
-            transition={{ delay: index * 0.2 }}
             {...fadeInUp}
+            animate="animate"
+            transition={{ 
+              duration: 0.5,
+              delay: index * 0.2 
+            }}
           >
             <Card className="h-full relative overflow-hidden">
               {kycInfo?.currentTier === tier.key && (

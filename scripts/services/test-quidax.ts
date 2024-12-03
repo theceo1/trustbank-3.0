@@ -248,14 +248,13 @@ export class TestQuidaxService {
     try {
       console.log('Creating instant swap with params:', params);
       
+      // Simplified payload matching the successful request
       const response = await axios.post(
         `${this.baseUrl}/users/me/swap_quotation`,
         {
           from_currency: params.from_currency.toLowerCase(),
           to_currency: params.to_currency.toLowerCase(),
-          from_amount: params.from_amount,
-          type: 'instant',
-          payment_method: params.payment_method
+          from_amount: params.from_amount
         },
         {
           headers: {
@@ -280,34 +279,47 @@ export class TestQuidaxService {
     }
   }
 
+  static async checkWalletBalance(userId: string, currency: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/users/${userId}/wallets/${currency}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Failed to check wallet balance:', error);
+      throw error;
+    }
+  }
+
   static async confirmInstantSwap(params: {
     user_id: string;
     quotation_id: string;
     payment_method: 'card' | 'bank_transfer' | 'wallet';
   }) {
     try {
-      console.log('\nConfirming instant swap with params:', params);
-      
-      // Simplified payload matching the webhook structure
-      const payload = {
-        payment_method: params.payment_method,
-        confirm: true  // Add explicit confirmation
-      };
-
-      if (params.payment_method === 'bank_transfer') {
-        Object.assign(payload, {
-          bank_account_reference: 'test_bank_reference',
-          bank_code: '044',
-          account_name: 'Test Account',
-          account_number: '0123456789',
-          bank_name: 'Access Bank'
-        });
+      // First check wallet balance if using wallet payment
+      if (params.payment_method === 'wallet') {
+        const walletBalance = await this.checkWalletBalance(params.user_id, 'ngn');
+        console.log('Current wallet balance:', walletBalance);
       }
 
-      console.log('Request payload:', JSON.stringify(payload, null, 2));
-      
+      console.log('\nConfirming instant swap with params:', params);
+
+      // Simplified payload based on API docs
+      const payload = {
+        payment_method: params.payment_method,
+        confirm: true,
+        terms_and_conditions: true
+      };
+
       const response = await axios.post(
-        `${this.baseUrl}/users/${params.user_id}/swap_quotation/${params.quotation_id}/confirm`,
+        `${this.baseUrl}/users/me/swap_quotation/${params.quotation_id}/confirm`,
         payload,
         {
           headers: {
@@ -317,21 +329,103 @@ export class TestQuidaxService {
         }
       );
 
-      console.log('\nResponse status:', response.status);
-      console.log('Response data:', JSON.stringify(response.data, null, 2));
-      
       return response.data;
     } catch (error: any) {
-      const errorDetails = {
+      console.error('\nConfirm instant swap complete error:', {
         message: error.message,
         response: error.response?.data,
-        status: error.response?.status,
-        url: error.config?.url,
-        data: error.config?.data,
-        headers: error.response?.headers,
-        requestHeaders: error.config?.headers
-      };
-      console.error('\nConfirm instant swap error details:', JSON.stringify(errorDetails, null, 2));
+        status: error.response?.status
+      });
+      throw error;
+    }
+  }
+
+  // Add helper methods for quotation management
+  private static async getQuotation(userId: string, quotationId: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/users/me/swap_quotation/${quotationId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Get quotation error:', error.response?.data || error);
+      throw error;
+    }
+  }
+
+  private static async refreshQuotation(userId: string, quotationId: string, params: {
+    from_currency: string;
+    to_currency: string;
+    from_amount: string;
+  }) {
+    const response = await axios.post(
+      `${this.baseUrl}/users/${userId}/swap_quotation/${quotationId}/refresh`,
+      {
+        from_currency: params.from_currency.toLowerCase(),
+        to_currency: params.to_currency.toLowerCase(),
+        from_amount: params.from_amount
+      },
+      {
+        headers: {
+          'Authorization': `Bearer ${this.secretKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+    return response.data.data;
+  }
+
+  static async generateDepositAddress(params: {
+    user_id: string;
+    currency: string;
+  }) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/users/${params.user_id}/wallets/${params.currency}/addresses`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Generate deposit address error:', error);
+      throw error;
+    }
+  }
+
+  static async initiateDeposit(params: {
+    user_id: string;
+    currency: string;
+    amount: string;
+  }) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/users/${params.user_id}/deposits`,
+        {
+          currency: params.currency,
+          amount: params.amount,
+          payment_method: 'bank_transfer'
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Initiate deposit error:', error);
       throw error;
     }
   }

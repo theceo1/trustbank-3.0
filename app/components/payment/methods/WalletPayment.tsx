@@ -13,6 +13,16 @@ export default function WalletPayment({ trade, onComplete }: PaymentProcessorPro
   const hasInsufficientBalance = trade.amount > (trade.walletBalance || 0);
 
   const handlePayment = async () => {
+    if (!trade.id) {
+      toast({
+        id: 'invalid-trade',
+        title: "Invalid Trade",
+        description: "Trade details are incomplete",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (hasInsufficientBalance) {
       toast({
         id: 'insufficient-balance',
@@ -72,7 +82,7 @@ export default function WalletPayment({ trade, onComplete }: PaymentProcessorPro
 
         <Button 
           onClick={handlePayment}
-          disabled={isProcessing || hasInsufficientBalance}
+          disabled={isProcessing || hasInsufficientBalance || !trade.id}
           className="w-full"
         >
           {isProcessing ? "Processing..." : "Confirm Payment"}

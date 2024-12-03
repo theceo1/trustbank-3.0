@@ -26,13 +26,16 @@ export function PaymentProcessor({ trade, onComplete }: PaymentProcessorProps) {
   }), []);
 
   useEffect(() => {
-    if (!trade.id) return;
+    if (!trade.id) {
+      console.error("Trade ID is undefined");
+      return;
+    }
 
     let cleanupFn: (() => void) | undefined;
 
     const initWatchStatus = async () => {
       cleanupFn = await TradeStatusService.watchStatus(
-        trade.id,
+        trade.id!,
         (newStatus: TradeStatus) => {
           if (!statusToProgress.hasOwnProperty(newStatus)) return;
           

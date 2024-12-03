@@ -30,10 +30,13 @@ ChartJS.register(
 
 export function TradeChart({ trades, period = 'week', height = 400 }: TradeChartProps) {
   const chartData: TradeChartData = useMemo(() => ({
-    labels: trades.map(trade => new Date(trade.created_at).toLocaleDateString()),
+    labels: trades.map(trade => {
+      const date = trade.created_at ? new Date(trade.created_at) : new Date();
+      return date.toLocaleDateString();
+    }),
     datasets: [{
       label: 'Trade Volume',
-      data: trades.map(trade => trade.amount),
+      data: trades.map(trade => trade.amount || 0),
       fill: true,
       borderColor: 'rgb(75, 192, 192)',
       backgroundColor: 'rgba(75, 192, 192, 0.2)',
