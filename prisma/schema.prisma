@@ -51,17 +51,18 @@ model Trade {
 }
 
 model User {
-  id         String   @id @default(cuid()) @db.Uuid
-  email      String   @unique
-  first_name String?
-  last_name  String?
-  quidax_id  String?
-  createdAt  DateTime @default(dbgenerated("timezone('utc'::text, now())")) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @default(dbgenerated("timezone('utc'::text, now())")) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  auth_user  users    @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                  String             @id @default(cuid()) @db.Uuid
+  email               String             @unique
+  first_name          String?
+  last_name           String?
+  quidax_id           String?
+  createdAt           DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime           @default(dbgenerated("timezone('utc'::text, now())")) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  auth_user           users              @relation(fields: [id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   admin_user          AdminUser?
   admin_activity_logs AdminActivityLog[]
-  admin_access_cache  AdminAccessCache?
+  admin_access_cache  admin_access_cache?
+  admin_profile       AdminProfile?
 
   @@map("users")
   @@schema("public")
@@ -143,7 +144,7 @@ model users {
   phone_change                    String?                 @default("")
   phone_change_token              String?                 @default("") @db.VarChar(255)
   phone_change_sent_at            DateTime?               @db.Timestamptz(6)
-  confirmed_at                    DateTime?               @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
+  confirmed_at                    DateTime?               @db.Timestamptz(6)
   email_change_token_current      String?                 @default("") @db.VarChar(255)
   email_change_confirm_status     Int?                    @default(0) @db.SmallInt
   banned_until                    DateTime?               @db.Timestamptz(6)
@@ -157,8 +158,8 @@ model users {
   one_time_tokens                 one_time_tokens[]
   sessions                        sessions[]
   account_settings                account_settings?
-  admin_access_cache              admin_access_cache?
-  admin_users                     admin_users?
+  admin_access_cache              admin_access_cache?     @relation("UsersToAdminAccessCache")
+  admin_users                     AdminUser?              @relation("UsersToAdminUser")
   analytics_events                analytics_events[]
   balances                        balances[]
   billing_history                 billing_history[]
@@ -208,8 +209,9 @@ model AdminUser {
   is_active  Boolean   @default(true)
   created_at DateTime  @default(now()) @db.Timestamptz(6)
   updated_at DateTime  @default(now()) @updatedAt @db.Timestamptz(6)
-  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  role       AdminRole @relation(fields: [role_id], references: [id])
+  user       User      @relation(fields: [user_id], references: [id], onDelete: Cascade, map: "admin_users_user_fkey")
+  role       AdminRole @relation(fields: [role_id], references: [id], map: "admin_users_role_fkey")
+  auth_user  users     @relation("UsersToAdminUser", fields: [user_id], references: [id], onDelete: Cascade, map: "admin_users_auth_user_fkey")
 
   @@unique([user_id])
   @@index([role_id])
@@ -233,14 +235,321 @@ model AdminActivityLog {
   @@schema("public")
 }
 
-model AdminAccessCache {
+model admin_access_cache {
   user_id      String   @id @db.Uuid
   is_admin     Boolean  @default(false)
   permissions  Json     @default("{}")
   last_checked DateTime @default(now()) @db.Timestamptz(6)
-  user         User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  user         User     @relation(map: "admin_access_cache_user_fkey", fields: [user_id], references: [id], onDelete: Cascade)
+  auth_user    users    @relation("UsersToAdminAccessCache", map: "admin_access_cache_auth_user_fkey", fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("admin_access_cache")
+  @@schema("public")
+}
+
+model AdminProfile {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  full_name  String?
+  avatar_url String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("admin_profiles")
+  @@schema("public")
+}
+
+// Additional models referenced in users model
+model identities {
+  id              String    @id @db.Uuid
+  user_id         String    @db.Uuid
+  identity_data   Json
+  provider        String
+  last_sign_in_at DateTime? @db.Timestamptz(6)
+  created_at      DateTime? @db.Timestamptz(6)
+  updated_at      DateTime? @db.Timestamptz(6)
+  user            users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([provider, user_id])
+  @@schema("auth")
+}
+
+model mfa_factors {
+  id            String    @id @db.Uuid
+  user_id       String    @db.Uuid
+  friendly_name String?
+  factor_type   String
+  status        String
+  created_at    DateTime? @db.Timestamptz(6)
+  updated_at    DateTime? @db.Timestamptz(6)
+  secret        String?
+  user          users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("auth")
+}
+
+model sessions {
+  id         String    @id @db.Uuid
+  user_id    String    @db.Uuid
+  created_at DateTime? @db.Timestamptz(6)
+  updated_at DateTime? @db.Timestamptz(6)
+  factor_id  String?   @db.Uuid
+  aal        String?   @db.VarChar(255)
+  not_after  DateTime? @db.Timestamptz(6)
+  user       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("auth")
+}
+
+model one_time_tokens {
+  id         String    @id @db.Uuid
+  user_id    String    @db.Uuid
+  token_hash String
+  created_at DateTime? @db.Timestamptz(6)
+  updated_at DateTime? @db.Timestamptz(6)
+  user       users     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("auth")
+}
+
+model account_settings {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  settings   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model analytics_events {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  event_type String
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model balances {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  currency   String
+  amount     Decimal  @db.Decimal
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, currency])
+  @@schema("public")
+}
+
+model billing_history {
+  id          String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id     String   @db.Uuid
+  amount      Decimal  @db.Decimal
+  currency    String
+  status      String
+  description String?
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  user        users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model crypto_transactions {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  currency   String
+  amount     Decimal  @db.Decimal
+  tx_hash    String?
+  status     String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model export_logs {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  file_type  String
+  status     String
+  url        String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model kyc_documents {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String
+  status     String
+  url        String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model kyc_status_tracking {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  status     String
+  level      Int      @default(0)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model kyc_verifications {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  status     String
+  data       Json?    @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model notifications {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String
+  message    String
+  read       Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model payment_methods {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String
+  details    Json
+  is_default Boolean  @default(false)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model profiles {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  full_name  String?
+  avatar_url String?
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model quidax_accounts {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  account_id String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model security_settings {
+  id             String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id        String   @db.Uuid
+  two_factor     Boolean  @default(false)
+  withdrawal_pin String?
+  last_updated   DateTime @default(now()) @db.Timestamptz(6)
+  created_at     DateTime @default(now()) @db.Timestamptz(6)
+  user           users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model stats {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String
+  value      Json
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model user_activity_logs {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  action     String
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model user_profiles {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @unique @db.Uuid
+  data       Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model verification_attempts {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String
+  status     String
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model verification_logs {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  type       String
+  status     String
+  metadata   Json     @default("{}")
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@schema("public")
+}
+
+model wallet_transactions {
+  id         String   @id @default(dbgenerated("uuid_generate_v4()")) @db.Uuid
+  user_id    String   @db.Uuid
+  trade_id   String   @db.Uuid
+  type       String
+  amount     Decimal  @db.Decimal
+  status     String
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  user       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  trade      Trade    @relation(fields: [trade_id], references: [id], onDelete: Cascade)
+
   @@schema("public")
 }
 
@@ -252,6 +561,10 @@ enum transaction_type {
   withdrawal
   deposit
   order
+  buy
+  sell
+
+  @@schema("public")
 }
 
 enum transaction_status {
@@ -261,4 +574,6 @@ enum transaction_status {
   cancelled
   reversed
   rejected
+
+  @@schema("public")
 }

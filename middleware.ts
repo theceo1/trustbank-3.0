@@ -50,13 +50,13 @@ export async function middleware(req: NextRequest) {
         return NextResponse.redirect(new URL('/auth/login?redirect=/admin/dashboard', req.url));
       }
 
-      const { data: adminUser } = await supabase
-        .from('admin_users')
-        .select('*, role:admin_roles(name, permissions)')
+      const { data: adminAccess } = await supabase
+        .from('admin_access_cache')
+        .select('is_admin, permissions')
         .eq('user_id', session.user.id)
         .single();
 
-      if (!adminUser?.is_active) {
+      if (!adminAccess?.is_admin) {
         return NextResponse.redirect(new URL('/dashboard', req.url));
       }
     }

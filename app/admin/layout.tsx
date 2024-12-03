@@ -3,7 +3,7 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAdminAuth } from "./context/AdminAuthContext";
+import { useAdminAuth, AdminAuthProvider } from "./context/AdminAuthContext";
 import AdminHeader from "./components/AdminHeader";
 import AdminSidebar from "./components/AdminSidebar";
 import { useToast } from "@/hooks/use-toast";
@@ -15,9 +15,17 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAdmin, isLoading, adminUser } = useAdminAuth();
-  const router = useRouter();
+  return (
+    <AdminAuthProvider>
+      <AdminLayoutContent>{children}</AdminLayoutContent>
+    </AdminAuthProvider>
+  );
+}
+
+function AdminLayoutContent({ children }: { children: React.ReactNode }) {
+  const { isAdmin, isLoading } = useAdminAuth();
   const { toast } = useToast();
+  const router = useRouter();
 
   useEffect(() => {
     if (!isLoading && !isAdmin) {
