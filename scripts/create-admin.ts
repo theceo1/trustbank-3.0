@@ -99,3 +99,5 @@ async function setupAdminTables() {
 }
 
 setupAdminTables();
+
+export { setupAdminTables };

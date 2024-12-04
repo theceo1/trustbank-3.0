@@ -1,3 +1,4 @@
+// scripts/test-admin-flow.ts
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';

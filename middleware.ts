@@ -2,6 +2,7 @@
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
+import { AdminService } from '@/app/lib/services/admin';
 
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
@@ -13,7 +14,7 @@ export async function middleware(req: NextRequest) {
       data: { session },
     } = await supabase.auth.getSession();
 
-    // Force dynamic behavior for specific routes
+    // Dynamic routes configuration (referencing existing code)
     const dynamicRoutes = [
       '/dashboard',
       '/profile',
@@ -29,25 +30,10 @@ export async function middleware(req: NextRequest) {
       res.headers.set('Pragma', 'no-cache');
     }
 
-    // Allow access to auth-related pages
-    if (pathname.startsWith('/auth')) {
-      if (session && pathname !== '/auth/verify') {
-        return NextResponse.redirect(new URL('/dashboard', req.url));
-      }
-      return res;
-    }
-
-    // Redirect unauthenticated users to login
-    if (!session && !pathname.startsWith('/auth')) {
-      const redirectUrl = new URL('/auth/login', req.url);
-      redirectUrl.searchParams.set('redirect', pathname);
-      return NextResponse.redirect(redirectUrl);
-    }
-
-    // Check if user is admin for /admin routes
+    // Handle admin routes first
     if (pathname.startsWith('/admin')) {
       if (!session?.user?.id) {
-        return NextResponse.redirect(new URL('/auth/login?redirect=/admin/dashboard', req.url));
+        return NextResponse.redirect(new URL('/admin/auth/login', req.url));
       }
 
       const { data: adminAccess } = await supabase
@@ -57,14 +43,44 @@ export async function middleware(req: NextRequest) {
         .single();
 
       if (!adminAccess?.is_admin) {
+        return NextResponse.redirect(new URL('/auth/login', req.url));
+      }
+      return res;
+    }
+
+    // Handle auth routes
+    if (pathname.startsWith('/auth')) {
+      if (session) {
+        // Check if user is admin and redirect accordingly
+        const { data: adminAccess } = await supabase
+          .from('admin_access_cache')
+          .select('is_admin')
+          .eq('user_id', session.user.id)
+          .single();
+
+        if (adminAccess?.is_admin) {
+          return NextResponse.redirect(new URL('/admin/dashboard', req.url));
+        }
         return NextResponse.redirect(new URL('/dashboard', req.url));
       }
+      return res;
+    }
+
+    // Handle protected routes
+    if (!session) {
+      const redirectUrl = new URL('/auth/login', req.url);
+      redirectUrl.searchParams.set('redirect', pathname);
+      return NextResponse.redirect(redirectUrl);
     }
 
     return res;
   } catch (error) {
     console.error('Middleware error:', error);
-    return NextResponse.redirect(new URL('/auth/login', req.url));
+    // Determine appropriate redirect based on the route type
+    const redirectUrl = pathname.startsWith('/admin') 
+      ? '/admin/auth/login' 
+      : '/auth/login';
+    return NextResponse.redirect(new URL(redirectUrl, req.url));
   }
 }
 

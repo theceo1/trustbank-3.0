@@ -6,8 +6,12 @@
     "esModuleInterop": true,
     "strict": true,
     "types": ["node"],
-    "outDir": "dist"
+    "outDir": "../dist",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["../*"]
+    }
   },
   "include": ["./**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["../node_modules"]
 }
