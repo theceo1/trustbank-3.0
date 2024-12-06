@@ -1,3 +1,4 @@
+// app/types/trade.ts
 import { PaymentMethodType } from './payment';
 
 export type TradeType = 'buy' | 'sell' | 'send' | 'receive' | 'swap';
@@ -35,23 +36,22 @@ export interface SwapDetails {
 export interface TradeDetails {
   id?: string;
   user_id: string;
-  type: TradeType;
-  currency: string;
   amount: number;
+  currency: string;
+  type: TradeType;
+  status: TradeStatus;
+  payment_method: PaymentMethodType;
   rate: number;
   total: number;
   fees: {
-    quidax: number;
     platform: number;
     processing: number;
+    total: number;
   };
-  payment_method: string;
-  status: string;
+  created_at?: string;  // Make it optional
+  updated_at?: string;  // Make it optional
   walletBalance?: number;
   reference?: string;
-  quidax_reference?: string;
-  created_at?: string;
-  updated_at?: string;
 }
 
 export interface TradeRateRequest {

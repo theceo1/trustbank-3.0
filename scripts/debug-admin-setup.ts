@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+// scripts/debug-admin-setup.ts
+import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 
@@ -19,7 +20,7 @@ async function debugAdminSetup() {
     
     if (authError) throw new Error(`Auth error: ${authError.message}`);
     
-    const adminUser = users.find(u => u.email === 'admin001@trustbank.tech');
+    const adminUser = (users as User[]).find(u => u.email === 'admin001@trustbank.tech');
     console.log('Auth user exists:', !!adminUser);
     if (adminUser) {
       console.log('Auth user ID:', adminUser.id);

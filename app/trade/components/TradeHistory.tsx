@@ -115,7 +115,7 @@ export function TradeHistory({ trades }: TradeHistoryProps) {
                             </div>
                             <div>
                               <p className="text-muted-foreground">Service Fee</p>
-                              <p className="font-medium">{formatCurrency(trade.fees.quidax)}</p>
+                              <p className="font-medium">{formatCurrency(trade.fees.total)}</p>
                             </div>
                             <div>
                               <p className="text-muted-foreground">Network Fee</p>

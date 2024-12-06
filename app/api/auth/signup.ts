@@ -1,51 +1,52 @@
 //app/api/auth/signups.ts test users
-import { prisma } from '@/app/lib/prisma';
+import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
 export const createTestUsers = async () => {
-    const users = await Promise.all([
-      prisma.users.create({
-        data: {
-          id: uuidv4(),
-          email: "user1@test.com",
-          encrypted_password: "hashedPassword1",
-          user: {
-            create: {
-              email: "user1@test.com",
-              first_name: "Test",
-              last_name: "User1"
-            }
-          },
-          wallets: {
-            create: {
-              id: uuidv4(),
-              balance: 0,
-              pending_balance: 0
-            }
-          }
-        }
-      }),
-      prisma.users.create({
-        data: {
-          id: uuidv4(),
-          email: "user2@test.com",
-          encrypted_password: "hashedPassword2",
-          user: {
-            create: {
-              email: "user2@test.com",
-              first_name: "Test",
-              last_name: "User2"
-            }
-          },
-          wallets: {
-            create: {
-              id: uuidv4(),
-              balance: 0,
-              pending_balance: 0
-            }
-          }
-        }
-      })
-    ]);
-    return users;
-  }
+  const users = await Promise.all([
+    createTestUser('user1@test.com', 'User1'),
+    createTestUser('user2@test.com', 'User2')
+  ]);
+  return users;
+};
+
+async function createTestUser(email: string, lastName: string) {
+  const { data: authUser, error: createError } = await supabase.auth.admin.createUser({
+    email,
+    password: 'hashedPassword1',
+    email_confirm: true
+  });
+
+  if (createError) throw createError;
+  if (!authUser.user) throw new Error('Failed to create auth user');
+
+  const { error: userError } = await supabase
+    .from('users')
+    .insert({
+      id: authUser.user.id,
+      email: email,
+      first_name: 'Test',
+      last_name: lastName
+    });
+
+  if (userError) throw userError;
+
+  const { error: walletError } = await supabase
+    .from('wallets')
+    .insert({
+      id: uuidv4(),
+      user_id: authUser.user.id,
+      currency: 'USDT',
+      balance: 0,
+      pending_balance: 0
+    });
+
+  if (walletError) throw walletError;
+
+  return authUser.user;
+}

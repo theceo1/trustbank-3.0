@@ -1,74 +1,92 @@
 //app/api/transactions/swap.ts
-import { prisma } from '@/app/lib/prisma';
-import { transaction_type, transaction_status } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+type TransactionType = 'buy' | 'sell';
+type TransactionStatus = 'pending' | 'completed' | 'failed';
 
 export const createSwapTransaction = async (
   senderId: string, 
   receiverId: string, 
   amount: number
 ) => {
-  const result = await prisma.$transaction(async (tx) => {
-    // Create trade record
-    const trade = await tx.trade.create({
-      data: {
+  // Create trade record
+  const { data: trade, error: tradeError } = await supabase
+    .from('trades')
+    .insert({
+      user_id: senderId,
+      type: 'sell' as TransactionType,
+      currency: "USDT",
+      amount: amount,
+      rate: 1,
+      status: 'pending' as TransactionStatus,
+      payment_method: "wallet",
+      crypto_amount: amount,
+      fiat_amount: amount
+    })
+    .select()
+    .single();
+
+  if (tradeError) throw tradeError;
+
+  // Create transaction records
+  const [senderTxResult, receiverTxResult] = await Promise.all([
+    supabase
+      .from('transactions')
+      .insert({
+        id: uuidv4(),
         user_id: senderId,
-        type: transaction_type.sell,
+        type: 'sell' as TransactionType,
+        amount: -amount,
+        status: 'pending' as TransactionStatus,
         currency: "USDT",
+        description: `USDT transfer to ${receiverId}`
+      })
+      .select()
+      .single(),
+    supabase
+      .from('transactions')
+      .insert({
+        id: uuidv4(),
+        user_id: receiverId,
+        type: 'sell' as TransactionType,
         amount: amount,
-        rate: 1,
-        status: transaction_status.pending,
-        payment_method: "wallet",
-        crypto_amount: amount,
-        fiat_amount: amount
-      }
-    });
-
-    // Create transaction records
-    const [senderTx, receiverTx] = await Promise.all([
-      tx.transaction.create({
-        data: {
-          id: uuidv4(),
-          userId: senderId,
-          type: transaction_type.sell,
-          amount: -amount,
-          status: transaction_status.pending,
-          currency: "USDT",
-          description: `USDT transfer to ${receiverId}`
-        }
-      }),
-      tx.transaction.create({
-        data: {
-          id: uuidv4(),
-          userId: receiverId,
-          type: transaction_type.sell,
-          amount: amount,
-          status: transaction_status.pending,
-          currency: "USDT",
-          description: `USDT received from ${senderId}`
-        }
+        status: 'pending' as TransactionStatus,
+        currency: "USDT",
+        description: `USDT received from ${senderId}`
       })
-    ]);
+      .select()
+      .single()
+  ]);
 
-    // Update wallets
-    await Promise.all([
-      tx.wallet.update({
-        where: { id: senderId },
-        data: {
-          balance: { decrement: amount },
-          pending_balance: { increment: amount }
-        }
-      }),
-      tx.wallet.update({
-        where: { id: receiverId },
-        data: {
-          pending_balance: { increment: amount }
-        }
-      })
-    ]);
+  if (senderTxResult.error) throw senderTxResult.error;
+  if (receiverTxResult.error) throw receiverTxResult.error;
 
-    return { trade, senderTx, receiverTx };
-  });
+  // Update wallets using RPC function
+  const [senderUpdate, receiverUpdate] = await Promise.all([
+    supabase.rpc('update_wallet_balance', {
+      p_user_id: senderId,
+      p_currency: 'usdt',
+      p_amount: -amount
+    }),
+    supabase.rpc('update_wallet_balance', {
+      p_user_id: receiverId,
+      p_currency: 'usdt',
+      p_amount: amount
+    })
+  ]);
 
-  return result;
-}
+  if (senderUpdate.error) throw senderUpdate.error;
+  if (receiverUpdate.error) throw receiverUpdate.error;
+
+  return {
+    trade: trade,
+    senderTx: senderTxResult.data,
+    receiverTx: receiverTxResult.data
+  };
+};

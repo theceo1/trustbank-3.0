@@ -31,7 +31,7 @@ export class WalletPaymentProcessor extends BasePaymentProcessor {
       amount: trade.total,
       currency: trade.currency,
       user_id: trade.user_id,
-      quidax_reference: trade.quidax_reference!
+      quidax_reference: trade.reference!
     });
   }
 

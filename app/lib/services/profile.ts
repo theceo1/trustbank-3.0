@@ -16,15 +16,14 @@ export class ProfileService {
           id,
           user_id,
           full_name,
-          email,
+          quidax_id,
           is_verified,
-          kyc_status,
+          kyc_verified,
           kyc_tier,
-          kyc_level,
-          trading_limit,
+          daily_limit,
+          monthly_limit,
           referral_code,
-          referral_count,
-          referred_by
+          documents
         `)
         .eq('user_id', userId)
         .single();
@@ -51,13 +50,12 @@ export class ProfileService {
         .insert([{
           user_id: userId,
           full_name: fullName,
-          is_verified: false,
-          kyc_status: 'unverified',
+          kyc_verified: false,
           kyc_tier: 'unverified',
-          kyc_level: 0,
-          trading_limit: 0,
-          referral_count: 0,
-          kyc_documents: {}
+          daily_limit: 0,
+          monthly_limit: 0,
+          documents: {},
+          is_test: false
         }])
         .select()
         .single();

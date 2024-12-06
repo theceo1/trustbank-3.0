@@ -45,7 +45,7 @@ export class TradeStatusService {
   static async verifyPayment(trade: TradeDetails): Promise<TradeStatus> {
     try {
       const processor = PaymentProcessorFactory.getProcessor(trade.payment_method as PaymentMethodType);
-      const result = await processor.verifyPayment(trade.quidax_reference!);
+      const result = await processor.verifyPayment(trade.reference!);
       
       return TradeStatus.PENDING;
     } catch (error) {

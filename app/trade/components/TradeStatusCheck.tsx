@@ -1,15 +1,17 @@
+//app/trade/components/TradeStatusCheck.tsx
 import { useEffect } from 'react';
 import { useTrade } from '@/app/contexts/TradeContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Progress } from '@/components/ui/progress';
 import { TradeUtils } from '@/app/lib/services/tradeUtils';
+import { TradeStatus } from '@/app/types/trade';
 
 export function TradeStatusCheck() {
   const { currentTrade, checkTradeStatus } = useTrade();
 
   useEffect(() => {
     const tradeId = currentTrade?.id;
-    if (tradeId && currentTrade?.status && ['pending', 'processing'].includes(currentTrade.status)) {
+    if (tradeId && currentTrade?.status && [TradeStatus.PENDING, TradeStatus.PROCESSING].includes(currentTrade.status)) {
       const interval = setInterval(() => {
         checkTradeStatus(tradeId);
       }, 5000); // Check every 5 seconds
@@ -27,7 +29,7 @@ export function TradeStatusCheck() {
       <AlertTitle>Trade Status: {currentTrade.status}</AlertTitle>
       <AlertDescription>
         <div className="mt-2 space-y-2">
-          <Progress value={currentTrade.status === 'completed' ? 100 : 50} />
+          <Progress value={currentTrade.status === TradeStatus.COMPLETED ? 100 : 50} />
           <p className="text-sm text-muted-foreground">
             {currentTrade.type === 'buy' ? 'Buying' : 'Selling'}{' '}
             {TradeUtils.formatAmount(currentTrade.amount, currentTrade.currency)} at{' '}

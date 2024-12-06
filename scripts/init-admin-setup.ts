@@ -2,7 +2,6 @@
 // It creates the auth user, admin role, public user record, admin user entry, and updates the access cache
 
 //scripts/init-admin-setup.ts
-// import { PrismaClient } from '@prisma/client';
 import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -16,12 +15,11 @@ const supabase = createClient(
 
 // Using the tested getOrCreateAuthUser function from setup-admin.ts
 async function getOrCreateAuthUser(email: string, password: string): Promise<User> {
-  // First try to get the user
   const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
   
   if (listError) throw listError;
   
-  const existingUser = users.find(u => u.email === email);
+  const existingUser = (users as User[]).find(u => u.email === email);
   if (existingUser) {
     return existingUser;
   }
@@ -51,25 +49,27 @@ async function initAdminSetup() {
     const authUser = await getOrCreateAuthUser('admin001@trustbank.tech', 'SecureAdminPass123!');
     console.log('✅ Auth user ready:', authUser.id);
 
-    // 2. Create admin role using Prisma
+    // 2. Create admin role using Supabase
     console.log('\nCreating admin role...');
-    const role = await supabase.from('admin_role').upsert({
-      where: { name: 'super_admin' },
-      update: {},
-      create: {
-        name: 'super_admin',
-        permissions: {
-          all: true,
-          manage_users: true,
-          manage_roles: true,
-          manage_settings: true,
-          view_analytics: true,
-          manage_transactions: true,
-          manage_kyc: true,
-          manage_support: true
+    const { data: role, error: roleError } = await supabase
+  .from('admin_role')
+  .upsert({
+    name: 'super_admin',
+    permissions: {
+      all: true,
+      manage_users: true,
+      manage_roles: true,
+      manage_settings: true,
+      view_analytics: true,
+      manage_transactions: true,
+      manage_kyc: true,
+      manage_support: true
         }
-      }
-    });
+      })
+      .select()
+      .single();
+
+    if (roleError) throw roleError;
     console.log('✅ Admin role created');
 
     // 3. Create public user record

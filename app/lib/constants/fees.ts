@@ -20,3 +20,13 @@ export const FEES = {
     }
   } as Record<PaymentMethodType, { percentage: number; fixed: number }>
 };
+
+
+export const calculateTradeFees = (amount: number) => {
+  return {
+    quidax: amount * FEES.QUIDAX,
+    platform: amount * FEES.PLATFORM,
+    processing: amount * FEES.PROCESSING,
+    total: amount * (FEES.QUIDAX + FEES.PLATFORM + FEES.PROCESSING)
+  };
+};

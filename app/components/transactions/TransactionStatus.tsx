@@ -1,8 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { QuidaxService } from "@/app/lib/services/quidax";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { TransactionStatusBadge } from "@/app/components/ui/transaction-status-badge";
 import { TransactionStatus as TxStatus } from '@/app/types/transactions';
 

@@ -110,23 +110,40 @@ export class KYCService {
     }
   }
 
-  static async getKYCStatus(userId: string): Promise<{ isVerified: boolean }> {
+  static async getKYCStatus(userId: string) {
     try {
-      const { data, error } = await supabase
-        .from('kyc_verifications')
-        .select('*')
+      const { data: profileData, error: profileError } = await this.supabase
+        .from('user_profiles')
+        .select('kyc_tier, kyc_status')
         .eq('user_id', userId)
         .single();
 
-      if (error) {
-        console.error('KYC fetch error:', error);
-        return { isVerified: false };
+      if (profileError) {
+        if (profileError.code === 'PGRST116') {
+          // Create initial profile if it doesn't exist
+          const { data: newProfile, error: createError } = await this.supabase
+            .from('user_profiles')
+            .insert([{
+              user_id: userId,
+              kyc_tier: 'unverified',
+              kyc_status: 'pending'
+            }])
+            .select()
+            .single();
+
+          if (createError) throw createError;
+          return { isVerified: false, tier: 'unverified' };
+        }
+        throw profileError;
       }
 
-      return { isVerified: !!data?.verified_at };
+      return {
+        isVerified: profileData.kyc_status === 'approved',
+        tier: profileData.kyc_tier
+      };
     } catch (error) {
-      console.error('KYC fetch error:', error);
-      return { isVerified: false };
+      console.error('KYC status check failed:', error);
+      return { isVerified: false, tier: 'unverified' };
     }
   }
 

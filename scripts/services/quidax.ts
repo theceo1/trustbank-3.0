@@ -1,3 +1,5 @@
+// scripts/services/quidax.ts
+
 import axios from 'axios';
 import debug from 'debug';
 import dotenv from 'dotenv';
@@ -124,35 +126,6 @@ export class QuidaxService {
   }
 
   // Swap Methods
-  static async getTemporaryQuotation(userId: string, params: {
-    from_currency: string;
-    to_currency: string;
-    from_amount: string;
-  }) {
-    try {
-      const response = await axios.post(
-        `${this.baseUrl}/users/${userId}/temporary_swap_quotation`,
-        {
-          from_currency: params.from_currency.toLowerCase(),
-          to_currency: params.to_currency.toLowerCase(),
-          from_amount: params.from_amount
-        },
-        {
-          headers: {
-            'Authorization': `Bearer ${this.secretKey}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      return response.data.data;
-    } catch (error: any) {
-      log('Get temporary quotation error:', error.response?.data || error);
-      throw error;
-    }
-  }
-
   static async createSwapQuotation(userId: string, params: {
     from_currency: string;
     to_currency: string;
@@ -261,8 +234,6 @@ export class QuidaxService {
   static async verifyWebhook(payload: any, signature: string) {
     // Verify webhook signature using your Quidax webhook secret
     // Implementation depends on your webhook secret from Quidax dashboard
-    const webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
-    // Add verification logic here
   }
 
   static async getTransactionStatus(transactionId: string) {
@@ -421,5 +392,229 @@ export class QuidaxService {
     };
 
     return checkStatus();
+  }
+
+  static async initiateTransfer(params: {
+    userId: string;
+    amount: string;
+    currency: string;
+    payment_method: string;
+  }) {
+    const url = `${this.baseUrl}/v1/users/${params.userId}/deposits`;
+    
+    const headers = {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.secretKey}`,
+      'User-Agent': 'TrustBank/1.0'
+    };
+
+    try {
+      const response = await axios.post(url, params, { headers });
+      return response.data;
+    } catch (error) {
+      console.error('Initiate transfer error:', error);
+      throw error;
+    }
+  }
+
+  static async monitorDeposit(depositId: string, maxAttempts = 20) {
+    let attempts = 0;
+    const delay = 5000; // 5 seconds between checks
+    
+    const checkStatus = async (): Promise<any> => {
+      try {
+        const response = await axios.get(
+          `${this.baseUrl}/users/me/deposits/${depositId}`,
+          {
+            headers: {
+              'Authorization': `Bearer ${this.secretKey}`,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        
+        const status = response.data.data;
+        log(`Deposit ${depositId} status:`, status);
+
+        if (status.status === 'accepted') {
+          return status;
+        }
+
+        if (['rejected', 'failed', 'canceled'].includes(status.status)) {
+          throw new Error(`Deposit ${status.status}: ${status.message || 'No error message provided'}`);
+        }
+
+        if (attempts >= maxAttempts) {
+          throw new Error(`Deposit monitoring timeout after ${maxAttempts} attempts`);
+        }
+
+        attempts++;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return checkStatus();
+      } catch (error: any) {
+        console.error('Deposit monitoring error:', error);
+        throw error;
+      }
+    };
+
+    return checkStatus();
+  }
+
+  static async createInstantSwap(userId: string, params: {
+    from_currency: string;
+    to_currency: string;
+    from_amount: string;
+  }) {
+    try {
+      // Create swap quotation
+      const quotation = await this.createSwapQuotation(userId, {
+        from_currency: params.from_currency.toLowerCase(),
+        to_currency: params.to_currency.toLowerCase(),
+        from_amount: params.from_amount
+      });
+
+      if (!quotation?.id) {
+        throw new Error('Failed to create swap quotation');
+      }
+
+      // Confirm the swap quotation
+      const confirmedSwap = await this.confirmSwapQuotation(userId, quotation.id);
+
+      // Monitor the swap transaction
+      const finalStatus = await this.monitorTransaction(confirmedSwap.id);
+
+      return {
+        quotation,
+        confirmedSwap,
+        finalStatus
+      };
+    } catch (error: any) {
+      log('Instant swap error:', error.response?.data || error);
+      throw error;
+    }
+  }
+
+  static async getAdminWalletAddress(currency: string = 'usdt') {
+    try {
+      const adminUserId = process.env.ADMIN_USER_ID;
+      if (!adminUserId) {
+        throw new Error('Admin user ID not configured');
+      }
+
+      const walletInfo = await this.getWalletInfo(adminUserId, currency);
+      return walletInfo.deposit_address;
+    } catch (error: any) {
+      log('Get admin wallet error:', error.response?.data || error);
+      throw error;
+    }
+  }
+
+  static async validateToken() {
+    try {
+      const response = await axios.get(`${this.baseUrl}/users/me`, {
+        headers: {
+          'Authorization': `Bearer ${this.secretKey}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      return true;
+    } catch (error: any) {
+      log('Validate token error:', error.response?.data || error);
+      return false;
+    }
+  }
+
+  static async generateDepositAddress(params: {
+    user_id: string;
+    currency: string;
+  }) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/users/${params.user_id}/wallets/${params.currency}/addresses`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Generate deposit address error:', error);
+      throw error;
+    }
+  }
+
+  static async withdrawCrypto(params: {
+    user_id: string;
+    currency: string;
+    amount: string;
+    recipient_address: string;
+    network: string;
+    transaction_note?: string;
+    narration?: string;
+  }) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/users/${params.user_id}/withdraws`,
+        {
+          currency: params.currency,
+          amount: params.amount,
+          fund_uid: params.recipient_address,
+          network: params.network,
+          transaction_note: params.transaction_note || 'Crypto withdrawal',
+          narration: params.narration || 'Crypto withdrawal'
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Withdrawal error:', error);
+      throw error;
+    }
+  }
+
+  static async cancelWithdrawal(userId: string, withdrawalId: string) {
+    try {
+      const response = await axios.post(
+        `${this.baseUrl}/users/${userId}/withdraws/${withdrawalId}/cancel`,
+        {},
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Cancel withdrawal error:', error);
+      throw error;
+    }
+  }
+
+  static async getWithdrawalStatus(userId: string, withdrawalId: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/users/${userId}/withdraws/${withdrawalId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error) {
+      console.error('Get withdrawal status error:', error);
+      throw error;
+    }
   }
 } 

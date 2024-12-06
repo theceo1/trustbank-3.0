@@ -1,6 +1,26 @@
-import { prisma } from '@/app/lib/prisma';
+// app/lib/services/quidax-webhook.service.ts
+
 import { logger } from '@/app/lib/logger';
-import { transaction_type, transaction_status } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
+
+// Initialize Supabase client
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
+
+// Define types
+enum TransactionType {
+  BUY = 'buy',
+  SELL = 'sell',
+  WITHDRAWAL = 'withdrawal'
+}
+
+enum TransactionStatus {
+  COMPLETED = 'completed',
+  FAILED = 'failed',
+  PENDING = 'pending'
+}
 
 type WebhookEvent = {
   event: string;
@@ -52,25 +72,59 @@ export class QuidaxWebhookService {
     }
   }
 
-  private async handleInstantOrderDone(data: any) {
-    try {
-      const user = await prisma.user.findFirst({
-        where: { email: data.user.email }
+  private async findUserByEmail(email: string) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+
+    if (error) throw error;
+    if (!user) throw new Error(`User not found: ${email}`);
+    return user;
+  }
+
+  private async createTransaction(data: {
+    userId: string;
+    type: TransactionType;
+    status: TransactionStatus;
+    amount: number;
+    currency: string;
+    reference: string;
+    description: string;
+    payment_method: string;
+  }) {
+    const { error } = await supabase
+      .from('transactions')
+      .insert({
+        ...data,
+        created_at: new Date().toISOString()
       });
 
-      if (!user) throw new Error(`User not found: ${data.user.email}`);
+    if (error) throw error;
+  }
 
-      await prisma.transaction.create({
-        data: {
-          userId: user.id,
-          type: transaction_type.buy,
-          status: transaction_status.completed,
-          amount: parseFloat(data.total.amount),
-          currency: data.total.unit.toUpperCase(),
-          reference: data.id,
-          description: `Instant order ${data.id}`,
-          payment_method: 'quidax'
-        }
+  private async updateTransaction(reference: string, status: TransactionStatus) {
+    const { error } = await supabase
+      .from('transactions')
+      .update({ status })
+      .eq('reference', reference);
+
+    if (error) throw error;
+  }
+
+  private async handleInstantOrderDone(data: any) {
+    try {
+      const user = await this.findUserByEmail(data.user.email);
+      await this.createTransaction({
+        userId: user.id,
+        type: TransactionType.BUY,
+        status: TransactionStatus.COMPLETED,
+        amount: parseFloat(data.total.amount),
+        currency: data.total.unit.toUpperCase(),
+        reference: data.id,
+        description: `Instant order ${data.id}`,
+        payment_method: 'quidax'
       });
     } catch (error) {
       logger.error('Error handling instant order:', error);
@@ -79,40 +133,33 @@ export class QuidaxWebhookService {
   }
 
   private async handleInstantOrderCancelled(data: any) {
-    await this.updateTransaction(data.id, transaction_status.failed, data);
+    await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 
   private async handleInstantOrderFailed(data: any) {
-    await this.updateTransaction(data.id, transaction_status.failed, data);
+    await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 
   private async handleSwapReversed(data: any) {
-    await this.updateTransaction(data.id, transaction_status.failed, data);
+    await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 
   private async handleSwapFailed(data: any) {
-    await this.updateTransaction(data.id, transaction_status.failed, data);
+    await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 
   private async handleSwapCompleted(data: any) {
     try {
-      const user = await prisma.user.findFirst({
-        where: { email: data.user.email }
-      });
-
-      if (!user) throw new Error(`User not found: ${data.user.email}`);
-
-      await prisma.transaction.create({
-        data: {
-          userId: user.id,
-          type: transaction_type.sell,
-          status: transaction_status.completed,
-          amount: parseFloat(data.from_amount),
-          currency: data.from_currency.toUpperCase(),
-          reference: data.id,
-          description: `Swap transaction ${data.id}`,
-          payment_method: 'quidax'
-        }
+      const user = await this.findUserByEmail(data.user.email);
+      await this.createTransaction({
+        userId: user.id,
+        type: TransactionType.SELL,
+        status: TransactionStatus.COMPLETED,
+        amount: parseFloat(data.from_amount),
+        currency: data.from_currency.toUpperCase(),
+        reference: data.id,
+        description: `Swap transaction ${data.id}`,
+        payment_method: 'quidax'
       });
     } catch (error) {
       logger.error('Error handling swap:', error);
@@ -122,23 +169,16 @@ export class QuidaxWebhookService {
 
   private async handleWithdrawSuccessful(data: any) {
     try {
-      const user = await prisma.user.findFirst({
-        where: { email: data.user.email }
-      });
-
-      if (!user) throw new Error(`User not found: ${data.user.email}`);
-
-      await prisma.transaction.create({
-        data: {
-          userId: user.id,
-          type: transaction_type.withdrawal,
-          status: transaction_status.completed,
-          amount: parseFloat(data.amount),
-          currency: data.currency.toUpperCase(),
-          reference: data.id,
-          description: `Withdrawal ${data.id}`,
-          payment_method: 'quidax'
-        }
+      const user = await this.findUserByEmail(data.user.email);
+      await this.createTransaction({
+        userId: user.id,
+        type: TransactionType.WITHDRAWAL,
+        status: TransactionStatus.COMPLETED,
+        amount: parseFloat(data.amount),
+        currency: data.currency.toUpperCase(),
+        reference: data.id,
+        description: `Withdrawal ${data.id}`,
+        payment_method: 'quidax'
       });
     } catch (error) {
       logger.error('Error handling withdrawal:', error);
@@ -147,28 +187,21 @@ export class QuidaxWebhookService {
   }
 
   private async handleWithdrawRejected(data: any) {
-    await this.updateTransaction(data.id, transaction_status.failed, data);
+    await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 
   private async handleOrderDone(data: any) {
     try {
-      const user = await prisma.user.findFirst({
-        where: { email: data.user.email }
-      });
-
-      if (!user) throw new Error(`User not found: ${data.user.email}`);
-
-      await prisma.transaction.create({
-        data: {
-          userId: user.id,
-          type: transaction_type.buy,
-          status: transaction_status.completed,
-          amount: parseFloat(data.origin_volume.amount),
-          currency: data.origin_volume.unit.toUpperCase(),
-          reference: data.id,
-          description: `Order ${data.id}`,
-          payment_method: 'quidax'
-        }
+      const user = await this.findUserByEmail(data.user.email);
+      await this.createTransaction({
+        userId: user.id,
+        type: TransactionType.BUY,
+        status: TransactionStatus.COMPLETED,
+        amount: parseFloat(data.origin_volume.amount),
+        currency: data.origin_volume.unit.toUpperCase(),
+        reference: data.id,
+        description: `Order ${data.id}`,
+        payment_method: 'quidax'
       });
     } catch (error) {
       logger.error('Error handling order:', error);
@@ -177,19 +210,7 @@ export class QuidaxWebhookService {
   }
 
   private async handleOrderCancelled(data: any) {
-    await this.updateTransaction(data.id, transaction_status.failed, data);
-  }
-
-  private async updateTransaction(transactionId: string, status: transaction_status, data: any) {
-    try {
-      await prisma.transaction.updateMany({
-        where: { reference: transactionId },
-        data: { status }
-      });
-    } catch (error) {
-      logger.error('Error updating transaction:', error);
-      throw error;
-    }
+    await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 }
 

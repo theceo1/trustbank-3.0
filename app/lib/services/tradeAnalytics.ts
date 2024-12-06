@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { TradeDetails } from '@/app/types/trade';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,7 +61,7 @@ export class TradeAnalyticsService {
 export class TradeAnalytics {
   static calculateTotalVolume(trades: TradeDetails[]): number {
     return trades.reduce((total, trade) => {
-      if (trade.status === 'completed') {
+      if (trade.status === TradeStatus.COMPLETED) {
         return total + (trade.amount * trade.rate);
       }
       return total;
@@ -70,7 +70,7 @@ export class TradeAnalytics {
 
   static getSuccessRate(trades: TradeDetails[]): number {
     if (trades.length === 0) return 0;
-    const completedTrades = trades.filter(t => t.status === 'completed').length;
+    const completedTrades = trades.filter(t => t.status === TradeStatus.COMPLETED).length;
     return (completedTrades / trades.length) * 100;
   }
 

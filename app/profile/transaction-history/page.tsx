@@ -64,7 +64,7 @@ export default function TransactionHistoryPage() {
   const { user } = useAuth();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all");
+  const [filter, setFilter] = useState<'all' | 'completed' | 'pending' | 'failed'>('all');
   const [dateRange, setDateRange] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -132,7 +132,7 @@ export default function TransactionHistoryPage() {
                 />
               </div>
               
-              <Select value={filter} onValueChange={setFilter}>
+              <Select value={filter} onValueChange={(value) => setFilter(value as 'all' | 'completed' | 'pending' | 'failed')}>
                 <SelectTrigger className="w-full md:w-[150px]">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>

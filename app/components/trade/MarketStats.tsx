@@ -1,3 +1,5 @@
+//app/components/trade/MarketStats.tsx
+
 import { useEffect, useState } from 'react';
 import { formatCurrency } from '@/app/lib/utils';
 
@@ -53,7 +55,7 @@ export default function MarketStats() {
         </div>
         <div>
           <p className="text-gray-600">24h Change</p>
-          <p className={`text-xl font-bold ${marketData.price_change_24h >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+          <p className={`text-xl font-bold ${marketData.price_change_24h >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             {marketData.price_change_24h.toFixed(2)}%
           </p>
         </div>

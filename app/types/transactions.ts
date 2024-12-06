@@ -42,6 +42,6 @@ export interface ReferralTransaction extends BaseTransaction {
 export interface TransactionFilters {
   currency?: string;
   limit?: number;
-  status: string;
+  status: 'all' | 'completed' | 'pending' | 'failed';
   dateRange: string;
 }

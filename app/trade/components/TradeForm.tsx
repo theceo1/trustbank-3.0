@@ -12,7 +12,7 @@ import { TradePreview } from './TradePreview';
 import { SwapForm } from './SwapForm';
 import { StandardTradeForm } from './StandardTradeForm';
 import { TradeTypeSelector } from './TradeTypeSelector';
-import { TradeDetails, TradeType, TradeRateResponse } from '@/app/types/trade';
+import { TradeDetails, TradeType, TradeRateResponse, TradeStatus } from '@/app/types/trade';
 import { PaymentMethodType } from '@/app/types/payment';
 import { MarketRateService } from '@/app/lib/services/market-rate';
 import { UnifiedTradeService } from '@/app/lib/services/unified-trade';
@@ -29,7 +29,7 @@ const RATE_REFRESH_BUFFER = 5000; // 5 seconds before expiry
 
 export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   const { user } = useUser();
-  const { checkKYCStatus } = useKYC();
+  const { checkKYCStatus, checkTradeLimits } = useKYC();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -99,50 +99,44 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   }, [fetchRate]);
 
   const handleTradeSubmit = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please login to continue",
+        variant: "destructive"
+      });
+      router.push('/login');
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const kycStatus = await checkKYCStatus();
       
+      // Check KYC status first
+      const kycStatus = await checkKYCStatus();
       if (!kycStatus) {
         toast({
-          id: "kyc-required",
-          title: "KYC Verification Required",
+          title: "KYC Required",
           description: "Please complete your identity verification to trade this amount",
           variant: "destructive"
         });
-        
-        // Short delay before redirect to ensure toast is visible
-        setTimeout(() => {
-          router.push('/profile/verification');
-        }, 1500);
+        router.push('/profile/verification');
         return;
       }
 
-      // Check KYC eligibility
-      const eligibility = await KYCService.isEligibleForTrade(user!.id);
-
-      if (!eligibility.eligible) {
+      // Check trade limits
+      const limitCheck = await checkTradeLimits(Number(tradeState.amount));
+      if (!limitCheck.allowed) {
         toast({
-          id: "kyc-tier-limit",
-          title: "Trade Not Allowed",
-          description: eligibility.reason || "Please upgrade your KYC tier to proceed with this trade",
+          title: "Trade Limit Exceeded",
+          description: limitCheck.reason,
           variant: "destructive"
         });
-        
-        setTimeout(() => {
-          router.push('/verification/upgrade');
-        }, 1500);
         return;
       }
 
-      const fees = await FeeService.calculateFees({
-        user_id: user!.id,
-        currency: tradeState.fromCurrency,
-        amount: Number(tradeState.amount)
-      });
-
+      // Proceed with trade
       const tradeDetails = createTradeDetails();
-      
       setTradeState(prev => ({
         ...prev,
         showPreview: true,
@@ -199,6 +193,10 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
   const createTradeDetails = (): TradeDetails => {
     if (!user || !tradeState.rate) throw new Error('Invalid trade state');
     
+    const totalFees = tradeState.rate.fees.quidax + 
+                      tradeState.rate.fees.platform + 
+                      tradeState.rate.fees.processing;
+    
     return {
       user_id: user.id,
       type: tradeState.type,
@@ -207,12 +205,12 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
       rate: tradeState.rate.rate,
       total: tradeState.rate.total,
       fees: {
-        quidax: tradeState.rate.fees.quidax,
         platform: tradeState.rate.fees.platform,
-        processing: tradeState.rate.fees.processing
+        processing: tradeState.rate.fees.processing,
+        total: totalFees
       },
       payment_method: tradeState.paymentMethod,
-      status: 'pending'
+      status: TradeStatus.PENDING
     };
   };
 

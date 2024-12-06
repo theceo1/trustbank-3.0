@@ -1,3 +1,4 @@
+//app/lib/services/tradeNotifications.ts
 import { TradeStatus, TradeDetails } from '@/app/types/trade';
 
 export class TradeNotifications {
@@ -10,13 +11,14 @@ export class TradeNotifications {
   static async notifyTradeStatus(trade: TradeDetails) {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
-    const messages = {
-      completed: `Your ${trade.type} trade for ${trade.amount} ${trade.currency} has been completed`,
-      failed: `Your trade has failed. Please check your dashboard for details`,
-      processing: `Your trade is being processed`,
+    const messages: Record<TradeStatus, string> = {
+      [TradeStatus.COMPLETED]: `Your ${trade.type} trade for ${trade.amount} ${trade.currency} has been completed`,
+      [TradeStatus.FAILED]: `Your trade has failed. Please check your dashboard for details`,
+      [TradeStatus.PROCESSING]: `Your trade is being processed`,
+      [TradeStatus.PENDING]: `Your trade is pending`
     };
 
-    const message = messages[trade.status as keyof typeof messages];
+    const message = messages[trade.status];
     if (!message) return;
 
     new Notification('Trade Update', {
@@ -29,7 +31,6 @@ export class TradeNotifications {
     await this.requestPermission();
     
     // Setup WebSocket or polling for real-time updates
-    // This is a placeholder for the actual implementation
     const ws = new WebSocket(process.env.NEXT_PUBLIC_WS_URL!);
     
     ws.onmessage = (event) => {

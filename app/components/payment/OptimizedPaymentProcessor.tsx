@@ -12,14 +12,14 @@ export function OptimizedPaymentProcessor({
   onComplete
 }: PaymentProcessorProps) {
   const { isOptimized, avgProcessingTime } = usePaymentOptimization(
-    trade.payment_method
+    trade.payment_method || 'wallet'
   );
 
   const PaymentComponent = {
     wallet: WalletPayment,
     card: CardPayment,
     bank_transfer: BankTransferPayment
-  }[trade.payment_method] as React.ComponentType<any>;
+  }[trade.payment_method || 'wallet'] as React.ComponentType<any>;
 
   const formatTime = (time: number): string => {
     return time < 60 

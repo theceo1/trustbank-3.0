@@ -1,4 +1,5 @@
-import { createClient } from '@supabase/supabase-js';
+// scripts/verify-users.ts
+import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import debug from 'debug';
@@ -20,7 +21,7 @@ async function verifyUsers() {
     if (authError) throw authError;
 
     // Check admin user
-    const adminUser = users.find(u => u.email === 'admin001@trustbank.tech');
+    const adminUser = (users as User[]).find(u => u.email === 'admin001@trustbank.tech');
     if (adminUser) {
       log('✓ Admin auth user exists');
       log('Admin metadata:', adminUser.user_metadata);
@@ -29,7 +30,7 @@ async function verifyUsers() {
     }
 
     // Check regular user
-    const regularUser = users.find(u => u.email === 'user001@trustbank.tech');
+    const regularUser = (users as User[]).find(u => u.email === 'user001@trustbank.tech');
     if (regularUser) {
       log('✓ Regular auth user exists');
       log('Regular user metadata:', regularUser.user_metadata);

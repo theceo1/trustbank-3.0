@@ -6,7 +6,7 @@ export const PLATFORM_FEES = {
   total: 0.03 // 3% Total fee
 };
 
-export type PaymentMethodType = 'bank_transfer' | 'card' | 'wallet';
+export type PaymentMethodType = 'wallet' | 'card' | 'bank_transfer';
 
 export interface PaymentMethod {
   id: string;
@@ -80,3 +80,21 @@ export interface PaymentConfirmationProps {
   onConfirm: () => Promise<void>;
   onCancel: () => void;
 }
+
+// Payment methods by trade type explanation:
+const PAYMENT_METHODS = {
+  // When buying crypto:
+  buy: ['wallet', 'card', 'bank_transfer'], // User can pay using their wallet balance, card, or bank transfer
+  
+  // When selling crypto:
+  sell: ['bank_transfer'], // User receives money in their bank account
+  
+  // When swapping between cryptocurrencies:
+  swap: ['wallet'], // Uses crypto balance in wallet to swap
+  
+  // When sending crypto to another user:
+  send: ['wallet'], // Sends from user's crypto wallet
+  
+  // When receiving crypto:
+  receive: ['wallet'] // Receives into user's crypto wallet
+};

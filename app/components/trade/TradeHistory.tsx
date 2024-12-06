@@ -7,11 +7,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
 
 const statusColors: Record<TradeStatus, string> = {
-  PENDING: 'text-yellow-500',
-  PROCESSING: 'text-yellow-500',
-  COMPLETED: 'text-green-500',
-  FAILED: 'text-red-500'
+  PENDING: 'text-yellow-600',
+  PROCESSING: 'text-yellow-600',
+  COMPLETED: 'text-green-600',
+  FAILED: 'text-red-600'
 } as const;
+
+interface TradeHistoryProps {
+  userId: string;
+}
 
 export function TradeHistory() {
   const [trades, setTrades] = useState<TradeDetails[]>([]);

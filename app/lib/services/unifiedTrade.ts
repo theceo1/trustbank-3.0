@@ -40,9 +40,9 @@ export class UnifiedTradeService {
         rate: params.rate,
         total: params.amount * params.rate,
         fees: {
-          quidax: params.amount * 0.01,
           platform: 0,
-          processing: 0.0005
+          processing: 0.0005,
+          total: params.amount * 0.01
         },
         payment_method: params.paymentMethod,
         reference: quidaxTrade.reference,
@@ -156,9 +156,9 @@ export class UnifiedTradeService {
       rate: parseFloat(quidaxTrade.rate),
       total: parseFloat(quidaxTrade.total),
       fees: {
-        quidax: parseFloat(quidaxTrade.quidax_fee),
-        platform: 0,
-        processing: parseFloat(quidaxTrade.network_fee)
+        platform: parseFloat(quidaxTrade.platform_fee),
+        processing: parseFloat(quidaxTrade.network_fee),
+        total: parseFloat(quidaxTrade.total)
       },
       payment_method: quidaxTrade.payment_method,
       reference: quidaxTrade.reference,

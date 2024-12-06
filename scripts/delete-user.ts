@@ -1,9 +1,8 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
-import debug from 'debug';
+import { resolve } from 'path';
 
-const log = debug('user:delete');
-dotenv.config({ path: '.env.local' });
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,32 +11,31 @@ const supabase = createClient(
 
 async function deleteUser(email: string) {
   try {
-    log('Deleting user...');
+    console.log(`Attempting to delete user: ${email}`);
     
-    // List users to find the user ID
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
-    if (listError) throw listError;
+    const { data: { users }, error: fetchError } = await supabase.auth.admin.listUsers();
+    if (fetchError) throw fetchError;
 
-    const user = users.find(u => u.email === email);
+    const user = (users as User[]).find(u => u.email === email);
     if (!user) {
-      log('User not found');
+      console.log('User not found');
       return;
     }
 
-    // Delete the user
+    // Delete from auth
     const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
     if (deleteError) throw deleteError;
 
-    log('User deleted successfully');
-
-  } catch (error: any) {
-    log('\n❌ Deletion failed:', {
-      message: error?.message || 'Unknown error',
-      code: error?.code || 'NO_CODE'
-    });
-    process.exit(1);
+    console.log('User deleted successfully');
+  } catch (error) {
+    console.error('Failed to delete user:', error);
   }
 }
 
-// Delete the user
-deleteUser('user001@trustbank.tech'); 
+const email = process.argv[2];
+if (!email) {
+  console.error('Please provide an email address');
+  process.exit(1);
+}
+
+deleteUser(email); 

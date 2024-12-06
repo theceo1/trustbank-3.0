@@ -52,6 +52,15 @@ async function setupAdminTables() {
         permissions jsonb DEFAULT '{}',
         last_checked timestamptz DEFAULT now()
       );
+
+      CREATE TABLE IF NOT EXISTS public.admin_profiles (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID REFERENCES auth.users(id) UNIQUE,
+        full_name TEXT,
+        role TEXT DEFAULT 'admin',
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
     `);
     log('✓ Admin tables created');
 
@@ -101,7 +110,7 @@ async function setupAdminTables() {
     `, [user.user.id, role.permissions]);
     log('✓ Admin access cache updated');
 
-    log('\n✨ Admin setup completed successfully');
+    log('\n�� Admin setup completed successfully');
     log('\nLogin credentials:');
     log('Email: admin001@trustbank.tech');
     log('Password: SecureAdminPass123!');

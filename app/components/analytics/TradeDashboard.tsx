@@ -45,7 +45,7 @@ export function TradeDashboard({ userId }: { userId: string }) {
 
       <MetricCard
         title="Average Trade"
-        value={formatCurrency(data?.averageTradeSize)}
+        value={formatCurrency(data?.averageTradeSize || 0)}
         trend={data?.sizeTrend}
         icon="trending-up"
         loading={isLoading}

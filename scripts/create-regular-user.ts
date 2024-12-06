@@ -1,3 +1,4 @@
+//scripts/create-regular-user.ts
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -83,4 +84,4 @@ async function createRegularUser(email: string, password: string) {
 }
 
 // Create a regular user
-createRegularUser('user001@trustbank.tech', 'SecureUserPass123!'); 
+createRegularUser('user2@trustbank.tech', 'SecureUserPass123!'); 

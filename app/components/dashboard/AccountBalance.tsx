@@ -7,7 +7,8 @@ import Modal from '@/components/ui/modal';
 import { useAuth } from '@/context/AuthContext';
 import { Eye, EyeOff } from 'lucide-react';
 import { motion } from "framer-motion";
-import supabase from "@/lib/supabase/client";
+import { WalletService } from "@/app/lib/services/wallet";
+import supabase from '@/lib/supabase/client';
 
 interface BalanceData {
   balance: number;
@@ -39,20 +40,13 @@ export default function AccountBalance() {
       if (!user) return;
       
       try {
-        const { data, error } = await supabase
-          .from('wallets')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
-
-        if (error) throw error;
-
-        if (data) {
+        const wallet = await WalletService.getOrCreateWallet(user.id, 'NGN');
+        if (wallet) {
           setBalance({
-            ...data,
-            total: data.balance,
-            available: data.balance - (data.pending || 0),
-            pending: data.pending || 0,
+            ...wallet,
+            total: wallet.balance,
+            available: wallet.balance - (wallet.pending_balance || 0),
+            pending: wallet.pending_balance || 0,
             currency: '₦'
           });
         }
@@ -65,18 +59,23 @@ export default function AccountBalance() {
 
     fetchBalance();
 
-    // Subscribe to real-time changes
+    // Keep subscription code the same
     const subscription = supabase
       .channel('wallets')
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user?.id}` },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'wallets',
+          filter: `user_id=eq.${user?.id} AND currency=eq.NGN` 
+        },
         (payload: any) => {
           if (payload.new) {
             setBalance({
               ...payload.new,
               total: payload.new.balance,
-              available: payload.new.balance - (payload.new.pending || 0),
-              pending: payload.new.pending || 0,
+              available: payload.new.balance - (payload.new.pending_balance || 0),
+              pending: payload.new.pending_balance || 0,
               currency: '₦'
             });
           }

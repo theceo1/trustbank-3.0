@@ -26,6 +26,21 @@ interface InstantSwapParams {
   type: 'buy' | 'sell';
 }
 
+interface SwapQuotationParams {
+  from_currency: string;
+  to_currency: string;
+  from_amount: string;
+}
+
+interface SwapQuotation {
+  id: string;
+  from_currency: string;
+  to_currency: string;
+  quoted_price: string;
+  from_amount: string;
+  to_amount: string;
+  expires_at: string;
+}
 export class QuidaxService {
   private static async makeRequest(
     endpoint: string,
@@ -46,7 +61,7 @@ export class QuidaxService {
     return response;
   }
 
-  private static baseUrl = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static baseUrl = 'https://www.quidax.com/api/v1';
   private static apiKey = process.env.QUIDAX_SECRET_KEY || '';
   private static webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
 
@@ -449,18 +464,20 @@ export class QuidaxService {
     }
   }
 
-  static async generateWalletAddress(userId: string, currency: string) {
+  static async generateWalletAddress(userId: string, currency: string, network?: string) {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/users/${userId}/wallets/${currency}/address`, 
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Accept': 'application/json'
-          }
-        }
-      );
+      const url = `${this.baseUrl}/users/${userId}/wallets/${currency}/addresses`;
+      const body = network ? { network } : {};
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
 
       if (!response.ok) {
         throw new Error(`Failed to generate wallet address: ${response.statusText}`);
@@ -511,6 +528,24 @@ export class QuidaxService {
     return response.json();
   }
 
+  static async createSwapQuotation(userId: string, params: SwapQuotationParams): Promise<SwapQuotation> {
+    const response = await fetch(`${this.baseUrl}/users/${userId}/swap_quotation`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
+    });
+  
+    if (!response.ok) {
+      throw new Error('Failed to create swap quotation');
+    }
+  
+    const data = await response.json();
+    return data.data;
+  }
+
   static async checkPaymentStatus(reference: string): Promise<string> {
     try {
       const response = await fetch(`${process.env.QUIDAX_API_URL}/payments/${reference}`, {
@@ -528,6 +563,50 @@ export class QuidaxService {
       return this.mapQuidaxStatus(data.status);
     } catch (error) {
       console.error('Error checking payment status:', error);
+      throw error;
+    }
+  }
+  
+  static async confirmSwapQuotation(userId: string, quotationId: string) {
+    const response = await fetch(
+      `${this.baseUrl}/users/${userId}/swap_quotation/${quotationId}/confirm`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+  
+    if (!response.ok) {
+      throw new Error('Failed to confirm swap quotation');
+    }
+  
+    return response.json();
+  }
+
+  static async getWalletInfo(userId: string, currency: string) {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/users/${userId}/wallets/${currency}`,
+        {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to get wallet info: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get wallet info error:', error);
       throw error;
     }
   }

@@ -1,12 +1,10 @@
-export const formatCurrency = (amount: number | undefined): string => {
-  if (amount === undefined) return '-';
-  
-  return new Intl.NumberFormat('en-US', {
+export const formatCurrency = (amount: number, currency: string = 'NGN'): string => {
+  const formatter = new Intl.NumberFormat('en-NG', {
     style: 'currency',
-    currency: 'USD',
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  }).format(amount);
+    currency: currency,
+    minimumFractionDigits: 2
+  });
+  return formatter.format(amount);
 };
 
 export const formatDate = (date: string) => {

@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { Eye, EyeOff } from 'lucide-react';
 import { motion } from "framer-motion";
 import supabase from "@/lib/supabase/client";
+import { WalletService } from '@/app/lib/services/wallet';
 
 interface BalanceData {
   balance: number;
@@ -47,50 +48,21 @@ export default function AccountBalance() {
       if (!user) return;
       
       try {
-        const { data, error } = await supabase
-          .from('wallets')
-          .select('*')
-          .eq('user_id', user.id)
-          .single();
+        const wallets = await WalletService.getUserWallet(user.id);
 
-        if (error) {
-          if (error.code === 'PGRST116') {
-            // Create new wallet if none exists
-            const { data: newWallet, error: createError } = await supabase
-              .from('wallets')
-              .insert([
-                {
-                  user_id: user.id,
-                  balance: 0,
-                  total_deposits: 0,
-                  total_withdrawals: 0,
-                  pending_balance: 0,
-                  last_transaction_at: new Date().toISOString()
-                }
-              ])
-              .select()
-              .single();
+        if (wallets.length === 0) {
+          console.error('No wallets found for user');
+          return;
+        }
 
-            if (createError) throw createError;
-            
-            if (newWallet) {
-              setBalance({
-                ...newWallet,
-                total: newWallet.balance,
-                available: newWallet.balance - (newWallet.pending_balance || 0),
-                pending: newWallet.pending_balance || 0,
-                currency: '₦'
-              });
-            }
-          } else {
-            throw error;
-          }
-        } else if (data) {
+        if (wallets && wallets.length > 0) {
+          // Get NGN wallet for main balance display
+          const ngnWallet = wallets.find(w => w.currency === 'NGN') || wallets[0];
           setBalance({
-            ...data,
-            total: data.balance,
-            available: data.balance - (data.pending_balance || 0),
-            pending: data.pending_balance || 0,
+            ...ngnWallet,
+            total: ngnWallet.balance,
+            available: ngnWallet.balance - (ngnWallet.pending_balance || 0),
+            pending: ngnWallet.pending_balance || 0,
             currency: '₦'
           });
         }

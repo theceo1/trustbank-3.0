@@ -30,7 +30,7 @@ export function TransactionReceipt({ trade, onDownload }: TransactionReceiptProp
         <div className="space-y-4 border-t border-b py-4">
           <div className="flex justify-between">
             <span className="text-gray-600">Date</span>
-            <span>{formatDate(trade.created_at!)}</span>
+            <span>{formatDate(trade.created_at || new Date().toISOString())}</span>
           </div>
           <div className="flex justify-between">
             <span className="text-gray-600">Amount</span>

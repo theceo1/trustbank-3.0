@@ -1,59 +1,45 @@
+// app/lib/constants/kyc-tiers.ts
 export const KYC_TIERS = {
     unverified: {
       name: "Unverified",
       description: "Limited access to platform features",
       dailyLimit: 0,
       monthlyLimit: 0,
+      maxTransactionLimit: 0,
       requirements: [],
-      color: "text-gray-500",
-      benefits: ["Create account", "View market prices"]
+      color: "gray",
+      benefits: []
     },
     tier1: {
-      name: "Basic",
-      description: "Start trading with basic verification",
-      dailyLimit: 100000,
-      monthlyLimit: 1000000,
-      requirements: ["NIN Verification", "Selfie Verification"],
-      color: "text-blue-500",
-      benefits: [
-        "Basic trading features",
-        "Deposit up to ₦100,000 daily",
-        "Withdraw up to ₦100,000 daily",
-        "Basic support"
-      ]
+      name: "Tier 1",
+      description: "Basic verification level",
+      dailyLimit: 50000,
+      monthlyLimit: 200000,
+      maxTransactionLimit: 20000,
+      requirements: ["Valid NIN"],
+      color: "green",
+      benefits: ["Basic trading features"]
     },
     tier2: {
-      name: "Intermediate",
-      description: "Enhanced features with BVN verification",
-      dailyLimit: 1000000,
-      monthlyLimit: 50000000,
-      requirements: ["NIN Verification", "Selfie Verification", "BVN Verification"],
-      color: "text-purple-500",
-      benefits: [
-        "All Basic features",
-        "Increased daily limits",
-        "Priority support",
-        "Advanced trading features"
-      ]
+      name: "Tier 2",
+      description: "Intermediate verification level",
+      dailyLimit: 200000,
+      monthlyLimit: 1000000,
+      maxTransactionLimit: 100000,
+      requirements: ["BVN Verification"],
+      color: "blue",
+      benefits: ["Higher trading limits"]
     },
     tier3: {
-      name: "Advanced",
-      description: "Full access with government ID verification",
-      dailyLimit: 10000000,
-      monthlyLimit: Number.MAX_SAFE_INTEGER,
-      requirements: [
-        "NIN Verification",
-        "Selfie Verification",
-        "BVN Verification",
-        "Government ID (Driver's License or International Passport)"
-      ],
-      color: "text-gold-600",
-      benefits: [
-        "All Intermediate features",
-        "Highest transaction limits",
-        "VIP support",
-        "Advanced analytics",
-        "Premium features"
-      ]
+      name: "Tier 3",
+      description: "Advanced verification level",
+      dailyLimit: 1000000,
+      monthlyLimit: 5000000,
+      maxTransactionLimit: 500000,
+      requirements: ["ID Verification"],
+      color: "purple",
+      benefits: ["Maximum trading limits"]
     }
-  };
+  } as const;
+
+export type KYCTierLevel = keyof typeof KYC_TIERS;

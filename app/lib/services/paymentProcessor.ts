@@ -1,4 +1,4 @@
-import { TradeDetails } from '@/app/types/trade';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
 import { PaymentService } from './payment';
 import { QuidaxService } from './quidax';
 import { WalletService } from './wallet';
@@ -7,7 +7,7 @@ import { PaymentProcessorFactory } from './payment/PaymentProcessorFactory';
 
 export class PaymentProcessor {
   static async initializePayment(trade: TradeDetails) {
-    if (trade.status !== 'pending') {
+    if (trade.status !== TradeStatus.PENDING) {
       throw new Error('Invalid trade status');
     }
 
@@ -31,20 +31,20 @@ export class PaymentProcessor {
       throw new Error('Insufficient wallet balance');
     }
 
-    if (!trade.quidax_reference) {
+    if (!trade.reference) {
       throw new Error('Missing Quidax reference');
     }
 
     await WalletService.updateBalance(trade.user_id, -trade.total);
-    return QuidaxService.processWalletPayment(trade.quidax_reference);
+    return QuidaxService.processWalletPayment(trade.reference);
   }
 
   private static async processExternalPayment(trade: TradeDetails) {
-    if (!trade.quidax_reference) {
+    if (!trade.reference) {
       throw new Error('Missing Quidax reference');
     }
 
-    const paymentDetails = await QuidaxService.getPaymentDetails(trade.quidax_reference);
+    const paymentDetails = await QuidaxService.getPaymentDetails(trade.reference);
     return {
       payment_url: paymentDetails.payment_url,
       reference: paymentDetails.reference

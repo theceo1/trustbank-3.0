@@ -2,13 +2,16 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { useAdminAuth, AdminAuthProvider } from "./context/AdminAuthContext";
 import AdminHeader from "./components/AdminHeader";
 import AdminSidebar from "./components/AdminSidebar";
 import { useToast } from "@/hooks/use-toast";
 import { LoadingSpinner } from "./components/LoadingSpinner";
 import { AdminRoleGuard } from "./components/AdminRoleGuard";
+
+// Auth pages that don't require admin check
+const AUTH_PAGES = ['/admin/auth/login', '/admin/auth/signup'];
 
 export default function AdminLayout({
   children,
@@ -26,17 +29,26 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
   const { isAdmin, isLoading } = useAdminAuth();
   const { toast } = useToast();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
-    if (!isLoading && !isAdmin) {
+    if (!isLoading && !isAdmin && !AUTH_PAGES.includes(pathname)) {
       toast({
         title: "Access Denied",
         description: "Admin privileges required",
         variant: "destructive"
       });
-      router.push('/dashboard');
+      // Only redirect if we're not already on an auth page
+      if (!pathname.includes('/admin/auth/')) {
+        router.push('/admin/auth/login');
+      }
     }
-  }, [isAdmin, isLoading, router, toast]);
+  }, [isAdmin, isLoading, pathname, router, toast]);
+
+  // Allow rendering of auth pages without admin check
+  if (AUTH_PAGES.includes(pathname)) {
+    return <>{children}</>;
+  }
 
   if (isLoading) {
     return (
@@ -46,7 +58,7 @@ function AdminLayoutContent({ children }: { children: React.ReactNode }) {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdmin && !AUTH_PAGES.includes(pathname)) {
     return null;
   }
 

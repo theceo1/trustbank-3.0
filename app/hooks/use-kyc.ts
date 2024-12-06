@@ -4,43 +4,51 @@
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext';
+import { KYCService } from '@/app/lib/services/kyc';
+import { KYC_TIERS } from '@/app/lib/constants/kyc-tiers';
 
 export function useKYC() {
   const { toast } = useToast();
   const router = useRouter();
   const [isVerifying, setIsVerifying] = useState(false);
+  const { user, kycInfo } = useAuth();
 
   const checkKYCStatus = async () => {
+    if (!user) return false;
+    
     try {
-      setIsVerifying(true);
-      const response = await fetch('/api/kyc/status');
-      const data = await response.json();
-
-      if (!data.verified) {
-        toast({
-          title: "KYC Required",
-          description: "Please complete your KYC verification to proceed",
-          variant: "destructive"
-        });
-        
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        router.push('/profile/verification');
-        return false;
+      if (kycInfo && kycInfo.status === 'approved') {
+        return true;
       }
 
-      return true;
+      const status = await KYCService.getKYCStatus(user.id);
+      return status.isVerified;
     } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to verify KYC status",
-        variant: "destructive"
-      });
+      console.error('KYC check failed:', error);
       return false;
-    } finally {
-      setIsVerifying(false);
     }
   };
 
-  return { checkKYCStatus, isVerifying };
+  const checkTradeLimits = async (amount: number) => {
+    if (!user || !kycInfo) return { allowed: false, reason: 'KYC required' };
+
+    const tierLimits = KYC_TIERS[kycInfo.currentTier];
+    if (!tierLimits) return { allowed: false, reason: 'Invalid KYC tier' };
+
+    if (amount > tierLimits.maxTransactionLimit) {
+      return {
+        allowed: false,
+        reason: `Amount exceeds your tier limit of ${tierLimits.maxTransactionLimit}. Please upgrade your KYC level.`
+      };
+    }
+
+    return { allowed: true };
+  };
+
+  return {
+    checkKYCStatus,
+    checkTradeLimits,
+    currentTier: kycInfo?.currentTier
+  };
 }

@@ -2,8 +2,11 @@ import supabase from '@/lib/supabase/client';
 import { Transaction, FiatTransaction, CryptoTransaction, ReferralTransaction } from '@/app/types/transactions';
 
 export interface TransactionFilters {
-  status: string;
-  dateRange: string;
+  limit?: number;
+  status?: 'all' | 'pending' | 'completed' | 'failed';
+  dateRange?: string;
+  currency?: string;
+  type?: 'deposit' | 'withdrawal' | 'buy' | 'sell';
 }
 
 export class TransactionService {

@@ -62,9 +62,9 @@ export class TransactionHistoryService {
       rate: Number(dbTrade.rate),
       total: Number(dbTrade.total),
       fees: {
-        quidax: Number(dbTrade.quidax_fee),
         platform: Number(dbTrade.platform_fee),
-        processing: 0
+        processing: 0,
+        total: Number(dbTrade.total)
       },
       status: dbTrade.status,
       payment_method: dbTrade.payment_method,

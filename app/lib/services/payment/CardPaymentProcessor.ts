@@ -1,5 +1,5 @@
 import { BasePaymentProcessor, PaymentProcessorResult, PaymentInitDetails } from './BasePaymentProcessor';
-import { TradeDetails } from '@/app/types/trade';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
 import { QuidaxService } from '../quidax';
 
 export class CardPaymentProcessor extends BasePaymentProcessor {
@@ -51,13 +51,12 @@ export class CardPaymentProcessor extends BasePaymentProcessor {
       rate: 1,
       total: details.amount,
       fees: {
-        quidax: 0,
         platform: 0,
-        processing: 0
+        processing: 0,
+        total: 0
       },
       payment_method: 'card',
-      status: 'pending',
-      quidax_reference: details.quidax_reference
+      status: TradeStatus.PENDING,
     });
 
     return {

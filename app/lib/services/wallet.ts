@@ -1,7 +1,19 @@
+// app/lib/services/wallet.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/app/types/database';
 import { TradeDetails } from '@/app/types/trade';
 import { WalletBalance } from '@/app/types/market';
+
+export interface WalletData {
+  id: string;
+  user_id: string;
+  currency: string;
+  balance: number;
+  total_deposits: number;
+  total_withdrawals: number;
+  pending_balance: number;
+  last_transaction_at: string;
+}
 
 interface PaymentProcessResult {
   reference: string;
@@ -26,7 +38,97 @@ interface QuidaxWalletUpdate {
 
 export class WalletService {
   private static supabase = createClientComponentClient<Database>();
+  private static DEFAULT_CURRENCIES = ['NGN', 'BTC', 'ETH', 'USDT', 'USDC'];
 
+  static async getOrCreateWallet(userId: string, currency: string): Promise<WalletData | null> {
+    try {
+      // First try to get existing wallet
+      const { data: existingWallet, error: fetchError } = await this.supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('currency', currency)
+        .maybeSingle();
+
+      if (fetchError && fetchError.code !== 'PGRST116') throw fetchError;
+
+      if (existingWallet) return existingWallet;
+
+      // Create new wallet if none exists
+      const { data: newWallet, error: createError } = await this.supabase
+        .from('wallets')
+        .insert({
+          user_id: userId,
+          currency,
+          balance: 0,
+          total_deposits: 0,
+          total_withdrawals: 0,
+          pending_balance: 0,
+          last_transaction_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (createError) {
+        console.error('Error creating wallet:', createError);
+        return null;
+      }
+
+      return newWallet;
+    } catch (error) {
+      console.error('Error in getOrCreateWallet:', error);
+      return null;
+    }
+  }
+
+  static async getUserWallet(userId: string): Promise<WalletData[]> {
+    try {
+      const { data, error } = await this.supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (error) throw error;
+
+      if (!data || data.length === 0) {
+        return this.createInitialWallets(userId);
+      }
+
+      return data;
+    } catch (error) {
+      console.error('Error fetching wallets:', error);
+      return [];
+    }
+  }
+
+  private static async createInitialWallets(
+    userId: string, 
+    currencies = this.DEFAULT_CURRENCIES
+  ): Promise<WalletData[]> {
+    try {
+      const walletsToCreate = currencies.map(currency => ({
+        user_id: userId,
+        currency,
+        balance: 0,
+        total_deposits: 0,
+        total_withdrawals: 0,
+        pending_balance: 0,
+        last_transaction_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }));
+
+      const { data, error } = await this.supabase
+        .from('wallets')
+        .upsert(walletsToCreate)
+        .select();
+
+      if (error) throw error;
+      return data || [];
+    } catch (error) {
+      console.error('Error creating wallets:', error);
+      return [];
+    }
+  }
   static async getWalletBalance(userId: string): Promise<WalletBalance[]> {
     const { data, error } = await this.supabase
       .from('wallets')

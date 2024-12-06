@@ -3,49 +3,37 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAuth } from '@/context/AuthContext';
 import { motion } from "framer-motion";
-import { 
-  Wallet, ArrowUpRight, ArrowDownLeft, Clock, Eye, 
-  EyeOff, Repeat, AlertCircle, TrendingUp, 
-  DollarSign, CreditCard, History, Plus
-} from 'lucide-react';
+import { ArrowUpRight, ArrowDownLeft, Eye, EyeOff, History, DollarSign } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import Modal from "@/components/ui/modal";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import supabase from '@/lib/supabase/client';
 import WalletPageSkeleton from "@/app/components/skeletons/WalletPageSkeleton";
 import { Badge } from "@/components/ui/badge";
 import BackButton from "@/components/ui/back-button";
-import { TransactionService } from '@/app/lib/services/transaction';
-import { Transaction, TransactionFilters } from "@/app/types/transactions";
+import { TransactionFilters, TransactionService } from '@/app/lib/services/transaction';
 import { WalletService } from '@/app/lib/services/wallet';
-import { WalletBalance } from '@/app/types/market';
+import { formatCurrency } from '@/app/lib/utils';
+import { AlertCircle } from "lucide-react";
+import { Transaction } from '@/app/types/transactions';
 
 export const dynamic = 'force-dynamic';
 
 interface WalletData {
+  id: string;
+  user_id: string;
+  currency: string;
   balance: number;
   total_deposits: number;
   total_withdrawals: number;
+  pending_balance: number;
   last_transaction_at: string;
-}
-
-interface Wallet {
-  id: string;
-  balance: number;
-  // ... other wallet properties
-}
-
-interface PostgresChangesPayload {
-  eventType: 'INSERT' | 'UPDATE' | 'DELETE';
-  new: Transaction;
-  old: Transaction | null;
+  quidax_wallet_id?: string;
 }
 
 const containerVariants = {
@@ -68,7 +56,7 @@ const itemVariants = {
 
 export default function WalletPage() {
   const router = useRouter();
-  const [walletData, setWalletData] = useState<WalletData | null>(null);
+  const [walletData, setWalletData] = useState<WalletData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,8 +65,7 @@ export default function WalletPage() {
   const [depositAmount, setDepositAmount] = useState("");
   const { user } = useAuth();
   const { toast } = useToast();
-  const [wallet, setWallet] = useState<Wallet | null>(null);
-  const [walletBalances, setWalletBalances] = useState<Wallet[]>([]);
+  const [wallet, setWallet] = useState<WalletData | null>(null);
 
   useEffect(() => {
     if (!user && !isLoading) {
@@ -91,33 +78,44 @@ export default function WalletPage() {
     if (!user) return;
     
     try {
-      const balances = await WalletService.getWalletBalance(user.id);
-      const formattedBalances: Wallet[] = balances.map(balance => ({
-        id: balance.currency,
-        balance: balance.available
-      }));
-      setWalletBalances(formattedBalances);
+      const wallets = await WalletService.getUserWallet(user.id);
+      if (wallets && Array.isArray(wallets)) {
+        setWalletData(wallets);
+        // Set the NGN wallet as the primary wallet for transactions
+        const ngnWallet = wallets.find(w => w.currency === 'NGN');
+        if (ngnWallet) {
+          setWallet(ngnWallet);
+        }
+      }
     } catch (error) {
-      console.error('Error fetching wallet data:', error);
+      console.error('Error fetching wallet:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load wallet data",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
-  }, [user]);
+  }, [user, toast]);
 
   const fetchTransactions = useCallback(async () => {
     if (!user || !wallet?.id) return;
-
+  
     try {
       const filters: TransactionFilters = {
-        currency: wallet.id,
         limit: 5,
         status: 'all',
-        dateRange: '30d'
+        dateRange: '30d',
+        currency: wallet.currency
       };
+      
       const data = await TransactionService.getUserTransactions(user.id, filters);
       setTransactions(data || []);
     } catch (err) {
       console.error('Transaction fetch error:', err);
     }
-  }, [user, wallet?.id]);
+  }, [user, wallet?.id, wallet?.currency]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -137,18 +135,21 @@ export default function WalletPage() {
     };
 
     fetchData();
-
+    
     if (user && wallet?.id) {
       const subscription = TransactionService.subscribeToTransactions(
         user.id,
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setTransactions(prev => [payload.new, ...prev.slice(0, 4)]);
+            setTransactions(prev => {
+              const newTx = payload.new as unknown as Transaction;
+              return [newTx, ...prev.slice(0, 4)] as Transaction[];
+            });
             fetchWalletData();
           }
         }
       );
-
+    
       return () => {
         subscription.unsubscribe();
       };
@@ -192,26 +193,39 @@ export default function WalletPage() {
         variant: "destructive",
       });
     }
+  }
+
+  const getTransactionIcon = (type: Transaction['type']) => {
+    switch (type) {
+      case 'deposit':
+      case 'buy':
+        return <ArrowUpRight className="text-green-600" />;
+      case 'withdrawal':
+      case 'sell':
+        return <ArrowDownLeft className="text-red-600" />;
+      case 'transfer':
+        return <ArrowUpRight className="text-blue-600" />;
+      default:
+        return <ArrowUpRight className="text-gray-500" />;
+    }
   };
 
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchWalletBalances = async () => {
-      try {
-        const balances: WalletBalance[] = await WalletService.getWalletBalance(user.id);
-        const formattedBalances: Wallet[] = balances.map(balance => ({
-          id: balance.id || '',
-          balance: balance.available
-        }));
-        setWalletBalances(formattedBalances);
-      } catch (error) {
-        console.error('Error fetching wallet balances:', error);
-      }
-    };
-
-    fetchWalletBalances();
-  }, [user]);
+  const getTransactionLabel = (type: Transaction['type']) => {
+    switch (type) {
+      case 'deposit':
+        return 'Deposit';
+      case 'withdrawal':
+        return 'Withdrawal';
+      case 'transfer':
+        return 'Transfer';
+      case 'buy':
+        return 'Buy';
+      case 'sell':
+        return 'Sell';
+      default:
+        return type;
+    }
+  };
 
   if (!user || isLoading) {
     return <WalletPageSkeleton />;
@@ -239,64 +253,39 @@ export default function WalletPage() {
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
-              <CardTitle className="text-2xl font-bold">Wallet Balance</CardTitle>
+              <CardTitle className="text-2xl font-bold">Wallet Balances</CardTitle>
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => setShowBalance(!showBalance)}
               >
-                {showBalance ? (
-                  <EyeOff className="h-4 w-4" />
-                ) : (
-                  <Eye className="h-4 w-4" />
-                )}
+                {showBalance ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-6">
-              <div className="flex justify-between items-center">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="text-lg font-bold">
-                      {showBalance ? `₦${(walletData?.balance || 0).toLocaleString()}` : '•••••••'}
-                    </p>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowBalance(!showBalance)}
-                    >
-                      {showBalance ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {walletData?.map((wallet) => (
+                <div 
+                  key={wallet.currency}
+                  className={`p-4 rounded-lg ${
+                    wallet.currency === 'NGN' ? 'bg-green-50 dark:bg-green-900/20' : 
+                    'bg-gray-50 dark:bg-gray-800'
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">{wallet.currency}</h3>
+                    <Badge variant="outline">{wallet.currency}</Badge>
                   </div>
+                  <p className="text-2xl font-bold">
+                    {showBalance ? 
+                      formatCurrency(wallet.balance, wallet.currency) : 
+                      '•••••••'
+                    }
+                  </p>
                   <p className="text-sm text-gray-500">Available Balance</p>
                 </div>
-                <Button onClick={() => setIsDepositModalOpen(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Deposit
-                </Button>
-              </div>
-              
-              <div className="grid grid-cols-2 sm:grid-cols-2 gap-3">
-                <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowUpRight className="text-green-600" />
-                    <p className="font-medium">Total Deposits</p>
-                  </div>
-                  <p className="text-xl font-bold">
-                    {showBalance ? `₦${(walletData?.total_deposits || 0).toLocaleString()}` : '****'}
-                  </p>
-                </div>
-                <div className="bg-red-50 dark:bg-red-900/20 p-4 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ArrowDownLeft className="text-red-600" />
-                    <p className="font-medium">Total Withdrawals</p>
-                  </div>
-                  <p className="text-xl font-bold">
-                    {showBalance ? `₦${(walletData?.total_withdrawals || 0).toLocaleString()}` : '****'}
-                  </p>
-                </div>
-              </div>
+              ))}
             </div>
           </CardContent>
         </Card>
@@ -312,38 +301,42 @@ export default function WalletPage() {
               <p className="text-center text-gray-500 py-4">No transactions yet</p>
             ) : (
               <div className="space-y-4">
+                
                 {transactions.map((tx) => (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg"
-                  >
-                    <div className="flex items-center gap-3">
-                      {tx.type === 'deposit' ? (
-                        <ArrowUpRight className="text-green-500" />
-                      ) : (
-                        <ArrowDownLeft className="text-red-500" />
-                      )}
-                      <div>
-                        <p className="font-medium">{tx.type === 'deposit' ? 'Deposit' : 'Withdrawal'}</p>
-                        <p className="text-sm text-gray-500">
-                          {new Date(tx.created_at).toLocaleDateString()}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className={`font-medium ${tx.type === 'deposit' ? 'text-green-500' : 'text-red-500'}`}>
-                        {tx.type === 'deposit' ? '+' : '-'}₦{(tx.amount || 0).toLocaleString()}
-                      </p>
-                      <Badge 
-                        variant={
-                          tx.status === 'completed' ? 'default' : 
-                          tx.status === 'pending' ? 'secondary' : 'destructive'
-                        }
-                      >
-                        {tx.status}
-                      </Badge>
-                    </div>
-                  </div>
+  <div
+    key={tx.id}
+    className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+  >
+    <div className="flex items-center gap-3">
+      {getTransactionIcon(tx.type)}
+      <div>
+        <p className="font-medium">{getTransactionLabel(tx.type)}</p>
+        <p className="text-sm text-gray-500">
+          {new Date(tx.created_at).toLocaleDateString()}
+        </p>
+      </div>
+    </div>
+    <div className="text-right">
+      <p className={`font-medium ${
+        tx.type === 'withdrawal' ? 'text-red-500' : 
+        tx.type === 'deposit' ? 'text-green-500' : 
+        'text-blue-500'
+      }`}>
+        {tx.type === 'withdrawal' ? '-' : '+'}₦{(tx.amount || 0).toLocaleString()}
+      </p>
+      <Badge 
+        variant={
+          tx.status === 'completed' ? 'default' : 
+          tx.status === 'pending' ? 'secondary' : 
+          'destructive'
+        }
+      >
+        {tx.status}
+      </Badge>
+    </div>
+  </div>
+
+                  
                 ))}
               </div>
             )}
@@ -382,7 +375,7 @@ export default function WalletPage() {
           </div>
           <Button 
             onClick={handleDeposit}
-            className="w-full"
+            className="w-full bg-green-600 hover:bg-green-300 text-white"
           >
             Proceed to Payment
           </Button>

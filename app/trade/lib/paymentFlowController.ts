@@ -11,7 +11,7 @@ export class PaymentFlowController {
 
     // Map fees to expected structure
     const mappedFees = {
-      service: tradeDetails.fees.platform + tradeDetails.fees.quidax,
+      service: tradeDetails.fees.platform + tradeDetails.fees.processing,
       network: tradeDetails.fees.processing
     };
 

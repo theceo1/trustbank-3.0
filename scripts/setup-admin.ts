@@ -24,14 +24,13 @@ interface AuthUserResponse extends User {
 }
 
 async function getOrCreateAuthUser(email: string, password: string): Promise<AuthUserResponse> {
-  // First try to get the user
   const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
   
   if (listError) throw listError;
   
-  const existingUser = users.find(u => u.email === email);
+  const existingUser = (users as AuthUserResponse[]).find(u => u.email === email);
   if (existingUser) {
-    return existingUser as AuthUserResponse;
+    return existingUser;
   }
 
   // If user doesn't exist, create them

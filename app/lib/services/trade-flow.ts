@@ -17,7 +17,11 @@ export class TradeFlow {
         ...details,
         rate: rate.rate,
         total: rate.total,
-        fees: rate.fees
+        fees: {
+          platform: rate.fees.platform,
+          processing: rate.fees.processing,
+          total: rate.fees.quidax + rate.fees.platform + rate.fees.processing
+        }
       });
 
       // 3. Return trade with payment details

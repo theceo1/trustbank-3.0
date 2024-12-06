@@ -1,3 +1,4 @@
+// app/components/payment/methods/CardPayment.tsx
 import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +11,7 @@ export default function CardPayment({ trade, onComplete }: PaymentProcessorProps
   const { toast } = useToast();
 
   const handlePayment = async () => {
-    if (!trade.id || !trade.reference) {
+    if (!trade.id) {
       toast({
         id: 'payment-invalid',
         title: "Invalid Trade",
@@ -27,7 +28,7 @@ export default function CardPayment({ trade, onComplete }: PaymentProcessorProps
         amount: trade.amount,
         currency: trade.currency,
         tradeId: trade.id,
-        reference: trade.reference
+        reference: trade.reference || `CARD_${trade.id}_${Date.now()}`
       });
 
       // Redirect to Quidax's secure payment page
