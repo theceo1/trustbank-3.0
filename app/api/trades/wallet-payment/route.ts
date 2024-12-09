@@ -6,8 +6,11 @@ import { WalletService } from '@/app/lib/services/wallet';
 
 export async function POST(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient({ 
+      cookies: async () => cookieStore 
+    });
+    
     const { data: { user } } = await supabase.auth.getUser();
 
     if (!user) {

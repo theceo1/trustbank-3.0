@@ -38,7 +38,7 @@ export function PaymentFeedbackForm({
         <div className="text-center">
           <h3 className="text-lg font-semibold">Rate Your Experience</h3>
           <p className="text-sm text-gray-500">
-            How was your payment experience with TrustBank?
+            How was your payment experience with trustBank?
           </p>
         </div>
 

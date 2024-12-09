@@ -76,26 +76,31 @@ export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
       setIsLoading(true);
       const rate = await MarketRateService.getRate({
         amount: Number(tradeState.amount),
-        currency_pair: `${tradeState.fromCurrency.toLowerCase()}_ngn`,
+        currency_pair: `${tradeState.fromCurrency}_${tradeState.toCurrency}`,
         type: tradeState.type as 'buy' | 'sell'
       });
-      
+  
       setTradeState(prev => ({
         ...prev,
         rate,
         rateExpiry: Date.now() + RATE_EXPIRY_TIME
       }));
     } catch (error) {
-      handleError(error, 'Failed to fetch rate');
+      console.error('Rate fetch error:', error);
+      toast({
+        title: "Error",
+        description: "Failed to fetch current rate. Please try again.",
+        variant: "destructive"
+      });
+      setTradeState(prev => ({ ...prev, rate: null }));
     } finally {
       setIsLoading(false);
     }
-  }, [tradeState.amount, tradeState.type, tradeState.fromCurrency]);
-
+  }, [tradeState.amount, tradeState.type, tradeState.fromCurrency, tradeState.toCurrency, toast]);
+  // Add debounced rate fetching
   useEffect(() => {
-    fetchRate();
-    const interval = setInterval(fetchRate, 30000);
-    return () => clearInterval(interval);
+    const timeoutId = setTimeout(fetchRate, 500);
+    return () => clearTimeout(timeoutId);
   }, [fetchRate]);
 
   const handleTradeSubmit = async () => {

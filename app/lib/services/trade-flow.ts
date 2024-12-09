@@ -1,3 +1,4 @@
+// app/lib/services/trade-flow.ts
 import { UnifiedTradeService } from './unified-trade';
 import { QuidaxService } from './quidax';
 import { TradeDetails } from '@/app/types/trade';
@@ -12,15 +13,15 @@ export class TradeFlow {
         type: 'sell'
       });
 
-      // 2. Create trade with rate
+      // 2. Create trade with rate and convert string amounts to numbers
       const trade = await UnifiedTradeService.createTrade({
         ...details,
-        rate: rate.rate,
-        total: rate.total,
+        rate: Number(rate.rate),
+        total: Number(rate.total),
         fees: {
-          platform: rate.fees.platform,
-          processing: rate.fees.processing,
-          total: rate.fees.quidax + rate.fees.platform + rate.fees.processing
+          platform: Number(rate.fees.platform),
+          processing: Number(rate.fees.processing),
+          total: Number(rate.fees.quidax) + Number(rate.fees.platform) + Number(rate.fees.processing)
         }
       });
 
@@ -31,7 +32,7 @@ export class TradeFlow {
           amount: trade.total,
           currency: 'NGN',
           payment_method: trade.payment_method,
-          reference: trade.quidax_reference
+          reference: trade.id
         }
       };
     } catch (error) {

@@ -1,3 +1,4 @@
+// app/components/profile/ProfileHeader.tsx
 "use client";
 
 import { useAuth } from '@/context/AuthContext';
@@ -43,7 +44,7 @@ export default function ProfileHeader() {
           if (profile.referral_code) {
             const { count } = await supabase
               .from('user_profiles')
-              .select('*', { count: 'exact' })
+              .select('*', { count: 'exact', head: true })
               .eq('referred_by', profile.referral_code);
               
             setReferralCount(count || 0);

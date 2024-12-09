@@ -28,7 +28,7 @@ export default function CardPayment({ trade, onComplete }: PaymentProcessorProps
         amount: trade.amount,
         currency: trade.currency,
         tradeId: trade.id,
-        reference: trade.reference || `CARD_${trade.id}_${Date.now()}`
+        reference: trade.quidax_reference || `CARD_${trade.id}_${Date.now()}`
       });
 
       // Redirect to Quidax's secure payment page

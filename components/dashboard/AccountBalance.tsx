@@ -1,3 +1,4 @@
+// components/dashboard/AccountBalance.tsx
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -48,21 +49,13 @@ export default function AccountBalance() {
       if (!user) return;
       
       try {
-        const wallets = await WalletService.getUserWallet(user.id);
-
-        if (wallets.length === 0) {
-          console.error('No wallets found for user');
-          return;
-        }
-
-        if (wallets && wallets.length > 0) {
-          // Get NGN wallet for main balance display
-          const ngnWallet = wallets.find(w => w.currency === 'NGN') || wallets[0];
+        const wallet = await WalletService.getWalletBalance(user.id);
+        if (wallet) {
           setBalance({
-            ...ngnWallet,
-            total: ngnWallet.balance,
-            available: ngnWallet.balance - (ngnWallet.pending_balance || 0),
-            pending: ngnWallet.pending_balance || 0,
+            ...wallet,
+            total: wallet.balance,
+            available: wallet.balance - (wallet.pending_balance || 0),
+            pending: wallet.pending_balance || 0,
             currency: '₦'
           });
         }
@@ -75,18 +68,24 @@ export default function AccountBalance() {
 
     fetchBalance();
 
-    // Subscribe to real-time changes
+    // Update subscription filter to only watch NGN wallet
     const subscription = supabase
       .channel('wallets')
       .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'wallets', filter: `user_id=eq.${user?.id}` },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'wallets',
+          filter: `user_id=eq.${user?.id} AND currency=eq.NGN` 
+        },
         (payload: any) => {
           if (payload.new) {
             setBalance({
               ...payload.new,
               total: payload.new.balance,
-              available: payload.new.balance - (payload.new.pending || 0),
-              pending: payload.new.pending || 0
+              available: payload.new.balance - (payload.new.pending_balance || 0),
+              pending: payload.new.pending_balance || 0,
+              currency: '₦'
             });
           }
         }

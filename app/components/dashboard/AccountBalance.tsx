@@ -1,3 +1,4 @@
+//app/components/dassboard/AccountBalance
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -40,7 +41,7 @@ export default function AccountBalance() {
       if (!user) return;
       
       try {
-        const wallet = await WalletService.getOrCreateWallet(user.id, 'NGN');
+        const wallet = await WalletService.getWalletBalance(user.id);
         if (wallet) {
           setBalance({
             ...wallet,

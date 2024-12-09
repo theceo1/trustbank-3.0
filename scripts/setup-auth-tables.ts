@@ -235,6 +235,9 @@ async function setupAuthTables() {
       client.release();
     }
   }
+  log('Creating auth schema...');
+  await client.query('CREATE SCHEMA IF NOT EXISTS auth');
+  log('✓ Auth schema created');
 }
 
 setupAuthTables();

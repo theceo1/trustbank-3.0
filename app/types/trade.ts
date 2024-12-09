@@ -36,11 +36,9 @@ export interface SwapDetails {
 export interface TradeDetails {
   id?: string;
   user_id: string;
-  amount: number;
-  currency: string;
   type: TradeType;
-  status: TradeStatus;
-  payment_method: PaymentMethodType;
+  currency: string;
+  amount: number;
   rate: number;
   total: number;
   fees: {
@@ -48,10 +46,12 @@ export interface TradeDetails {
     processing: number;
     total: number;
   };
-  created_at?: string;  // Make it optional
-  updated_at?: string;  // Make it optional
-  walletBalance?: number;
-  reference?: string;
+  payment_method: PaymentMethodType;
+  status: TradeStatus;
+  quidax_id?: string;
+  quidax_reference?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface TradeRateRequest {
@@ -64,34 +64,34 @@ export interface TradeRateRequest {
 }
 
 export interface TradeRateResponse {
-  rate: number;
-  usdRate?: number;
-  total: number;
-  fees: {
-    quidax: number;    // 1.4%
-    platform: number;   // 1.6%
-    processing: number; // Payment method specific
+  data: {
+    amount: string;
+    total: string;
+    fee: string;
+    rate: string;
   };
 }
 
 export interface QuidaxTradeResponse {
   id: string;
   status: string;
-  reference: string;
-  quidax_reference: string;
+  amount: string;
+  fee: string;
+  total: string;
 }
 
-export interface CreateTradeParams extends Omit<TradeParams, 'reference'> {
-  rateTimestamp?: number;
-  external_reference?: string;
+export interface CreateTradeParams {
+  amount: string;
+  currency_pair: string;
+  type: 'buy' | 'sell';
 }
 
 export type TradeActionType = 'buy' | 'sell' | 'send' | 'receive' | 'swap';
 
 export interface QuidaxRateParams {
-  amount: number;
+  amount: string;
   currency_pair: string;
-  type: TradeType;
+  type: 'buy' | 'sell';
 }
 
 export interface OrderStatus {
@@ -125,7 +125,7 @@ export interface TradeRate {
 }
 
 export interface GetRateParams {
-  amount: number;
+  amount: string;
   currency_pair: string;
-  type: 'buy' | 'sell';
+  type: string;
 }

@@ -1,3 +1,4 @@
+// scripts/verify-auth-setup.ts
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';

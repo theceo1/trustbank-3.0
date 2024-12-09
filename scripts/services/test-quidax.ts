@@ -19,8 +19,8 @@ const supabase = createClient(
 );
 
 export class TestQuidaxService {
-  private static baseUrl: string;
-  private static secretKey: string;
+  private static baseUrl = process.env.QUIDAX_API_URL;
+  private static secretKey = process.env.QUIDAX_SECRET_KEY;
 
   static {
     if (!process.env.QUIDAX_API_URL || !process.env.QUIDAX_SECRET_KEY) {
@@ -159,7 +159,6 @@ export class TestQuidaxService {
   static async confirmSwapQuotation(params: {
     user_id: string;
     quotation_id: string;
-    instant_order_id: string;
   }) {
     try {
       console.log('Confirming swap quotation with params:', params);
@@ -169,7 +168,7 @@ export class TestQuidaxService {
         {
           confirm: true,
           type: 'instant',
-          instant_order_id: params.instant_order_id
+          payment_method: 'wallet'
         },
         {
           headers: {
@@ -179,7 +178,7 @@ export class TestQuidaxService {
         }
       );
 
-      console.log('Swap confirmation response:', response.data);
+      console.log('Confirmation response:', response.data);
       return response.data.data;
     } catch (error: any) {
       const errorDetails = {
@@ -189,7 +188,7 @@ export class TestQuidaxService {
         url: error.config?.url,
         data: error.config?.data
       };
-      console.error('Quidax swap confirmation error:', errorDetails);
+      console.error('Confirm swap quotation error:', errorDetails);
       throw error;
     }
   }
@@ -243,24 +242,28 @@ export class TestQuidaxService {
     from_currency: string;
     to_currency: string;
     from_amount: string;
-    payment_method: string;
   }) {
-    const response = await axios.post(
-      `${process.env.QUIDAX_API_URL}/users/${params.user_id}/instant_orders`,
-      {
-        bid: params.to_currency,
-        ask: params.from_currency,
-        amount: params.from_amount,
-        payment_method: params.payment_method
-      },
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    return response.data;
+    try {
+      console.log('Creating instant swap with params:', params);
+      
+      // Create quotation
+      const quotation = await this.createSwapQuotation(params);
+      
+      // Immediately confirm the quotation (within 15 seconds window)
+      console.log('Confirming quotation immediately...');
+      const confirmation = await this.confirmSwapQuotation({
+        user_id: params.user_id,
+        quotation_id: quotation.id
+      });
+
+      return {
+        quotation,
+        confirmation
+      };
+    } catch (error: any) {
+      console.error('Instant swap error:', error.response?.data || error);
+      throw error;
+    }
   }
 
   static async checkWalletBalance(userId: string, currency: string) {
@@ -284,27 +287,13 @@ export class TestQuidaxService {
   static async confirmInstantSwap(params: {
     user_id: string;
     quotation_id: string;
-    payment_method: 'card' | 'bank_transfer' | 'wallet';
   }) {
     try {
-      // First check wallet balance if using wallet payment
-      if (params.payment_method === 'wallet') {
-        const walletBalance = await this.checkWalletBalance(params.user_id, 'ngn');
-        console.log('Current wallet balance:', walletBalance);
-      }
-
-      console.log('\nConfirming instant swap with params:', params);
-
-      // Simplified payload based on API docs
-      const payload = {
-        payment_method: params.payment_method,
-        confirm: true,
-        terms_and_conditions: true
-      };
-
+      console.log('Confirming instant swap with params:', params);
+      
       const response = await axios.post(
-        `${this.baseUrl}/users/me/swap_quotation/${params.quotation_id}/confirm`,
-        payload,
+        `${this.baseUrl}/users/${params.user_id}/swap_quotation/${params.quotation_id}/confirm`,
+        {},
         {
           headers: {
             'Authorization': `Bearer ${this.secretKey}`,
@@ -313,13 +302,9 @@ export class TestQuidaxService {
         }
       );
 
-      return response.data;
+      return response.data.data;
     } catch (error: any) {
-      console.error('\nConfirm instant swap complete error:', {
-        message: error.message,
-        response: error.response?.data,
-        status: error.response?.status
-      });
+      console.error('Confirm instant swap error:', error.response?.data || error);
       throw error;
     }
   }
@@ -394,9 +379,9 @@ export class TestQuidaxService {
   }) {
     try {
       const response = await axios.post(
-        `${this.baseUrl}/users/${params.user_id}/deposits`,
+        `${this.baseUrl}/users/me/deposits`,
         {
-          currency: params.currency,
+          currency: params.currency.toLowerCase(),
           amount: params.amount,
           payment_method: 'bank_transfer'
         },
@@ -508,5 +493,99 @@ export class TestQuidaxService {
       }
     );
     return response.data;
+  }
+
+  static async getMarketStats(marketPair: string) {
+    try {
+      console.log('Getting market stats for:', marketPair);
+      
+      const response = await axios.get(
+        `${this.baseUrl}/markets/tickers/${marketPair}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.data?.data?.ticker) {
+        throw new Error('Invalid market stats response');
+      }
+
+      const { ticker, at } = response.data.data;
+      console.log('Market stats response:', {
+        timestamp: new Date(at * 1000).toISOString(),
+        buy: ticker.buy,
+        sell: ticker.sell,
+        last: ticker.last,
+        stats: {
+          low: ticker.low,
+          high: ticker.high,
+          volume: ticker.vol,
+          open: ticker.open
+        }
+      });
+
+      return response.data.data;
+    } catch (error: any) {
+      const errorDetails = {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url
+      };
+      console.error('Failed to get market stats:', errorDetails);
+      throw error;
+    }
+  }
+
+  static async fundWallet(userId: string, currency: string, amount: string) {
+    try {
+      console.log(`Creating deposit for ${currency} wallet for user ${userId} with ${amount}`);
+      
+      // Create the deposit
+      const deposit = await this.initiateDeposit({
+        user_id: userId,
+        currency: currency.toLowerCase(),
+        amount: amount
+      });
+
+      console.log('Deposit created:', deposit);
+
+      // Monitor the deposit status
+      let attempts = 0;
+      const maxAttempts = 10;
+      const checkInterval = 2000; // 2 seconds
+
+      while (attempts < maxAttempts) {
+        const depositStatus = await this.getDeposits(userId, {
+          currency: currency.toLowerCase(),
+          state: 'submitted'
+        });
+
+        console.log(`Deposit status check ${attempts + 1}/${maxAttempts}:`, depositStatus);
+
+        if (depositStatus?.data?.some((d: any) => d.status === 'accepted')) {
+          console.log('Deposit accepted');
+          return depositStatus.data[0];
+        }
+
+        await new Promise(resolve => setTimeout(resolve, checkInterval));
+        attempts++;
+      }
+
+      throw new Error('Deposit monitoring timeout');
+    } catch (error: any) {
+      const errorDetails = {
+        message: error.message,
+        response: error.response?.data,
+        status: error.response?.status,
+        url: error.config?.url,
+        data: error.config?.data
+      };
+      console.error('Wallet funding error:', errorDetails);
+      throw error;
+    }
   }
 }

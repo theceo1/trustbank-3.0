@@ -149,57 +149,67 @@ export class KYCService {
 
   static async getKYCInfo(userId: string): Promise<KYCInfo> {
     try {
-      const { data: profileData, error: profileError } = await this.supabase
+      // First clean up any duplicate profiles
+      await this.supabase
+        .from('user_profiles')
+        .delete()
+        .eq('user_id', userId)
+        .neq('id', (
+          await this.supabase
+            .from('user_profiles')
+            .select('id')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .single()
+        ).data?.id);
+
+      // Now proceed with normal flow
+      const { data: existingProfile, error: checkError } = await this.supabase
         .from('user_profiles')
         .select('kyc_tier, kyc_status, kyc_documents')
         .eq('user_id', userId)
-        .maybeSingle();
+        .single();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('KYC fetch error:', profileError);
-        return {
-          currentTier: 'unverified',
-          status: 'pending',
-          documents: {}
-        };
-      }
+      if (checkError) {
+        if (checkError.code === 'PGRST116') {
+          // Create initial profile if it doesn't exist
+          const { data: newProfile, error: createError } = await this.supabase
+            .from('user_profiles')
+            .insert([{
+              user_id: userId,
+              kyc_tier: 'unverified',
+              kyc_status: 'pending',
+              kyc_documents: {}
+            }])
+            .select()
+            .single();
 
-      if (!profileData) {
-        // Create initial profile if it doesn't exist
-        const { data: newProfile, error: createError } = await this.supabase
-          .from('user_profiles')
-          .insert([{
-            user_id: userId,
-            kyc_tier: 'unverified',
-            kyc_status: 'pending',
-            kyc_documents: {}
-          }])
-          .select()
-          .single();
+          if (createError) {
+            console.error('Profile creation error:', createError);
+            return {
+              currentTier: 'unverified',
+              status: 'pending',
+              documents: {}
+            };
+          }
 
-        if (createError) {
-          console.error('Profile creation error:', createError);
           return {
-            currentTier: 'unverified',
-            status: 'pending',
-            documents: {}
+            currentTier: newProfile.kyc_tier,
+            status: newProfile.kyc_status,
+            documents: newProfile.kyc_documents || {}
           };
         }
-
-        return {
-          currentTier: newProfile.kyc_tier,
-          status: newProfile.kyc_status,
-          documents: newProfile.kyc_documents
-        };
+        throw checkError;
       }
 
       return {
-        currentTier: profileData.kyc_tier,
-        status: profileData.kyc_status,
-        documents: profileData.kyc_documents
+        currentTier: existingProfile.kyc_tier,
+        status: existingProfile.kyc_status,
+        documents: existingProfile.kyc_documents || {}
       };
     } catch (error) {
-      console.error('KYC service error:', error);
+      console.error('KYC fetch error:', error);
       return {
         currentTier: 'unverified',
         status: 'pending',

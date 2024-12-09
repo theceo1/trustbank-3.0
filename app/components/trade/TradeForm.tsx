@@ -1,171 +1,194 @@
 //app/components/trade/TradeForm.tsx
-import { useState } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TradeType, TradeDetails, TradeStatus } from '@/app/types/trade';
-import { PaymentMethodType } from '@/app/types/payment';
-import { formatCurrency } from '@/app/lib/utils';
-import { ArrowRight } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
 
-interface TradeFormProps {
-  type: TradeType;
-  balance: number;
-  isLoading?: boolean;
-  onSubmit: (trade: TradeDetails) => Promise<void>;
+interface TradeQuote {
+  quotation_id: string;
+  rate: string;
+  total: string;
+  receive_amount: string;
+  fee: string;
+  expires_at: string;
 }
 
-const PAYMENT_METHODS: Record<TradeType, PaymentMethodType[]> = {
-  buy: ['wallet', 'card', 'bank_transfer'],
-  sell: ['bank_transfer'],
-  swap: ['wallet'],
-  send: ['wallet'],
-  receive: ['wallet']
-};
-
-const SUPPORTED_CURRENCIES = [
-  { value: 'btc', label: 'Bitcoin (BTC)' },
-  { value: 'eth', label: 'Ethereum (ETH)' },
-  { value: 'usdt', label: 'Tether (USDT)' },
-  { value: 'usdc', label: 'USD Coin (USDC)' }
-];
-
-export function TradeForm({ type, balance, onSubmit, isLoading }: TradeFormProps) {
-  const [step, setStep] = useState<'input' | 'review'>('input');
+export default function TradeForm() {
+  const router = useRouter();
+  const { toast } = useToast();
+  
+  const [loading, setLoading] = useState(false);
+  const [countdown, setCountdown] = useState(0);
+  const [quote, setQuote] = useState<TradeQuote | null>(null);
+  
   const [formData, setFormData] = useState({
-    amount: "",
-    currency: SUPPORTED_CURRENCIES[0].value,
-    paymentMethod: PAYMENT_METHODS[type][0]
+    fromCurrency: 'USDT',
+    toCurrency: 'NGN',
+    amount: '',
+    type: 'sell' as 'buy' | 'sell'
   });
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (step === 'input') {
-      setStep('review');
-      return;
+  const currencies = [
+    { value: 'USDT', label: 'USDT' },
+    { value: 'BTC', label: 'Bitcoin' },
+    { value: 'ETH', label: 'Ethereum' },
+    { value: 'NGN', label: 'Nigerian Naira' }
+  ];
+
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (countdown > 0) {
+      timer = setInterval(() => {
+        setCountdown(prev => prev - 1);
+      }, 1000);
+    } else if (quote && countdown === 0) {
+      setQuote(null); // Clear quote when countdown ends
     }
-  
-    if (!formData.amount || isLoading) return;
-  
+    return () => clearInterval(timer);
+  }, [countdown, quote]);
+
+  const getQuote = async () => {
     try {
-      await onSubmit({
-        amount: Number(formData.amount) || 0,
-        type,
-        payment_method: formData.paymentMethod,
-        currency: formData.currency,
-        status: TradeStatus.PENDING,
-        user_id: '', // Will be set by the service
-        rate: 0, // Will be set by the service
-        total: 0, // Will be set by the service
-        fees: {
-          platform: 0,
-          processing: 0,
-          total: 0
-        },
-        created_at: new Date().toISOString(), // Add this line
-        updated_at: new Date().toISOString()  // Add this line if required
+      setLoading(true);
+      const response = await fetch('/api/trades/quote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
       });
+
+      if (!response.ok) throw new Error('Failed to get quote');
+      
+      const data = await response.json();
+      setQuote(data);
+      setCountdown(14); // Start 14 second countdown
     } catch (error) {
-      console.error('Trade error:', error);
-      setStep('input');
+      toast({
+        title: 'Error',
+        description: 'Failed to get trade quote',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  if (step === 'review') {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Review Trade</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Amount</span>
-              <span className="font-medium">{formatCurrency(Number(formData.amount))}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Currency</span>
-              <span className="font-medium">{formData.currency.toUpperCase()}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Payment Method</span>
-              <span className="font-medium">{formData.paymentMethod.replace('_', ' ').toUpperCase()}</span>
-            </div>
-          </div>
-          
-          <div className="flex space-x-2">
-            <Button variant="outline" onClick={() => setStep('input')} className="flex-1">
-              Back
-            </Button>
-            <Button onClick={handleSubmit} disabled={isLoading} className="flex-1">
-              Confirm Trade
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    
+    try {
+      if (!quote) {
+        // Get initial quote
+        const quoteRes = await fetch('/api/trades/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+        
+        const quoteData = await quoteRes.json();
+        if (!quoteData.error) {
+          setQuote(quoteData);
+          setCountdown(14);
+        } else {
+          throw new Error(quoteData.error);
+        }
+      } else {
+        // Execute trade
+        const tradeRes = await fetch('/api/trades/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...formData,
+            quotationId: quote.quotation_id
+          })
+        });
+        
+        const tradeData = await tradeRes.json();
+        if (tradeData.error) {
+          throw new Error(tradeData.error);
+        }
+        
+        // Reset form and show success
+        setQuote(null);
+        setFormData({
+          fromCurrency: 'USDT',
+          toCurrency: 'NGN',
+          amount: '',
+          type: 'sell'
+        });
+        toast({
+          title: 'Trade Executed',
+          description: 'Your trade has been successfully executed'
+        });
+      }
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Currency</label>
-        <Select 
-          value={formData.currency} 
-          onValueChange={(value) => setFormData(prev => ({ ...prev, currency: value }))}
+      <div className="grid gap-4">
+        <Select
+          value={formData.type}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, type: value as 'buy' | 'sell' }))}
         >
-          <SelectTrigger>
-            <SelectValue placeholder="Select currency" />
-          </SelectTrigger>
-          <SelectContent>
-            {SUPPORTED_CURRENCIES.map((currency) => (
-              <SelectItem key={currency.value} value={currency.value}>
-                {currency.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
         </Select>
-      </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Amount</label>
+        <Select
+          value={formData.fromCurrency}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, fromCurrency: value }))}
+        >
+          {currencies.map(currency => (
+            <option key={currency.value} value={currency.value}>
+              {currency.label}
+            </option>
+          ))}
+        </Select>
+
+        <Select
+          value={formData.toCurrency}
+          onValueChange={(value) => setFormData(prev => ({ ...prev, toCurrency: value }))}
+        >
+          {currencies.map(currency => (
+            <option key={currency.value} value={currency.value}>
+              {currency.label}
+            </option>
+          ))}
+        </Select>
+
         <Input
           type="number"
+          placeholder="Amount"
           value={formData.amount}
           onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-          placeholder="Enter amount"
           min="0"
+          step="any"
           required
         />
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Payment Method</label>
-        <Select 
-          value={formData.paymentMethod} 
-          onValueChange={(value) => setFormData(prev => ({ ...prev, paymentMethod: value as PaymentMethodType }))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Select payment method" />
-          </SelectTrigger>
-          <SelectContent>
-            {PAYMENT_METHODS[type].map((method) => (
-              <SelectItem key={method} value={method}>
-                {method.replace('_', ' ').toUpperCase()}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {quote && (
+        <div className="bg-secondary p-4 rounded-lg space-y-2">
+          <p>Rate: {quote.rate}</p>
+          <p>You&apos;ll receive: {quote.receive_amount}</p>
+          <p>Fee: {quote.fee}</p>
+          <p>Expires in: {countdown} seconds</p>
+        </div>
+      )}
 
-      <div className="flex justify-between text-sm text-muted-foreground">
-        <span>Available Balance</span>
-        <span>{formatCurrency(balance)}</span>
-      </div>
-
-      <Button type="submit" className="w-full" disabled={isLoading}>
-        Review Trade <ArrowRight className="ml-2 h-4 w-4" />
+      <Button type="submit" disabled={loading} className="w-full">
+        {loading ? 'Processing...' : quote ? 'Confirm Trade' : 'Get Quote'}
       </Button>
     </form>
   );

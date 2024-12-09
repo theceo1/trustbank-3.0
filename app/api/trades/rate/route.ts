@@ -1,7 +1,8 @@
+//app/api/trades/rate/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { MarketRateService } from '@/app/lib/services/market-rate';
+import { QuidaxService } from '@/app/lib/services/quidax';
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,7 +15,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const rate = await MarketRateService.getRate({
+    const rate = await QuidaxService.getInstantRate({
       amount: body.amount,
       currency_pair: `${body.currency.toLowerCase()}_ngn`,
       type: body.type

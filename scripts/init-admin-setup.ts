@@ -5,38 +5,35 @@
 import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
+import { Pool } from 'pg';
 
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL
+});
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Using the tested getOrCreateAuthUser function from setup-admin.ts
+// Helper function to create/get auth user
 async function getOrCreateAuthUser(email: string, password: string): Promise<User> {
-  const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
+  const { data: { users } } = await supabase.auth.admin.listUsers();
+  const existingUser = users.find(u => u.email === email);
   
-  if (listError) throw listError;
-  
-  const existingUser = (users as User[]).find(u => u.email === email);
-  if (existingUser) {
-    return existingUser;
-  }
+  if (existingUser) return existingUser;
 
-  // If user doesn't exist, create them
-  const { data: { user }, error: createError } = await supabase.auth.admin.createUser({
+  const { data: { user }, error } = await supabase.auth.admin.createUser({
     email,
     password,
-    email_confirm: true,
-    user_metadata: {
-      is_admin: true
-    }
+    email_confirm: true
   });
 
-  if (createError) throw createError;
-  if (!user) throw new Error('User creation failed');
-
+  if (error) throw error;
+  if (!user) throw new Error('Failed to create auth user');
+  
   return user;
 }
 
@@ -44,94 +41,110 @@ async function initAdminSetup() {
   console.log('🔧 Initializing admin setup...\n');
 
   try {
-    // 1. Create auth user first
-    console.log('Creating/getting auth user...');
+    // 1. Create admin tables first
+    const client = await pool.connect();
+    try {
+      await client.query(`
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        
+        -- Create admin tables
+        CREATE TABLE IF NOT EXISTS admin_roles (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          name VARCHAR(50) NOT NULL UNIQUE,
+          permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS admin_users (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES auth.users(id),
+          role_id UUID NOT NULL REFERENCES admin_roles(id),
+          is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMPTZ DEFAULT NOW(),
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS admin_access_cache (
+          id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+          user_id UUID NOT NULL REFERENCES auth.users(id),
+          is_admin BOOLEAN DEFAULT false,
+          permissions JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ DEFAULT NOW(),
+          UNIQUE(user_id)
+        );
+      `);
+      console.log('✅ Admin tables created');
+    } finally {
+      client.release();
+    }
+
+    // 2. Create/get auth user
+    console.log('\nCreating/getting auth user...');
     const authUser = await getOrCreateAuthUser('admin001@trustbank.tech', 'SecureAdminPass123!');
     console.log('✅ Auth user ready:', authUser.id);
 
-    // 2. Create admin role using Supabase
+    // 3. Create admin role
     console.log('\nCreating admin role...');
     const { data: role, error: roleError } = await supabase
-  .from('admin_role')
-  .upsert({
-    name: 'super_admin',
-    permissions: {
-      all: true,
-      manage_users: true,
-      manage_roles: true,
-      manage_settings: true,
-      view_analytics: true,
-      manage_transactions: true,
-      manage_kyc: true,
-      manage_support: true
+      .from('admin_roles')
+      .upsert({
+        name: 'super_admin',
+        permissions: {
+          all: true,
+          manage_users: true,
+          manage_roles: true,
+          manage_settings: true,
+          view_analytics: true,
+          manage_transactions: true,
+          manage_kyc: true,
+          manage_support: true
         }
+      }, {
+        onConflict: 'name'
       })
       .select()
       .single();
 
     if (roleError) throw roleError;
+    if (!role) throw new Error('Failed to create admin role');
     console.log('✅ Admin role created');
-
-    // 3. Create public user record
-    console.log('\nCreating public user record...');
-    await supabase.from('user').upsert({
-      where: { id: authUser.id },
-      update: {
-        email: 'admin001@trustbank.tech',
-        first_name: 'System',
-        last_name: 'Administrator'
-      },
-      create: {
-        id: authUser.id,
-        email: 'admin001@trustbank.tech',
-        first_name: 'System',
-        last_name: 'Administrator'
-      }
-    });
-    console.log('✅ Public user record created');
 
     // 4. Create admin user entry
     console.log('\nSetting up admin user...');
-    await supabase.from('admin_user').upsert({
-      where: { user_id: authUser.id },
-      update: {
-        role_id: role.id,
-        is_active: true
-      },
-      create: {
+    const { error: adminError } = await supabase
+      .from('admin_users')
+      .upsert({
         user_id: authUser.id,
         role_id: role.id,
         is_active: true
-      }
-    });
+      }, {
+        onConflict: 'user_id'
+      });
+
+    if (adminError) throw adminError;
     console.log('✅ Admin user entry created');
 
     // 5. Update admin access cache
     console.log('\nUpdating access cache...');
-    const permissions = role.permissions as Record<string, boolean>;
-    await supabase.from('admin_access_cache').upsert({
-      where: { user_id: authUser.id },
-      update: {
-        is_admin: true,
-        permissions: permissions
-      },
-      create: {
+    const { error: cacheError } = await supabase
+      .from('admin_access_cache')
+      .upsert({
         user_id: authUser.id,
         is_admin: true,
-        permissions: permissions
-      }
-    });
+        permissions: role.permissions
+      }, {
+        onConflict: 'user_id'
+      });
+
+    if (cacheError) throw cacheError;
     console.log('✅ Access cache updated');
 
     console.log('\n✨ Admin setup completed successfully');
-    console.log('\nLogin credentials:');
-    console.log('Email: admin001@trustbank.tech');
-    console.log('Password: SecureAdminPass123!');
-    console.log('Admin ID:', authUser.id);
 
   } catch (error: any) {
     console.error('\n❌ Setup failed:', error);
-    if (error.code) console.error('Error code:', error.code);
     if (error.message) console.error('Error message:', error.message);
     if (error.details) console.error('Error details:', error.details);
     process.exit(1);

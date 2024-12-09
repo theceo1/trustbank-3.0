@@ -4,81 +4,150 @@ import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import debug from 'debug';
-import { QuidaxService } from '../scripts/services/quidax';
+import { QuidaxService } from '../app/lib/services/quidax';
 import { TestQuidaxService } from './services/test-quidax';
 import crypto from 'crypto';
 
 const log = debug('trade:test');
-dotenv.config({ path: resolve(process.cwd(), '.env.local') });
+const authLog = debug('trade:auth');
+const dbLog = debug('trade:db');
+const quidaxLog = debug('trade:quidax');
 
-process.env.DEBUG = 'trade:*';
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-interface UserProfile {
-  id: string;
-  user_id: string;
-  quidax_id: string;
-  kyc_tier: string;
-  kyc_verified: boolean;
-  users: {
-    email: string;
-  }[];
+interface TestConfig {
+  currencies: string[];
+  tradeAmount: string;
+  defaultCurrency: string;
+  targetCurrency: string;
 }
 
-const TEST_CONFIG = {
+const TEST_CONFIG: TestConfig = {
   currencies: ['NGN', 'USDT'],
   tradeAmount: '1000',
   defaultCurrency: 'NGN',
   targetCurrency: 'USDT'
 };
 
-async function createTestUser(email: string): Promise<UserProfile> {
-  // First check and delete if user exists
-  const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
-  if (authError) throw authError;
-  
-  const existingUser = (users as User[]).find(u => u.email === email);
-  if (existingUser) {
-    await supabase.auth.admin.deleteUser(existingUser.id);
-  }
+function generateReferralCode(length = 8): string {
+  return crypto.randomBytes(length).toString('hex').slice(0, length).toUpperCase();
+}
 
-  // Create new auth user with specified password
-  const { data: { user }, error: createError } = await supabase.auth.admin.createUser({
-    email: email,
-    password: 'SecureUserPass123!',
-    email_confirm: true
-  });
+async function createTestUser(email: string): Promise<any> {
+  try {
+    // First verify if user exists and delete
+    const { data: { users } } = await supabase.auth.admin.listUsers();
+    const existingUser = users.find(u => u.email === email);
+    if (existingUser) {
+      authLog('🔄 Deleting existing user...');
+      await supabase.auth.admin.deleteUser(existingUser.id);
+    }
 
-  if (createError) throw createError;
-  if (!user) throw new Error('Failed to create auth user');
+    // Wait a moment for deletion to complete
+    await new Promise(resolve => setTimeout(resolve, 1000));
 
-  // Create user profile
-  const { error: profileError } = await supabase
-    .from('users')
-    .insert({
-      id: user.id,
-      email: email,
-      first_name: 'Test',
-      last_name: 'User',
-      is_verified: true,
-      kyc_level: 2,
-      kyc_status: 'approved'
+    authLog('🔑 Creating auth user...');
+    const { data: { user }, error: createError } = await supabase.auth.admin.createUser({
+      email,
+      password: 'SecureUserPass123!',
+      email_confirm: true
     });
 
-  if (profileError) throw profileError;
+    if (createError) throw createError;
+    if (!user) throw new Error('Failed to create auth user');
 
-  return { 
-    id: user.id,
-    user_id: user.id,
-    quidax_id: '',
-    kyc_tier: 'tier2',
-    kyc_verified: true,
-    users: [{ email: email }]
-  };
+    dbLog('👤 Creating user profile...');
+    const { error: profileError } = await supabase
+      .from('users')
+      .insert({
+        id: user.id,
+        email: email,
+        first_name: 'Test',
+        last_name: 'User',
+        is_verified: true,
+        kyc_level: 2,
+        kyc_status: 'approved'
+      });
+
+    if (profileError) {
+      dbLog('❌ User profile creation failed:', profileError);
+      throw profileError;
+    }
+    dbLog('✅ User profile created');
+
+    quidaxLog('🔄 Creating Quidax sub-account...');
+    const quidaxUser = await TestQuidaxService.createSubAccount({
+      email: email,
+      first_name: 'Test',
+      last_name: 'User'
+    });
+    quidaxLog('✅ Quidax sub-account created:', quidaxUser.id);
+
+    dbLog('🏷️ Creating user profile with referral...');
+    const referralCode = generateReferralCode();
+    const { error: userProfileError } = await supabase
+      .from('user_profiles')
+      .insert({
+        user_id: user.id,
+        referral_code: referralCode,
+        kyc_tier: 'tier2',
+        daily_limit: 1000000,
+        monthly_limit: 50000000,
+        kyc_verified: true,
+        quidax_id: quidaxUser.id,
+        documents: {
+          nin: 'verified',
+          bvn: 'verified'
+        }
+      });
+
+    if (userProfileError) {
+      dbLog('❌ User profile creation failed:', userProfileError);
+      throw userProfileError;
+    }
+    dbLog('✅ User profile created with referral');
+
+    dbLog('💰 Creating wallets...');
+    const currencies = ['ngn', 'btc', 'eth', 'usdt', 'usdc'];
+    for (const currency of currencies) {
+      const { error: walletError } = await supabase
+        .from('wallets')
+        .insert({
+          user_id: user.id,
+          currency: currency.toUpperCase(),
+          balance: currency === 'NGN' ? 1000000 : 0,
+          is_test: true,
+          quidax_wallet_id: quidaxUser.id
+        });
+
+      if (walletError) {
+        dbLog(`❌ Wallet creation failed for ${currency}:`, walletError);
+        throw walletError;
+      }
+      dbLog(`✅ Wallet created for ${currency}`);
+    }
+
+    return {
+      id: user.id,
+      user_id: user.id,
+      quidax_id: quidaxUser.id,
+      kyc_tier: 'tier2',
+      kyc_verified: true
+    };
+  } catch (error: any) {
+    log('❌ User creation failed:', {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint
+    });
+    throw error;
+  }
 }
 
 async function testTrade() {
@@ -101,22 +170,27 @@ async function testTrade() {
     
     log('✅ Test user profile ready:', profile);
 
+    // Get wallet balances
     const walletChecks = await Promise.all(
-      TEST_CONFIG.currencies.map(async (currency) => {
-        const balance = await QuidaxService.checkWalletBalance(profile.quidax_id, currency.toLowerCase());
-        return { currency, balance };
+      TEST_CONFIG.currencies.map(async (currency: string) => {
+        const { data: wallet } = await supabase
+          .from('wallets')
+          .select('balance')
+          .eq('user_id', profile.user_id)
+          .eq('currency', currency)
+          .single();
+        return { currency, balance: wallet?.balance || 0 };
       })
     );
     log('💰 Current wallet balances:', walletChecks);
 
-    const quotation = await QuidaxService.createSwapQuotation(
-      profile.quidax_id,
-      {
-        from_currency: TEST_CONFIG.defaultCurrency,
-        to_currency: TEST_CONFIG.targetCurrency,
-        from_amount: TEST_CONFIG.tradeAmount
-      }
-    );
+    // Create swap quotation
+    const quotation = await QuidaxService.createSwapQuotation({
+      user_id: profile.quidax_id,
+      from_currency: TEST_CONFIG.defaultCurrency.toLowerCase(),
+      to_currency: TEST_CONFIG.targetCurrency.toLowerCase(),
+      from_amount: TEST_CONFIG.tradeAmount
+    });
     log('📊 Swap quotation created:', quotation);
 
     const swapResult = await QuidaxService.confirmSwapQuotation(
@@ -125,7 +199,8 @@ async function testTrade() {
     );
     log('✅ Swap confirmed:', swapResult);
 
-    await QuidaxService.monitorTransaction(swapResult.id);
+    // Wait for transaction to complete
+    await new Promise(resolve => setTimeout(resolve, 5000));
     log('🏁 Trade completed successfully');
 
     return true;

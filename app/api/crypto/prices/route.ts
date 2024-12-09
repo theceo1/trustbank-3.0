@@ -1,3 +1,7 @@
+//app/api/crypto/prices/route.ts
+
+import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
 
 let cachedData: any = null;
@@ -6,6 +10,11 @@ const CACHE_DURATION = 10000; // 10 seconds
 
 export async function GET() {
   try {
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ 
+      cookies: () => Promise.resolve(cookieStore) 
+    });
+
     const now = Date.now();
     
     if (cachedData && (now - lastFetch) < CACHE_DURATION) {
@@ -17,7 +26,7 @@ export async function GET() {
       {
         headers: {
           'Accept': 'application/json',
-          'Cache-Control': 'no-cache'
+          'x-cg-api-key': process.env.COINGECKO_API_KEY as string
         },
         next: { revalidate: 10 }
       }

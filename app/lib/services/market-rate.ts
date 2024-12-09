@@ -1,55 +1,55 @@
 import { TradeRateResponse } from '@/app/types/trade';
-import { FEES } from '../constants/fees';
 
 export class MarketRateService {
+  private static BASE_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL;
+  private static API_KEY = process.env.NEXT_PUBLIC_QUIDAX_API_KEY;
+
   static async getRate({ amount, currency_pair, type }: {
     amount: number;
     currency_pair: string;
     type: 'buy' | 'sell';
   }): Promise<TradeRateResponse> {
     try {
-      const [crypto] = currency_pair.split('_');
-      const coinId = this.getCoinId(crypto);
-      
-      const response = await fetch(`/api/market/rates?coin=${coinId}`);
+      const [fromCurrency, toCurrency] = currency_pair.split('_');
+      const response = await fetch(
+        `${this.BASE_URL}/api/v1/quotes?` + 
+        new URLSearchParams({
+          market: `${fromCurrency}${toCurrency}`,
+          unit: fromCurrency,
+          kind: type === 'sell' ? 'bid' : 'ask',
+          volume: amount.toString()
+        }),
+        {
+          headers: {
+            'Authorization': `Bearer ${this.API_KEY}`,
+            'Accept': 'application/json'
+          }
+        }
+      );
+
       if (!response.ok) {
-        throw new Error('Failed to fetch market rate');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to get rate');
       }
 
-      const { usdRate, ngnRate } = await response.json();
+      const data = await response.json();
       
-      // Calculate fees
-      const quidaxFee = amount * FEES.QUIDAX;
-      const platformFee = amount * FEES.PLATFORM;
-      const processingFee = amount * FEES.PROCESSING;
-      
-      const total = type === 'buy' 
-        ? amount + quidaxFee + platformFee + processingFee
-        : amount - (quidaxFee + platformFee + processingFee);
+      if (data.status !== 'success') {
+        throw new Error(data.message || 'Failed to get rate');
+      }
 
       return {
-        rate: ngnRate,
-        usdRate,
-        total,
+        rate: Number(data.data.price.amount),
+        total: Number(data.data.total.amount),
         fees: {
-          quidax: quidaxFee,
-          platform: platformFee,
-          processing: processingFee
+          quidax: Number(data.data.fee.amount),
+          platform: 0,
+          processing: 0
         }
       };
     } catch (error) {
-      console.error('Market rate fetch error:', error);
+      console.error('Get rate error:', error);
       throw error;
     }
   }
-
-  private static getCoinId(currency: string): string {
-    const coinIds: Record<string, string> = {
-      'btc': 'bitcoin',
-      'eth': 'ethereum',
-      'usdt': 'tether',
-      'usdc': 'usd-coin'
-    };
-    return coinIds[currency.toLowerCase()] || currency.toLowerCase();
-  }
-} 
+}

@@ -1,3 +1,4 @@
+// app/trade/components/TradeHistory.tsx
 "use client";
 
 import { useState } from 'react';

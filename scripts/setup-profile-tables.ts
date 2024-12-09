@@ -1,3 +1,4 @@
+//scripts/setup-profile-tables.ts
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -13,13 +14,11 @@ const pool = new Pool({
 async function setupProfileTables() {
   let client;
   try {
+    console.log('Setting up profile and KYC tables...');
     log('Setting up profile and KYC tables...');
     client = await pool.connect();
 
-    // Drop existing user_profiles table to recreate with new schema
-    await client.query(`DROP TABLE IF EXISTS public.user_profiles CASCADE;`);
-
-    // Create user_profiles table with all required fields
+    // Create user_profiles table without dropping
     await client.query(`
       CREATE TABLE IF NOT EXISTS public.user_profiles (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -29,6 +28,7 @@ async function setupProfileTables() {
         kyc_verified BOOLEAN DEFAULT FALSE,
         daily_limit DECIMAL(20, 2) DEFAULT 0,
         monthly_limit DECIMAL(20, 2) DEFAULT 0,
+        referral_code TEXT,
         documents JSONB DEFAULT '{}'::jsonb,
         is_test BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -36,19 +36,26 @@ async function setupProfileTables() {
         UNIQUE(user_id)
       );
     `);
+    console.log('✓ User profiles table created');
     log('✓ User profiles table created');
 
-    // Add is_test column to wallets table
-    await client.query(`
-      ALTER TABLE public.wallets 
-      ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;
-    `);
-    log('✓ Wallets table updated');
+    // Add any missing columns
+    const alterTableQueries = [
+      "ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS referral_code TEXT;",
+      "ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS is_test BOOLEAN DEFAULT FALSE;",
+      "ALTER TABLE public.user_profiles ADD COLUMN IF NOT EXISTS kyc_tier TEXT DEFAULT 'unverified';"
+    ];
 
-    log('\n✨ Profile tables setup completed successfully');
+    for (const query of alterTableQueries) {
+      await client.query(query);
+    }
+
+    console.log('✨ Profile tables setup completed successfully');
+    log('✨ Profile tables setup completed successfully');
 
   } catch (error: any) {
-    log('\n❌ Setup failed:', {
+    console.error('❌ Setup failed:', error);
+    log('❌ Setup failed:', {
       message: error?.message || 'Unknown error',
       code: error?.code || 'NO_CODE'
     });
@@ -58,6 +65,4 @@ async function setupProfileTables() {
   }
 }
 
-setupProfileTables()
-  .then(() => process.exit(0))
-  .catch(() => process.exit(1)); 
+setupProfileTables();

@@ -24,7 +24,7 @@ import { Transaction } from '@/app/types/transactions';
 
 export const dynamic = 'force-dynamic';
 
-interface WalletData {
+export interface WalletData {
   id: string;
   user_id: string;
   currency: string;
@@ -33,7 +33,6 @@ interface WalletData {
   total_withdrawals: number;
   pending_balance: number;
   last_transaction_at: string;
-  quidax_wallet_id?: string;
 }
 
 const containerVariants = {
@@ -78,14 +77,10 @@ export default function WalletPage() {
     if (!user) return;
     
     try {
-      const wallets = await WalletService.getUserWallet(user.id);
-      if (wallets && Array.isArray(wallets)) {
-        setWalletData(wallets);
-        // Set the NGN wallet as the primary wallet for transactions
-        const ngnWallet = wallets.find(w => w.currency === 'NGN');
-        if (ngnWallet) {
-          setWallet(ngnWallet);
-        }
+      const wallet = await WalletService.getWalletBalance(user.id);
+      if (wallet) {
+        setWalletData([wallet]);
+        setWallet(wallet);
       }
     } catch (error) {
       console.error('Error fetching wallet:', error);

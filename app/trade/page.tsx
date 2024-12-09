@@ -9,7 +9,7 @@ import { TradeHistory } from './components/TradeHistory';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from "@/components/ui/button";
 import { TradeType } from '@/app/types/trade';
-
+ 
 export default function TradePage() {
   const { user } = useAuth();
   const [selectedAction, setSelectedAction] = useState<TradeType>('buy');
@@ -20,26 +20,6 @@ export default function TradePage() {
         <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle>Trade Crypto</CardTitle>
-            <div className="flex space-x-2 mt-4">
-              <Button 
-                variant={selectedAction === 'buy' ? 'default' : 'outline'}
-                onClick={() => setSelectedAction('buy')}
-              >
-                Buy
-              </Button>
-              <Button 
-                variant={selectedAction === 'sell' ? 'default' : 'outline'}
-                onClick={() => setSelectedAction('sell')}
-              >
-                Sell
-              </Button>
-              <Button 
-                variant={selectedAction === 'swap' ? 'default' : 'outline'}
-                onClick={() => setSelectedAction('swap')}
-              >
-                Swap
-              </Button>
-            </div>
           </CardHeader>
           <CardContent>
             <TradeForm initialType={selectedAction} />

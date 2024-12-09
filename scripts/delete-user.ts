@@ -1,7 +1,9 @@
 import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
+import debug from 'debug';
 
+const log = debug('user:delete');
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
 const supabase = createClient(
@@ -13,6 +15,7 @@ async function deleteUser(email: string) {
   try {
     console.log(`Attempting to delete user: ${email}`);
     
+    // First find the user
     const { data: { users }, error: fetchError } = await supabase.auth.admin.listUsers();
     if (fetchError) throw fetchError;
 
@@ -22,13 +25,21 @@ async function deleteUser(email: string) {
       return;
     }
 
-    // Delete from auth
+    // Delete related data first
+    await Promise.all([
+      supabase.from('wallets').delete().eq('user_id', user.id),
+      supabase.from('user_profiles').delete().eq('user_id', user.id),
+      supabase.from('users').delete().eq('id', user.id)
+    ]);
+
+    // Finally delete the auth user
     const { error: deleteError } = await supabase.auth.admin.deleteUser(user.id);
     if (deleteError) throw deleteError;
 
-    console.log('User deleted successfully');
+    console.log('User and related data deleted successfully');
   } catch (error) {
     console.error('Failed to delete user:', error);
+    throw error; // Re-throw to ensure process exits with error
   }
 }
 
@@ -38,4 +49,6 @@ if (!email) {
   process.exit(1);
 }
 
-deleteUser(email); 
+deleteUser(email)
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1)); 

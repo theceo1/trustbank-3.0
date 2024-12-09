@@ -38,7 +38,13 @@
     "fix:wallets": "ts-node scripts/fix-wallet.ts",
     "fix:wallet-constraints": "ts-node scripts/fix-wallet-constraints.ts",
     "setup:db-functions": "ts-node scripts/setup-db-functions.ts",
-    "fix:all": "npm run setup:db-functions && npm run fix:wallet-constraints && npm run fix:wallets"
+    "fix:all": "npm run setup:db-functions && npm run fix:wallet-constraints && npm run fix:wallets",
+    "fix:auth": "DEBUG=auth:* ts-node scripts/fix-auth-setup.ts",
+    "debug:auth": "DEBUG=auth:* ts-node scripts/debug-auth-setup.ts",
+    "verify:auth-schema": "DEBUG=auth:* ts-node scripts/verify-auth-schema.ts",
+    "fix:auth-sequences": "DEBUG=auth:* ts-node scripts/fix-auth-sequences.ts",
+    "setup-test-users": "DEBUG=setup:* ts-node scripts/setup-test-users.ts",
+    "test-transfer": "DEBUG=test:* ts-node scripts/test-usdt-transfer.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",

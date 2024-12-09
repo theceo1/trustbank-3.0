@@ -1,3 +1,4 @@
+//app/lib/auth.ts
 import { AuthOptions } from "next-auth";
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 

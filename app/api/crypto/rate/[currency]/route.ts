@@ -1,41 +1,51 @@
+//app/api/crypto/rate/[currency]/route.ts
 import { NextResponse } from 'next/server';
-import { currencyIds } from '@/app/lib/constants/crypto';
-
-type SupportedCurrency = keyof typeof currencyIds;
 
 export async function GET(request: Request) {
   const segments = request.url.split('/');
-  const currency = segments[segments.length - 1].toUpperCase() as SupportedCurrency;
-  const ngnRate = 1350;
+  const currency = segments[segments.length - 1].toUpperCase();
   
   try {
-    if (!(currency in currencyIds)) {
-      return NextResponse.json(
-        { error: 'Unsupported currency' }, 
-        { status: 400 }
-      );
+    // For USDT/NGN rate
+    const response = await fetch(
+      `https://www.quidax.com/api/v1/markets/tickers/usdtngn`,
+      {
+        headers: {
+          'Accept': 'application/json'
+        }
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch rate');
     }
+
+    const data = await response.json();
+    const rate = parseFloat(data.ticker.last);
 
     if (currency === 'USDT' || currency === 'USDC') {
       return NextResponse.json({ 
-        rate: ngnRate,
+        rate,
         usdPrice: 1 
       });
     }
 
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/simple/price?ids=${currencyIds[currency]}&vs_currencies=usd`
+    // For other cryptocurrencies, get their USDT rate first
+    const cryptoResponse = await fetch(
+      `https://www.quidax.com/api/v1/markets/tickers/${currency.toLowerCase()}usdt`
     );
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch price');
+    if (!cryptoResponse.ok) {
+      throw new Error('Failed to fetch crypto price');
     }
 
-    const data = await response.json();
-    const usdPrice = data[currencyIds[currency]].usd;
-    const rate = usdPrice * ngnRate;
-
-    return NextResponse.json({ rate, usdPrice });
+    const cryptoData = await cryptoResponse.json();
+    const usdPrice = parseFloat(cryptoData.ticker.last);
+    
+    return NextResponse.json({ 
+      rate: usdPrice * rate,
+      usdPrice 
+    });
   } catch (error) {
     console.error('Price fetch error:', error);
     return NextResponse.json(
