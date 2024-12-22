@@ -1,11 +1,17 @@
 // app/lib/services/wallet.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import type { Database } from '@/types/supabase';
+import supabase from '@/lib/supabase/client';
 
 export interface WalletData {
+  id: string;
+  user_id: string;
   currency: string;
-  balance: string;
-  pending: string;
+  balance: number;
+  pending_balance: number;
+  total_deposits: number;
+  total_withdrawals: number;
+  last_transaction_at: string;
 }
 
 interface PaymentProcessResult {
@@ -13,7 +19,7 @@ interface PaymentProcessResult {
   status: 'completed' | 'failed';
 }
 
-interface QuidaxWalletUpdate {
+export interface QuidaxWalletUpdate {
   event: string;
   data: {
     id: string;
@@ -32,58 +38,27 @@ interface QuidaxWalletUpdate {
 export class WalletService {
   private static supabase = createClientComponentClient<Database>();
 
-  static async getWalletBalance(userId: string): Promise<WalletData[]> {
-    try {
-      const { data: wallets, error } = await this.supabase
-        .from('wallets')
-        .select('*')
-        .eq('user_id', userId)
-        .throwOnError();
+  static async getWalletBalance(userId: string): Promise<WalletData | null> {
+    const { data, error } = await supabase
+      .from('wallets')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('currency', 'NGN')
+      .single();
 
-      if (error) throw error;
-
-      const currencies = ['btc', 'eth', 'usdt', 'usdc', 'ngn'];
-      const defaultWallet = {
-        balance: '0',
-        pending: '0'
-      };
-
-      return currencies.map(currency => {
-        const wallet = wallets?.find(w => w.currency.toLowerCase() === currency.toLowerCase());
-        return {
-          currency: currency.toLowerCase(),
-          ...defaultWallet,
-          ...(wallet && { balance: wallet.balance.toString() })
-        };
-      });
-    } catch (error) {
-      console.error('Error fetching wallet balances:', error);
-      // Return default balances instead of throwing
-      return ['btc', 'eth', 'usdt', 'usdc', 'ngn'].map(currency => ({
-        currency,
-        balance: '0',
-        pending: '0'
-      }));
-    }
+    if (error) throw error;
+    return data;
   }
 
-  static async updateWalletBalance(userId: string, currency: string, balance: string) {
-    try {
-      const { error } = await this.supabase
-        .from('wallets')
-        .upsert({
-          user_id: userId,
-          currency: currency.toLowerCase(),
-          balance: parseFloat(balance) || 0,
-          updated_at: new Date().toISOString()
-        })
-        .throwOnError();
+  static async updateWalletBalance(walletId: string, amount: number, type: 'credit' | 'debit') {
+    const { data, error } = await supabase.rpc('update_wallet_balance', {
+      p_wallet_id: walletId,
+      p_amount: amount,
+      p_type: type
+    });
 
-      if (error) throw error;
-    } catch (error) {
-      console.error('Error updating wallet balance:', error);
-      throw new Error('Failed to update balance');
-    }
+    if (error) throw error;
+    return data;
   }
 
 

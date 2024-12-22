@@ -1,9 +1,10 @@
+// app/lib/services/tradeStatus.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { TradeDetails, TradeStatus } from '@/app/types/trade';
 import { QuidaxService } from './quidax';
 import { PaymentService } from './payment';
 import { PaymentProcessorFactory } from './payment/PaymentProcessorFactory';
-import { PaymentMethodType } from '@/app/types/payment';
+import { PaymentMethodType, PaymentStatus } from '@/app/types/payment';
 
 export class TradeStatusService {
   static async watchStatus(
@@ -20,10 +21,11 @@ export class TradeStatusService {
         
         if (!response.ok) throw new Error(data.error);
         
-        const status = QuidaxService.mapQuidaxStatus(data.status);
-        onStatusChange(status as TradeStatus);
+        const paymentStatus = QuidaxService.mapQuidaxStatus(data.status);
+        const tradeStatus = this.mapPaymentStatusToTradeStatus(paymentStatus);
+        onStatusChange(tradeStatus);
         
-        return status === TradeStatus.COMPLETED || status === TradeStatus.FAILED;
+        return tradeStatus === TradeStatus.COMPLETED || tradeStatus === TradeStatus.FAILED;
       } catch (error) {
         console.error('Status check failed:', error);
         return false;
@@ -40,6 +42,18 @@ export class TradeStatusService {
 
     // Cleanup function
     return () => clearInterval(intervalId);
+  }
+
+  private static mapPaymentStatusToTradeStatus(status: PaymentStatus): TradeStatus {
+    const statusMap: Record<PaymentStatus, TradeStatus> = {
+      'initiated': TradeStatus.PENDING,
+      'pending': TradeStatus.PENDING,
+      'processing': TradeStatus.PROCESSING,
+      'confirming': TradeStatus.PROCESSING,
+      'completed': TradeStatus.COMPLETED,
+      'failed': TradeStatus.FAILED
+    };
+    return statusMap[status] || TradeStatus.FAILED;
   }
 
   static async verifyPayment(trade: TradeDetails): Promise<TradeStatus> {

@@ -1,7 +1,9 @@
-import { useState } from 'react';
+// app/components/payment/methods/WalletPayment.tsx
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PaymentProcessorProps, PaymentResult } from '@/app/types/payment';
+import { PaymentProcessorProps, PaymentResult, PaymentStatus } from '@/app/types/payment';
+import { PaymentProcessorFactory } from '@/app/lib/services/payment/PaymentProcessorFactory';
 import { WalletService } from '@/app/lib/services/wallet';
 import { useToast } from '@/hooks/use-toast';
 import { formatCurrency } from '@/app/lib/utils';
@@ -9,8 +11,24 @@ import { formatCurrency } from '@/app/lib/utils';
 export default function WalletPayment({ trade, onComplete }: PaymentProcessorProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const { toast } = useToast();
+  const [balance, setBalance] = useState(0);
 
-  const hasInsufficientBalance = trade.amount > (trade.walletBalance || 0);
+  useEffect(() => {
+    const fetchBalance = async () => {
+      if (trade.user_id) {
+        try {
+          const userBalance = await WalletService.getUserBalance(trade.user_id);
+          setBalance(userBalance);
+        } catch (error) {
+          console.error('Failed to fetch wallet balance:', error);
+        }
+      }
+    };
+    
+    fetchBalance();
+  }, [trade.user_id]);
+
+  const hasInsufficientBalance = trade.amount > balance;
 
   const handlePayment = async () => {
     if (!trade.id) {
@@ -35,14 +53,11 @@ export default function WalletPayment({ trade, onComplete }: PaymentProcessorPro
 
     setIsProcessing(true);
     try {
-      const result = await WalletService.processPayment({
-        amount: trade.amount,
-        currency: trade.currency,
-        tradeId: trade.id
-      });
+      const walletProcessor = PaymentProcessorFactory.getProcessor('wallet');
+      const result = await walletProcessor.process(trade);
       
       const paymentResult: PaymentResult = {
-        status: 'completed',
+        status: result.status as PaymentStatus,
         trade_id: trade.id,
         reference: result.reference
       };
@@ -71,7 +86,7 @@ export default function WalletPayment({ trade, onComplete }: PaymentProcessorPro
         <div className="text-center space-y-2">
           <h3 className="font-semibold">Pay from Wallet</h3>
           <p className="text-sm text-gray-500">
-            Available Balance: {formatCurrency(trade.walletBalance || 0)}
+            Available Balance: {formatCurrency(balance)}
           </p>
           {hasInsufficientBalance && (
             <p className="text-sm text-red-500">

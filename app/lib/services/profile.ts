@@ -1,5 +1,8 @@
+//app/lib/services/profile.ts
+
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/app/types/database';
+import { KYCTier, KYC_LIMITS } from '@/app/types/kyc';
 
 function generateReferralCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -18,12 +21,12 @@ export class ProfileService {
           full_name,
           quidax_id,
           is_verified,
-          kyc_verified,
-          kyc_tier,
+          kyc_level,
+          kyc_status,
           daily_limit,
           monthly_limit,
           referral_code,
-          documents
+          kyc_documents
         `)
         .eq('user_id', userId)
         .single();
@@ -50,12 +53,12 @@ export class ProfileService {
         .insert([{
           user_id: userId,
           full_name: fullName,
-          kyc_verified: false,
-          kyc_tier: 'unverified',
-          daily_limit: 0,
-          monthly_limit: 0,
-          documents: {},
-          is_test: false
+          kyc_level: KYCTier.NONE,
+          kyc_status: 'pending',
+          is_verified: false,
+          daily_limit: KYC_LIMITS[KYCTier.NONE].dailyLimit,
+          monthly_limit: KYC_LIMITS[KYCTier.NONE].monthlyLimit,
+          kyc_documents: {}
         }])
         .select()
         .single();

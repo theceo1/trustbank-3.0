@@ -1,3 +1,4 @@
+// app/components/verification/KYCAdvancedForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -54,7 +55,7 @@ export function KYCAdvancedForm() {
     try {
       const idDocumentUrl = await KYCService.uploadDocument(data.idDocument);
 
-      await KYCService.submitVerification(user.id, 'advanced', {
+      await KYCService.submitVerification(user.id, 'photo_id', {
         idType: data.idType,
         idNumber: data.idNumber,
         idDocumentUrl,

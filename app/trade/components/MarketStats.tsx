@@ -19,21 +19,31 @@ export function MarketStats() {
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
-        const response = await fetch(
-          'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,tether&order=market_cap_desc'
-        );
+        const response = await fetch('/api/crypto/prices?' + new URLSearchParams({
+          ids: 'bitcoin,ethereum,tether',
+          vs_currencies: 'usd'
+        }));
         
         if (!response.ok) throw new Error('Failed to fetch market data');
         
         const data = await response.json();
-        const formattedData = data.reduce((acc: Record<string, CryptoData>, coin: any) => {
-          acc[coin.symbol] = {
-            current_price: coin.current_price,
-            price_change_percentage_24h: coin.price_change_percentage_24h,
-            symbol: coin.symbol
-          };
-          return acc;
-        }, {});
+        const formattedData = {
+          btc: {
+            current_price: data.bitcoin?.usd || 0,
+            price_change_percentage_24h: 0,
+            symbol: 'btc'
+          },
+          eth: {
+            current_price: data.ethereum?.usd || 0,
+            price_change_percentage_24h: 0,
+            symbol: 'eth'
+          },
+          usdt: {
+            current_price: data.tether?.usd || 0,
+            price_change_percentage_24h: 0,
+            symbol: 'usdt'
+          }
+        };
         
         setMarketData(formattedData);
         setError(null);

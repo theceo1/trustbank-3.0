@@ -1,3 +1,4 @@
+// app/lib/services/payment/BankTransferProcessor.ts
 import { BasePaymentProcessor, PaymentProcessorResult, PaymentInitDetails } from './BasePaymentProcessor';
 import { TradeDetails } from '@/app/types/trade';
 import { QuidaxService } from '../quidax';

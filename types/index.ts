@@ -1,4 +1,6 @@
+//types/index.ts
 import { Session, User } from "@supabase/supabase-js";
+import { KYCInfo } from "@/app/types/kyc";
 
 export interface UserProfile {
     user_id: string;
@@ -10,19 +12,15 @@ export interface UserProfile {
 
 export interface AuthContextType {
   user: User | null;
-  isLoading: boolean;
+  loading: boolean;
+  kycInfo?: KYCInfo;
   signUp: (email: string, password: string, metadata?: {
     name?: string;
     referralCode?: string;
     referredBy?: string | null;
-  }) => Promise<{
-    data: { user: User | null; session: Session | null } | null;
-    error: Error | null;
-  }>;
-  signIn: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<{
-    data: { url: string; provider: string } | null;
-    error: Error | null;
-  }>;
-  logout: () => Promise<void>;
+  }) => Promise<{ user: User | null; error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ user: User | null; error: Error | null }>;
+  signOut: () => Promise<void>;
+  signInWithGoogle: () => Promise<{ data: { provider: string; url: string | null } | null; error: Error | null }>;
+  getToken: () => Promise<string>;
 }

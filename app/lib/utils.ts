@@ -1,10 +1,8 @@
-export const formatCurrency = (amount: number, currency: string = 'NGN'): string => {
-  const formatter = new Intl.NumberFormat('en-NG', {
+export const formatCurrency = (amount: number): string => {
+  return new Intl.NumberFormat('en-NG', {
     style: 'currency',
-    currency: currency,
-    minimumFractionDigits: 2
-  });
-  return formatter.format(amount);
+    currency: 'NGN',
+  }).format(amount);
 };
 
 export const formatDate = (date: string) => {
@@ -19,12 +17,19 @@ export const formatPercentage = (value: number): string => {
 };
 
 export const formatCryptoAmount = (amount: number): string => {
-  return amount.toLocaleString(undefined, {
-    minimumFractionDigits: 8,
-    maximumFractionDigits: 8
-  });
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 8,
+  }).format(amount);
 };
 
 export function cn(...classes: string[]) {
   return classes.filter(Boolean).join(' ');
 }
+
+export const formatNumber = (value: number, decimals: number = 2): string => {
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: decimals,
+  }).format(value);
+};

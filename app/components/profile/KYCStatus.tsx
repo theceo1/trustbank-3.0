@@ -1,11 +1,21 @@
+// app/components/profile/KYCStatus.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { KYC_TIERS } from "@/app/lib/constants/kyc-tiers";
+import { KYC_LIMITS, KYCTier } from "@/app/types/kyc";
 import { Badge } from "@/components/ui/badge";
 import { Shield, ChevronRight } from "lucide-react";
 import Link from "next/link";
 
 export function KYCStatus({ currentTier }: { currentTier: string }) {
-  const tier = KYC_TIERS[currentTier as keyof typeof KYC_TIERS];
+  // Map the string tier to KYCTier enum
+  const tierMapping: Record<string, KYCTier> = {
+    'unverified': KYCTier.NONE,
+    'basic': KYCTier.BASIC,
+    'intermediate': KYCTier.INTERMEDIATE,
+    'advanced': KYCTier.ADVANCED
+  };
+
+  const tierEnum = tierMapping[currentTier.toLowerCase()] || KYCTier.NONE;
+  const limits = KYC_LIMITS[tierEnum];
   
   return (
     <Card>
@@ -22,7 +32,7 @@ export function KYCStatus({ currentTier }: { currentTier: string }) {
             </Badge>
           </div>
           <div className="text-sm text-muted-foreground">
-            Daily Limit: ₦{tier.dailyLimit.toLocaleString()}
+            Daily Limit: ₦{limits.dailyLimit.toLocaleString()}
           </div>
           <Link 
             href="/profile/verification" 

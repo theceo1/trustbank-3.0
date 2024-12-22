@@ -22,9 +22,9 @@ export default function CalculatorPage() {
             </p>
           </div>
 
-          <div className="text-left mb-6 flex items-center gap-2">
-            <h2 className="text-md font-semibold">trust<span className="text-green-600">Rate™</span></h2>
-            <span className="px-2.5 py-0.5 text-[7px] font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full uppercase tracking-wider">
+          <div className="text-left mb-2 flex items-center gap-2">
+            <h2 className="text-lg font-semibold">trust<span className="text-green-600">Rate™</span></h2>
+            <span className="px-2.5 py-0.5 text-[6px] font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 rounded-full uppercase tracking-wider">
               Beta
             </span>
           </div>

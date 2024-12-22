@@ -20,7 +20,7 @@ async function createAdminUser() {
   log('Starting admin user creation...');
   try {
     const { data: { user }, error } = await supabase.auth.admin.createUser({
-      email: 'admin001@trustbank.tech',
+      email: 'admin02@trustbank.tech',
       password: 'SecureAdminPass123!',
       email_confirm: true,
       user_metadata: {
@@ -46,7 +46,7 @@ async function createAdminUser() {
       .from('users')
       .insert({
         id: user.id,
-        email: 'admin001@trustbank.tech',
+        email: 'admin02@trustbank.tech',
         first_name: 'System',
         last_name: 'Administrator',
         is_verified: true,

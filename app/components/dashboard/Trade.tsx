@@ -1,95 +1,118 @@
-//app/components/dashboard/Trade.tsx
+// app/components/dashboard/Trade.tsx
 "use client";
 
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowRight } from "lucide-react";
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { TradeDetails } from '@/app/types/trade';
-import { useState, useEffect, useCallback } from 'react';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { TradeDetails, TradeQuotation } from '@/app/types/trade';
+import { formatNumber } from '@/app/lib/utils';
 
-interface TradeProps {
-  initialTrade?: TradeDetails;
-}
+const SUPPORTED_CURRENCIES = [
+  { value: 'USDT', label: 'USDT' },
+  { value: 'BTC', label: 'BTC' },
+  { value: 'ETH', label: 'ETH' },
+  { value: 'USDC', label: 'USDC' }
+];
 
-export function Trade({ initialTrade }: TradeProps) {
+const formatCryptoBalance = (amount: number, currency: string) => {
+  return `${formatNumber(amount, 8)} ${currency}`;
+};
+
+export function Trade() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, getToken } = useAuth();
   const { toast } = useToast();
   
   const [loading, setLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [selectedCurrency, setSelectedCurrency] = useState<string>('USDT');
   const [amount, setAmount] = useState<string>('');
-  const [quotation, setQuotation] = useState<any>(null);
+  const [quotation, setQuotation] = useState<TradeQuotation | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [quotationTimer, setQuotationTimer] = useState<number>(0);
 
-  const formatCryptoBalance = (amount: number, currency: string) => {
-    return `${amount.toFixed(8)} ${currency}`;
-  };
-
   const fetchWalletBalance = useCallback(async () => {
-    if (!user?.id) {
-      router.push('/login');
-      return;
-    }
+    if (!user?.id) return;
     
     try {
+      const token = await getToken();
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
       const response = await fetch(`/api/wallet/balance/${selectedCurrency.toLowerCase()}`, {
-        headers: { 'Content-Type': 'application/json' },
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         credentials: 'include'
       });
       
+      if (response.status === 401) {
+        router.push('/auth/login');
+        return;
+      }
+      
       if (!response.ok) {
-        if (response.status === 401) {
-          router.push('/login');
-          return;
-        }
-        throw new Error('Failed to fetch balance');
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
-      setWalletBalance(Number(data.balance));
+      setWalletBalance(Number(data.balance) || 0);
     } catch (error) {
       console.error('Check balance error:', error);
+      setWalletBalance(0);
       toast({
         title: "Error",
-        description: "Failed to fetch wallet balance",
+        description: "Unable to fetch balance. Please try logging in again.",
         variant: "destructive"
       });
+      
+      if (error instanceof Error && error.message.includes('401')) {
+        router.push('/auth/login');
+      }
     }
-  }, [selectedCurrency, user?.id, router, toast]);
+  }, [selectedCurrency, user?.id, getToken, toast, router]);
 
   const handleReviewTrade = useCallback(async () => {
     if (!user?.id || !amount || parseFloat(amount) <= 0) return;
     
     try {
+      const token = await getToken();
       setIsReviewing(true);
       const response = await fetch('/api/trades/quote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
         body: JSON.stringify({
           fromCurrency: selectedCurrency,
           toCurrency: 'ngn',
           amount: parseFloat(amount)
         })
       });
-  
+
       if (!response.ok) {
-        throw new Error('Failed to get quotation');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to get quote');
       }
-  
+
       const quote = await response.json();
-      setQuotation(quote);
-      
-      const expiryTime = new Date(quote.expires_at).getTime();
-      const now = Date.now();
-      setQuotationTimer(Math.floor((expiryTime - now) / 1000));
+      if (!quote || !quote.data) {
+        throw new Error('Invalid quote response');
+      }
+
+      setQuotation({
+        ...quote.data,
+        expiresAt: Date.now() + 14000 // 14 seconds
+      });
+      setQuotationTimer(14);
       
       const interval = setInterval(() => {
         setQuotationTimer(prev => {
@@ -101,30 +124,57 @@ export function Trade({ initialTrade }: TradeProps) {
           return prev - 1;
         });
       }, 1000);
-  
+
+      return () => clearInterval(interval);
     } catch (error) {
+      console.error('Quote error:', error);
       toast({
         title: "Error",
-        description: "Failed to get trade quotation. Please try again.",
+        description: error instanceof Error ? error.message : "Failed to get quote",
         variant: "destructive"
       });
     } finally {
       setIsReviewing(false);
     }
-  }, [user?.id, amount, selectedCurrency, toast]);
-   
+  }, [user?.id, amount, selectedCurrency, getToken, toast]);
+
   const handleConfirmTrade = async () => {
     if (!user?.id || !quotation) return;
     
     try {
-      const confirmedTrade = await QuidaxService.confirmSwapQuotation(user.id, quotation.id);
+      const token = await getToken();
+      setLoading(true);
+      const response = await fetch('/api/trades/confirm', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({ quotationId: quotation.id })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to confirm trade');
+      }
+
+      const confirmedTrade = await response.json();
+      
+      toast({
+        title: "Success",
+        description: "Trade confirmed successfully",
+      });
+      
       router.push(`/trades/${confirmedTrade.id}`);
     } catch (error) {
+      console.error('Trade confirmation error:', error);
       toast({
-        title: "Error",
-        description: "Failed to confirm trade. Please try again.",
+        title: "Trade Failed",
+        description: error instanceof Error ? error.message : "Unable to process trade at this time",
         variant: "destructive"
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -145,9 +195,11 @@ export function Trade({ initialTrade }: TradeProps) {
             <SelectValue placeholder="Select currency" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="USDT">USDT</SelectItem>
-            <SelectItem value="BTC">BTC</SelectItem>
-            <SelectItem value="ETH">ETH</SelectItem>
+            {SUPPORTED_CURRENCIES.map(currency => (
+              <SelectItem key={currency.value} value={currency.value}>
+                {currency.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
 
@@ -172,9 +224,11 @@ export function Trade({ initialTrade }: TradeProps) {
           </Button>
         ) : (
           <div className="space-y-4">
-            <div className="text-sm">
-              Rate expires in: {quotationTimer}s
-            </div>
+            {quotation && (
+              <div className="text-sm text-gray-600 mt-2">
+                Rate expires in: {quotationTimer}s
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <Button 
                 onClick={handleConfirmTrade}

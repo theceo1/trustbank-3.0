@@ -1,6 +1,7 @@
+// app/components/profile/TierComparison.tsx
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { KYC_TIERS } from "@/app/lib/constants/kyc-tiers";
+import { KYC_LIMITS, KYCTier } from "@/app/types/kyc";
 import { Check, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,11 +10,50 @@ interface TierComparisonProps {
   completedRequirements: string[];
 }
 
+const TIER_INFO = {
+  unverified: {
+    key: 'unverified',
+    name: 'Unverified',
+    description: 'Basic account with limited features',
+    requirements: [],
+    benefits: ['Basic account access', 'View market rates'],
+    limits: KYC_LIMITS[KYCTier.NONE],
+    color: 'text-gray-500'
+  },
+  basic: {
+    key: 'basic',
+    name: 'Basic',
+    description: 'Start trading with basic verification',
+    requirements: ['BVN Verification'],
+    benefits: ['Small transactions', 'Basic trading features'],
+    limits: KYC_LIMITS[KYCTier.BASIC],
+    color: 'text-blue-500'
+  },
+  intermediate: {
+    key: 'intermediate',
+    name: 'Intermediate',
+    description: 'Enhanced trading limits with additional verification',
+    requirements: ['NIN Verification'],
+    benefits: ['Higher transaction limits', 'Advanced trading features'],
+    limits: KYC_LIMITS[KYCTier.INTERMEDIATE],
+    color: 'text-green-500'
+  },
+  advanced: {
+    key: 'advanced',
+    name: 'Advanced',
+    description: 'Maximum trading capabilities',
+    requirements: ['International Passport or Driver\'s License'],
+    benefits: ['Highest transaction limits', 'All platform features', 'Priority support'],
+    limits: KYC_LIMITS[KYCTier.ADVANCED],
+    color: 'text-purple-500'
+  }
+};
+
 export function TierComparison({ currentTier, completedRequirements }: TierComparisonProps) {
   return (
     <div className="w-full overflow-x-auto">
       <div className="min-w-[800px] grid grid-cols-4 gap-4 p-4">
-        {Object.entries(KYC_TIERS).map(([tierKey, tier], index) => (
+        {Object.entries(TIER_INFO).map(([tierKey, tier], index) => (
           <motion.div
             key={tierKey}
             initial={{ opacity: 0, y: 20 }}
@@ -38,9 +78,8 @@ export function TierComparison({ currentTier, completedRequirements }: TierCompa
                   <div className="mt-4">
                     <p className="font-medium">Limits:</p>
                     <ul className="text-sm space-y-1">
-                      <li>Daily: ₦{tier.dailyLimit.toLocaleString()}</li>
-                      <li>Monthly: ₦{tier.monthlyLimit.toLocaleString()}</li>
-                      {/* <li>Annual: ₦{tier.annualLimit.toLocaleString()}</li> */}
+                      <li>Daily: ₦{tier.limits.dailyLimit.toLocaleString()}</li>
+                      <li>Monthly: ₦{tier.limits.monthlyLimit.toLocaleString()}</li>
                     </ul>
                   </div>
                 </div>

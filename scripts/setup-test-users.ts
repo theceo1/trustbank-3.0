@@ -1,5 +1,5 @@
 // scripts/setup-test-users.ts
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import debug from 'debug';
@@ -48,16 +48,34 @@ const TEST_USERS: TestUser[] = [
   }
 ];
 
+interface TestUserResult {
+  email: string;
+  user_id: string;
+  quidax_id: string;
+}
+
+// Add AuthUser interface to extend User with email
+interface AuthUser extends User {
+  email: string;
+}
+
 async function setupTestUsers() {
   try {
     log('🚀 Starting test users setup...');
-    const results = [];
+    const results: TestUserResult[] = [];
 
-    // Get all existing auth users first
-    const { data: { users: existingUsers }, error: authListError } = await supabase.auth.admin.listUsers();
+    // Get all existing auth users with proper typing
+    const { data: { users }, error: authListError } = 
+      await supabase.auth.admin.listUsers() as { 
+        data: { users: AuthUser[] }, 
+        error: Error | null 
+      };
+
     if (authListError) {
       throw new Error(`Failed to list auth users: ${authListError.message}`);
     }
+
+    const existingUsers = users;
 
     for (const testUser of TEST_USERS) {
       log(`📝 Processing user: ${testUser.email}`);
@@ -100,6 +118,11 @@ async function setupTestUsers() {
           throw new Error(`Auth user creation failed: ${createError?.message}`);
         }
         userId = user.id;
+      }
+
+      // Before creating profile or pushing results, validate userId
+      if (!userId) {
+        throw new Error(`User ID is undefined for ${testUser.email}`);
       }
 
       // Create Quidax account if needed
@@ -161,7 +184,7 @@ async function setupTestUsers() {
       results.push({
         email: testUser.email,
         user_id: userId,
-        quidax_id: quidaxId
+        quidax_id: quidaxId as string
       });
 
       log(`✅ Setup completed for: ${testUser.email}`);

@@ -68,16 +68,12 @@ export interface QuidaxDeposit {
 
 export interface QuidaxSwapTransaction {
   id: string;
+  status: string;
+  execution_price: string;
+  from_amount: string;
+  to_amount: string;
   from_currency: string;
   to_currency: string;
-  from_amount: string;
-  received_amount: string;
-  execution_price: string;
-  status: 'initiated' | 'pending' | 'completed' | 'failed';
-  created_at: string;
-  updated_at: string;
-  swap_quotation: QuidaxQuotation;
-  user: QuidaxUser;
 }
 
 export interface QuidaxQuotationParams {
@@ -85,23 +81,14 @@ export interface QuidaxQuotationParams {
   from_currency: string;
   to_currency: string;
   from_amount: string;
-  type?: 'instant';
-  payment_method?: 'wallet' | 'card' | 'bank_transfer';
 }
 
 export interface QuidaxQuotation {
   id: string;
-  from_currency: string;
-  to_currency: string;
   quoted_price: string;
-  quoted_currency: string;
   from_amount: string;
   to_amount: string;
-  confirmed: boolean;
   expires_at: string;
-  created_at: string;
-  updated_at: string;
-  user: QuidaxUser;
 }
 
 export interface QuidaxTemporaryQuotation {
@@ -146,3 +133,26 @@ export type SwapQuotation = QuidaxQuotation;
 export type SwapTransaction = QuidaxSwapTransaction;
 export type TemporaryQuotation = QuidaxTemporaryQuotation;
 export type SwapQuotationParams = QuidaxQuotationParams;
+
+export interface QuidaxRateResponse {
+  price: {
+    unit: string;
+    amount: string;
+  };
+  total: {
+    unit: string;
+    amount: string;
+  };
+  volume: {
+    unit: string;
+    amount: string;
+  };
+  fee: {
+    unit: string;
+    amount: string;
+  };
+  receive: {
+    unit: string;
+    amount: string;
+  };
+}

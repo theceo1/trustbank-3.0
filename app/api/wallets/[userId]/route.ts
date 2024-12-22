@@ -1,12 +1,10 @@
 import { QuidaxService } from '@/app/lib/services/quidax';
 import { NextResponse } from 'next/server';
 
-export async function GET(
-  request: Request,
-  { params }: { params: { userId: string } }
-) {
+export async function GET(request: Request) {
   try {
-    const userId = params.userId;
+    const segments = request.url.split('/');
+    const userId = segments[segments.length - 1];
     const currencies = ['NGN', 'BTC', 'ETH', 'USDT', 'USDC'];
     
     const wallets = await Promise.all(
@@ -14,7 +12,6 @@ export async function GET(
         try {
           return await QuidaxService.getWalletInfo(userId, currency);
         } catch (error) {
-          // Return zero balance if wallet doesn't exist
           return {
             currency,
             balance: '0',

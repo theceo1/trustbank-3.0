@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import supabase from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { AdminRole, AdminPermission } from '../types/admin';
+import { Database } from '@/types/supabase';
+
+type AdminProfileRow = Database['public']['Tables']['admin_profiles']['Row'];
 
 interface AdminUser {
   id: string;
@@ -83,7 +86,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   const refreshAdminStatus = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      
+      setAdminUser(null);
       if (!session) {
         setIsAdmin(false);
         setAdminUser(null);
@@ -92,23 +95,35 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      const { data: adminData } = await supabase
+      const { data: adminData, error } = await supabase
         .from('admin_profiles')
-        .select('*')
+        .select('id, user_id, role, is_active, last_active')
         .eq('user_id', session.user.id)
         .single();
 
-      if (adminData?.is_active) {
-        setIsAdmin(true);
-        setAdminUser({
-          ...adminData,
+      if (error || !adminData) {
+        throw error || new Error('No admin data found');
+      }
+
+      if (adminData.is_active) {
+        const adminUserData: AdminUser = {
+          id: adminData.id,
+          user_id: adminData.user_id,
+          role: adminData.role as AdminRole,
+          is_active: adminData.is_active,
+          last_active: adminData.last_active,
           permissions: RolePermissions[adminData.role as AdminRole]
-        });
+        };
+
+        setIsAdmin(true);
+        setAdminUser(adminUserData);
 
         // Update last active timestamp
         await supabase
           .from('admin_profiles')
-          .update({ last_active: new Date().toISOString() })
+          .update({
+            last_active: new Date().toISOString()
+          })
           .eq('user_id', session.user.id);
 
       } else {

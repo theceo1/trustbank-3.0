@@ -28,13 +28,67 @@ export interface Database {
           referral_code?: string | null
           referred_by?: string | null
           email?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          full_name?: string | null
+          user_id?: string
+          full_name?: string
           is_verified?: boolean
-          referral_code?: string | null
-          referred_by?: string | null
-          email?: string | null
+          referral_code?: string
+          referred_by?: string
+          email?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      admin_profiles: {
+        Row: {
+          id: string
+          user_id: string
+          role: string
+          is_active: boolean
+          last_active: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          role: string
+          is_active?: boolean
+          last_active?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          role?: string
+          is_active?: boolean
+          last_active?: string
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      admin_access_cache: {
+        Row: {
+          user_id: string
+          is_admin: boolean
+          permissions: Record<string, boolean>
+          last_checked: string
+        }
+        Insert: {
+          user_id: string
+          is_admin: boolean
+          permissions: Record<string, boolean>
+          last_checked?: string
+        }
+        Update: {
+          user_id?: string
+          is_admin?: boolean
+          permissions?: Record<string, boolean>
+          last_checked?: string
         }
       }
       wallets: {

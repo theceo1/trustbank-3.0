@@ -1,55 +1,49 @@
+//app/lib/services/market-rate.ts
 import { TradeRateResponse } from '@/app/types/trade';
+import { FEES, calculateTradeFees } from '@/app/lib/constants/fees';
+
+const QUIDAX_API_BASE_URL = 'https://www.quidax.com/api/v1';
+const RATE_EXPIRY_TIME = 14000; // 14 seconds
 
 export class MarketRateService {
-  private static BASE_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL;
-  private static API_KEY = process.env.NEXT_PUBLIC_QUIDAX_API_KEY;
-
   static async getRate({ amount, currency_pair, type }: {
     amount: number;
     currency_pair: string;
     type: 'buy' | 'sell';
   }): Promise<TradeRateResponse> {
-    try {
-      const [fromCurrency, toCurrency] = currency_pair.split('_');
-      const response = await fetch(
-        `${this.BASE_URL}/api/v1/quotes?` + 
-        new URLSearchParams({
-          market: `${fromCurrency}${toCurrency}`,
-          unit: fromCurrency,
-          kind: type === 'sell' ? 'bid' : 'ask',
-          volume: amount.toString()
-        }),
-        {
-          headers: {
-            'Authorization': `Bearer ${this.API_KEY}`,
-            'Accept': 'application/json'
-          }
+    const market = currency_pair.toLowerCase();
+    const response = await fetch(
+      `${QUIDAX_API_BASE_URL}/markets/tickers/${market}`,
+      {
+        headers: {
+          'accept': 'application/json'
         }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to get rate');
       }
+    );
 
-      const data = await response.json();
-      
-      if (data.status !== 'success') {
-        throw new Error(data.message || 'Failed to get rate');
-      }
-
-      return {
-        rate: Number(data.data.price.amount),
-        total: Number(data.data.total.amount),
-        fees: {
-          quidax: Number(data.data.fee.amount),
-          platform: 0,
-          processing: 0
-        }
-      };
-    } catch (error) {
-      console.error('Get rate error:', error);
-      throw error;
+    if (!response.ok) {
+      throw new Error('Failed to fetch rate');
     }
+
+    const data = await response.json();
+    
+    if (!data?.data?.ticker) {
+      throw new Error('Invalid quote response');
+    }
+
+    const ticker = data.data.ticker;
+    const rate = type === 'buy' ? parseFloat(ticker.sell) : parseFloat(ticker.buy);
+    const total = rate * amount;
+    
+    // Calculate fees using the constants
+    const fees = calculateTradeFees(total);
+
+    return {
+      rate,
+      amount,
+      total,
+      fees,
+      expiresAt: Date.now() + RATE_EXPIRY_TIME
+    };
   }
 }

@@ -1,6 +1,6 @@
 // app/components/profile/KYCTierInfo.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { KYC_TIERS } from "@/app/lib/constants/kyc-tiers";
+import { KYC_LIMITS, KYCTier } from "@/app/types/kyc";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
@@ -11,8 +11,35 @@ interface KYCTierInfoProps {
   completedRequirements?: string[];
 }
 
+const TIER_INFO = {
+  unverified: {
+    key: 'unverified',
+    name: 'Unverified',
+    requirements: [],
+    limits: KYC_LIMITS[KYCTier.NONE]
+  },
+  basic: {
+    key: 'basic',
+    name: 'Basic',
+    requirements: ['BVN Verification'],
+    limits: KYC_LIMITS[KYCTier.BASIC]
+  },
+  intermediate: {
+    key: 'intermediate',
+    name: 'Intermediate',
+    requirements: ['NIN Verification'],
+    limits: KYC_LIMITS[KYCTier.INTERMEDIATE]
+  },
+  advanced: {
+    key: 'advanced',
+    name: 'Advanced',
+    requirements: ['International Passport or Driver\'s License'],
+    limits: KYC_LIMITS[KYCTier.ADVANCED]
+  }
+};
+
 export function KYCTierInfo({ currentTier, verificationStatus, completedRequirements = [] }: KYCTierInfoProps) {
-  const tier = KYC_TIERS[currentTier as keyof typeof KYC_TIERS];
+  const tier = TIER_INFO[currentTier as keyof typeof TIER_INFO];
   const nextTier = getNextTier(currentTier);
   
   return (
@@ -26,8 +53,8 @@ export function KYCTierInfo({ currentTier, verificationStatus, completedRequirem
             <div>
               <h3 className="font-semibold">Current Tier: {currentTier.toUpperCase()}</h3>
               <p className="text-sm text-muted-foreground">
-                Daily Limit: ₦{tier.dailyLimit.toLocaleString()}<br />
-                Monthly Limit: ₦{tier.monthlyLimit.toLocaleString()}
+                Daily Limit: ₦{tier.limits.dailyLimit.toLocaleString()}<br />
+                Monthly Limit: ₦{tier.limits.monthlyLimit.toLocaleString()}
               </p>
             </div>
             
@@ -46,9 +73,9 @@ export function KYCTierInfo({ currentTier, verificationStatus, completedRequirem
                     <Button 
                       className="w-full"
                       disabled={
-                        currentTier === nextTier.key || // Disable if already on this tier
-                        (nextTier.key === "intermediate" && currentTier === "unverified") || // Disable intermediate if not basic
-                        (nextTier.key === "advanced" && currentTier !== "intermediate") // Disable advanced if not intermediate
+                        currentTier === nextTier.key ||
+                        (nextTier.key === "intermediate" && currentTier === "unverified") ||
+                        (nextTier.key === "advanced" && currentTier !== "intermediate")
                       }
                     >
                       {currentTier === nextTier.key ? "Already Verified" : "Upgrade to " + nextTier.name}
@@ -65,14 +92,11 @@ export function KYCTierInfo({ currentTier, verificationStatus, completedRequirem
 }
 
 function getNextTier(currentTier: string) {
-  const tiers = Object.entries(KYC_TIERS);
+  const tiers = Object.entries(TIER_INFO);
   const currentIndex = tiers.findIndex(([key]) => key === currentTier);
   if (currentIndex < tiers.length - 1) {
-    const nextTierKey = tiers[currentIndex + 1][0];
-    return {
-      key: nextTierKey,
-      ...KYC_TIERS[nextTierKey as keyof typeof KYC_TIERS]
-    };
+    const [nextTierKey, nextTierInfo] = tiers[currentIndex + 1];
+    return nextTierInfo;
   }
   return null;
 }

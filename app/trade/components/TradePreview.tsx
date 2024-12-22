@@ -1,13 +1,17 @@
+//app/trade/components/TradePreview.tsx
+ 
 "use client";
 
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { TradeDetails } from "@/app/types/trade";
 import { formatCurrency } from "@/lib/utils";
-import { Shield, Clock, ArrowRight, Loader2 } from "lucide-react";
+import { Shield, Clock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { formatCryptoAmount } from '@/app/lib/utils';
+import { Progress } from "@/components/ui/progress";
 
 interface TradePreviewProps {
   tradeDetails: TradeDetails;
@@ -15,6 +19,7 @@ interface TradePreviewProps {
   onCancel: () => void;
   isLoading?: boolean;
   isOpen?: boolean;
+  expiryTime: number;
 }
 
 export function TradePreview({
@@ -22,8 +27,29 @@ export function TradePreview({
   onConfirm,
   onCancel,
   isLoading,
-  isOpen
+  isOpen,
+  expiryTime
 }: TradePreviewProps) {
+  const [timeLeft, setTimeLeft] = useState<number>(14);
+  const [isExpired, setIsExpired] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const secondsLeft = Math.max(0, Math.ceil((expiryTime - now) / 1000));
+      setTimeLeft(secondsLeft);
+      
+      if (secondsLeft === 0) {
+        setIsExpired(true);
+        clearInterval(interval);
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isOpen, expiryTime]);
+
   if (!isOpen) return null;
   
   const fees = {
@@ -40,19 +66,25 @@ export function TradePreview({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/20 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
     >
-      <Card className="w-full max-w-md mx-auto bg-white/95 dark:bg-gray-900/95 shadow-2xl">
+      <Card className="w-full max-w-md mx-auto bg-white/95 dark:bg-gray-900/95 shadow-2xl border-0">
         <CardHeader className="space-y-1 pb-4">
           <CardTitle className="text-xl font-bold">Confirm Your Trade</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Please review your {tradeDetails.type} order details
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              Rate valid for:
+            </p>
+            <div className="flex items-center gap-2">
+              <Progress value={(timeLeft / 14) * 100} className="w-24" />
+              <span className="text-sm font-medium">{timeLeft}s</span>
+            </div>
+          </div>
         </CardHeader>
 
         <CardContent className="space-y-6">
           {/* Trade Summary */}
-          <div className="space-y-4 p-4 bg-primary/5 rounded-xl">
+          <div className="space-y-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-100 dark:border-green-900">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">You {tradeDetails.type}</span>
               <span className="text-lg font-semibold">
@@ -61,7 +93,7 @@ export function TradePreview({
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Rate</span>
-              <span className="text-lg font-semibold">
+              <span className="text-lg font-semibold text-green-600">
                 {formatCurrency(tradeDetails.rate)}
               </span>
             </div>
@@ -102,19 +134,24 @@ export function TradePreview({
               variant="outline"
               onClick={onCancel}
               disabled={isLoading}
-              className="h-12"
+              className="h-12 hover:bg-gray-100 dark:hover:bg-gray-800"
             >
               Cancel
             </Button>
             <Button
               onClick={onConfirm}
-              disabled={isLoading}
-              className="h-12 bg-gradient-to-r from-green-600 to-green-500"
+              disabled={isLoading || isExpired}
+              className="h-12 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-700 hover:to-green-600 transition-all duration-300"
             >
               {isLoading ? (
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Processing
+                </span>
+              ) : isExpired ? (
+                <span className="flex items-center gap-2">
+                  <AlertCircle className="h-4 w-4" />
+                  Rate Expired
                 </span>
               ) : (
                 <span className="flex items-center gap-2">

@@ -3,7 +3,7 @@ import { TestQuidaxService } from './services/test-quidax';
 import debug from 'debug';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
-import { createClient } from '@supabase/supabase-js';
+import { createClient, User } from '@supabase/supabase-js';
 import { setupTestUsers } from './setup-test-users';
 
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
@@ -14,13 +14,22 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+interface AuthUser extends User {
+  email: string;
+}
+
 async function testUSDTTransfer() {
   try {
     log('🚀 Starting USDT to NGN transfer test...');
 
-    // First check if users exist in auth
+    // First check if users exist in auth with proper typing
     log('🔍 Checking auth users...');
-    const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
+    const { data: { users }, error: authError } = 
+      await supabase.auth.admin.listUsers() as { 
+        data: { users: AuthUser[] }, 
+        error: Error | null 
+      };
+
     if (authError) {
       log('❌ Auth check failed:', authError);
       throw authError;

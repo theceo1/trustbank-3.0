@@ -1,3 +1,4 @@
+// app/lib/services/bank.ts
 import { TradeDetails } from '@/app/types/trade';
 import { QuidaxService } from './quidax';
 

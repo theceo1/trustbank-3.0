@@ -1,5 +1,6 @@
+// app/components/kyc/TierInfoCard.tsx
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { KYC_TIERS } from "@/app/lib/constants/kyc-tiers";
+import { KYC_LIMITS, KYCTier } from "@/app/types/kyc";
 import { CheckCircle, XCircle } from "lucide-react";
 
 interface TierInfoProps {
@@ -12,19 +13,19 @@ export function TierInfoCard({ currentTier, userVerifications }: TierInfoProps) 
     {
       name: "Tier 1",
       requirements: ["BVN Verification"],
-      limits: KYC_TIERS.tier1,
+      limits: KYC_LIMITS[KYCTier.BASIC],
       requiredDocs: ["bvn"]
     },
     {
       name: "Tier 2",
       requirements: ["NIN Verification"],
-      limits: KYC_TIERS.tier2,
+      limits: KYC_LIMITS[KYCTier.INTERMEDIATE],
       requiredDocs: ["nin"]
     },
     {
       name: "Tier 3",
       requirements: ["International Passport or Driver's License"],
-      limits: KYC_TIERS.tier3,
+      limits: KYC_LIMITS[KYCTier.ADVANCED],
       requiredDocs: ["international_passport", "drivers_license"]
     }
   ];

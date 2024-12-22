@@ -16,11 +16,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    // Get user's Quidax ID
+    const { data: userData } = await supabase
+      .from('users')
+      .select('quidax_id')
+      .eq('id', session.user.id)
+      .single();
+
+    if (!userData?.quidax_id) {
+      return NextResponse.json(
+        { error: 'Please complete your account setup to trade' },
+        { status: 400 }
+      );
+    }
+
     const body = await request.json();
-    const confirmation = await QuidaxService.confirmSwapQuotation(
-      session.user.id,
-      body.quoteId
-    );
+    const confirmation = await QuidaxService.confirmSwapQuotation({
+      user_id: userData.quidax_id,
+      quotation_id: body.quoteId
+    });
 
     return NextResponse.json(confirmation);
   } catch (error) {

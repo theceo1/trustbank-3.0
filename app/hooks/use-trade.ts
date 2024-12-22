@@ -1,3 +1,4 @@
+//app/hooks/use-trade.ts
 "use client";
 
 import { useState, useEffect, useCallback } from 'react';
@@ -98,7 +99,7 @@ export function useTrade() {
         router.push('/profile/kyc');
         return null;
       }
-
+ 
       const tradeDetails: TradeParams = {
         user_id: user.id,
         type: tradeState.tradeType,
@@ -107,7 +108,7 @@ export function useTrade() {
         rate: tradeState.rate.rate,
         total: tradeState.rate.total,
         fees: {
-          service: tradeState.rate.fees.quidax + tradeState.rate.fees.platform,
+          service: tradeState.rate.fees.platform + tradeState.rate.fees.quidax,
           network: tradeState.rate.fees.processing
         },
         paymentMethod: tradeState.paymentMethod,

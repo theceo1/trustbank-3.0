@@ -1,16 +1,21 @@
 // app/api/wallet/balance/[currency]/route.ts
-import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import type { Database } from '@/types/supabase';
 
-export async function GET(
-  request: Request,
-  { params }: { params: { currency: string } }
-) {
+console.log('Loading wallet balance route handler...');
+
+export async function GET(request: Request) {
   try {
+    // Extract currency from URL
+    const segments = request.url.split('/');
+    const currency = segments[segments.length - 1];
+    
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+    const supabase = createRouteHandlerClient<Database>({ 
+      cookies: () => cookieStore 
+    });
     
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
@@ -19,24 +24,25 @@ export async function GET(
 
     const { data: wallet, error } = await supabase
       .from('wallets')
-      .select('*')
+      .select('balance')
       .eq('user_id', session.user.id)
-      .eq('currency', params.currency.toLowerCase())
+      .eq('currency', currency.toUpperCase())
       .single();
 
-    if (error && error.code !== 'PGRST116') { // Not found error
-      throw error;
+    if (error) {
+      console.error('Wallet fetch error:', error);
+      return NextResponse.json(
+        { error: 'Failed to fetch wallet balance' }, 
+        { status: 500 }
+      );
     }
 
-    return NextResponse.json({
-      currency: params.currency.toLowerCase(),
-      balance: wallet?.balance?.toString() || '0',
-      pending: wallet?.pending_balance?.toString() || '0'
-    });
+    return NextResponse.json({ balance: wallet?.balance || 0 });
+
   } catch (error) {
-    console.error('Error fetching wallet balance:', error);
+    console.error('Wallet balance error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch balance' },
+      { error: 'Internal server error' }, 
       { status: 500 }
     );
   }

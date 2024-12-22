@@ -1,18 +1,25 @@
 //app/trade/page.tsx
 "use client";
 
-import { useState } from 'react';
+import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TradeForm } from './components/TradeForm';
 import { MarketStats } from './components/MarketStats';
 import { TradeHistory } from './components/TradeHistory';
 import { useAuth } from '@/context/AuthContext';
-import { Button } from "@/components/ui/button";
-import { TradeType } from '@/app/types/trade';
- 
+import { useRouter } from 'next/navigation';
+
 export default function TradePage() {
   const { user } = useAuth();
-  const [selectedAction, setSelectedAction] = useState<TradeType>('buy');
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!user) {
+      router.push('/auth/login?redirect=/trade');
+    }
+  }, [user, router]);
+
+  if (!user) return null;
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6 mt-12">
@@ -22,7 +29,7 @@ export default function TradePage() {
             <CardTitle>Trade Crypto</CardTitle>
           </CardHeader>
           <CardContent>
-            <TradeForm initialType={selectedAction} />
+            <TradeForm />
           </CardContent>
         </Card>
 
@@ -31,16 +38,14 @@ export default function TradePage() {
         </div>
       </div>
 
-      {user && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Trade History</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TradeHistory trades={[]} />
-          </CardContent>
-        </Card>
-      )}
+      <Card>
+        <CardHeader>
+          <CardTitle>Trade History</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <TradeHistory trades={[]} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

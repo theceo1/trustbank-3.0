@@ -1,3 +1,4 @@
+// app/api/users/create-sub-account/route.ts
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
@@ -21,7 +22,7 @@ export async function POST(request: Request) {
       .single();
 
     // Create Quidax sub-account
-    const quidaxUser = await QuidaxService.createSubAccount({
+    const quidaxUser = await QuidaxService.getOrCreateSubAccount({
       email: user.email!,
       first_name: profile?.full_name?.split(' ')[0] || 'User',
       last_name: profile?.full_name?.split(' ').slice(1).join(' ') || String(user.id)
@@ -31,10 +32,10 @@ export async function POST(request: Request) {
     await supabase
       .from('user_profiles')
       .update({ 
-        quidax_user_id: quidaxUser.data.id,
+        quidax_user_id: quidaxUser.id,
         metadata: {
           ...profile?.metadata,
-          quidax_data: quidaxUser.data
+          quidax_data: quidaxUser
         }
       })
       .eq('id', user.id);

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,20 +21,29 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { signIn, signInWithGoogle } = useAuth() as AuthContextType;
+  const searchParams = useSearchParams();
+  const redirect = searchParams?.get('redirect');
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
-
+    
     try {
-      const { error, user } = await signIn(email, password);
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
       if (error) throw error;
-      if (user) {
-        router.push('/dashboard');
+
+      if (data.session) {
+        const redirectTo = searchParams?.get('redirect') || '/dashboard';
+        window.location.href = redirectTo;
       }
-    } catch (error: any) {
-      setError('Invalid email or password. Please try again.');
+    } catch (err) {
+      console.error('Login error:', err);
+      setError(err instanceof Error ? err.message : 'Failed to sign in');
     } finally {
       setIsLoading(false);
     }
@@ -170,7 +179,7 @@ export default function Login() {
                 </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
+              <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-4">
                   <div className="relative">
                     <Label htmlFor="email" className="text-sm font-medium">

@@ -1,8 +1,8 @@
+// app/api/trades/wallet-payment/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
-import { WalletService } from '@/app/lib/services/wallet';
+import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,12 +17,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { tradeId, amount } = await request.json();
+    const { tradeId } = await request.json();
 
-    // Get trade details
+    // Get trade details and user's Quidax ID
     const { data: trade } = await supabase
       .from('trades')
-      .select('*')
+      .select('*, users!inner(quidax_id)')
       .eq('id', tradeId)
       .eq('user_id', user.id)
       .single();
@@ -31,11 +31,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Trade not found' }, { status: 404 });
     }
 
-    // Transfer to exchange wallet
-    await WalletService.transferToExchange(user.id, amount);
-    
-    // Process payment
-    const result = await QuidaxService.processWalletPayment(trade.quidax_reference);
+    if (!trade.users.quidax_id) {
+      return NextResponse.json(
+        { error: 'User not properly setup' },
+        { status: 400 }
+      );
+    }
+
+    // Confirm the swap quotation
+    const result = await QuidaxMarketService.confirmQuote(
+      trade.users.quidax_id,
+      trade.quidax_reference
+    );
+
+    // Update trade status
+    await supabase
+      .from('trades')
+      .update({ 
+        status: 'processing',
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', tradeId);
 
     return NextResponse.json(result);
   } catch (error: any) {

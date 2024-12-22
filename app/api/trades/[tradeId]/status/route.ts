@@ -1,3 +1,5 @@
+//app/api/trades/[tradeId]/status/route.ts
+
 import { NextResponse } from 'next/server';
 import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
 import { getCurrentUser } from '@/app/lib/session';

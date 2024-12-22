@@ -1,14 +1,15 @@
 //app/profile/verification/id/page.tsx
 'use client';
 
-import React, { useState, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
-import { Camera, Upload, RefreshCw } from 'lucide-react';
+import { useState, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import Webcam from 'react-webcam';
+import { motion } from 'framer-motion';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Camera, ArrowLeft, Shield, RefreshCw, Upload, X, Check } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { KYCService } from '@/app/lib/services/kyc';
-import { useAuth } from '@/context/AuthContext';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Select,
   SelectContent,
@@ -16,20 +17,32 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import Image from 'next/image';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
-export default function IDVerification() {
-  const [idType, setIdType] = useState<'passport' | 'drivers_license'>();
-  const [selfieImage, setSelfieImage] = useState<string>();
-  const [idImage, setIdImage] = useState<string>();
+const WEBCAM_CONFIG = {
+  width: 720,
+  height: 720,
+  facingMode: "user"
+};
+
+const ID_TYPES = [
+  { value: 'passport', label: 'International Passport' },
+  { value: 'drivers_license', label: "Driver's License" },
+  { value: 'national_id', label: 'National ID Card' },
+];
+
+export default function PhotoIDVerificationPage() {
+  const webcamRef = useRef<Webcam>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [idType, setIdType] = useState<string>('');
+  const [idImage, setIdImage] = useState<string | null>(null);
+  const [selfieImage, setSelfieImage] = useState<string | null>(null);
   const [showCamera, setShowCamera] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
-  const { user } = useAuth();
-  const webcamRef = React.useRef<Webcam>(null);
+  const router = useRouter();
 
-  const handleCapture = React.useCallback(() => {
+  const capture = useCallback(() => {
     const imageSrc = webcamRef.current?.getScreenshot();
     if (imageSrc) {
       setSelfieImage(imageSrc);
@@ -37,9 +50,18 @@ export default function IDVerification() {
     }
   }, [webcamRef]);
 
-  const handleIdUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) { // 5MB limit
+        toast({
+          title: "File too large",
+          description: "Please upload an image less than 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setIdImage(reader.result as string);
@@ -49,27 +71,28 @@ export default function IDVerification() {
   };
 
   const handleSubmit = async () => {
-    if (!idType || !selfieImage || !idImage || !user?.id) return;
+    if (!idType || !idImage || !selfieImage) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide all required information",
+        variant: "destructive"
+      });
+      return;
+    }
 
+    setLoading(true);
     try {
-      setLoading(true);
-      await KYCService.verifyPhotoID(user.id, {
-        idType,
-        selfieImage,
-        idImage
-      });
-
+      // API call implementation here
+      await new Promise(resolve => setTimeout(resolve, 2000)); // Simulated API call
       toast({
-        id: "id-verification-success",
-        title: "Verification Submitted",
+        title: "Verification Initiated",
         description: "Your ID verification is being processed",
-        variant: "default"
       });
-    } catch (error: any) {
+      router.push('/profile/verification');
+    } catch (error) {
       toast({
-        id: "id-verification-failed",
         title: "Verification Failed",
-        description: error.message,
+        description: "Please try again later",
         variant: "destructive"
       });
     } finally {
@@ -78,128 +101,182 @@ export default function IDVerification() {
   };
 
   return (
-    <motion.div 
-      className="container max-w-2xl mx-auto px-4 py-8"
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-    >
-      <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold mb-2">ID Verification</h1>
-        <p className="text-gray-600">Upload your ID and take a selfie to verify your identity</p>
-      </div>
-
-      <div className="space-y-6">
-        <Select onValueChange={(value) => setIdType(value as any)}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select ID Type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="passport">International Passport</SelectItem>
-            <SelectItem value="drivers_license">Driver&apos;s License</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <div className="space-y-4">
-            <h3 className="font-semibold">ID Document</h3>
-            <div className="border-2 border-dashed rounded-lg p-4 text-center">
-              {idImage ? (
-                <div className="relative">
-                  <Image
-                    src={idImage}
-                    alt="ID"
-                    className="rounded-lg"
-                    width={400}
-                    height={300}
-                  />
-                  <Button
-                    onClick={() => setIdImage(undefined)}
-                    variant="outline"
-                    size="sm"
-                    className="absolute top-2 right-2"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleIdUpload}
-                  />
-                  <Upload className="h-8 w-8 mx-auto mb-2" />
-                  <p>Upload ID</p>
-                </label>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h3 className="font-semibold">Selfie</h3>
-            <div className="border-2 border-dashed rounded-lg p-4 text-center">
-              {selfieImage ? (
-                <div className="relative">
-                  <Image
-                    src={selfieImage}
-                    alt="Selfie"
-                    className="rounded-lg"
-                    width={400}
-                    height={300}
-                  />
-                  <Button
-                    onClick={() => setSelfieImage(undefined)}
-                    variant="outline"
-                    size="sm"
-                    className="absolute top-2 right-2"
-                  >
-                    <RefreshCw className="h-4 w-4" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  onClick={() => setShowCamera(true)}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <Camera className="h-8 w-8 mr-2" />
-                  Take Selfie
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-
+    <div className="min-h-screen flex flex-col bg-gray-50">
+      <div className="container max-w-2xl mx-auto px-4 py-8 flex-grow">
         <Button
-          onClick={handleSubmit}
-          disabled={loading || !idType || !selfieImage || !idImage}
-          className="w-full bg-green-600 hover:bg-green-300 text-white hover:text-black"
+          variant="ghost"
+          onClick={() => router.back()}
+          className="mb-6"
         >
-          {loading ? 'Verifying...' : 'Submit Verification'}
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
         </Button>
-      </div>
 
-      <Dialog open={showCamera} onOpenChange={setShowCamera}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Take a Selfie</DialogTitle>
-          </DialogHeader>
-          <div className="relative">
-            <Webcam
-              ref={webcamRef}
-              screenshotFormat="image/jpeg"
-              className="rounded-lg"
-            />
-            <Button
-              onClick={handleCapture}
-              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-green-600 hover:bg-green-300 text-white hover:text-black"
-            >
-              Capture
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </motion.div>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <Card className="border-2">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Shield className="h-6 w-6 text-green-600" />
+                <div>
+                  <CardTitle>Photo ID Verification</CardTitle>
+                  <CardDescription>Upload a government-issued photo ID for full verification</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-6">
+              <Alert>
+                <AlertDescription>
+                  Please ensure your ID is valid and clearly visible. Supported formats: JPG, PNG (max 15MB)
+                </AlertDescription>
+              </Alert>
+
+              {/* ID Type Selection */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">ID Type</label>
+                <Select value={idType} onValueChange={setIdType}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select ID type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ID_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* ID Upload Section */}
+              <div className="space-y-4">
+                <label className="text-sm font-medium">Upload ID Document</label>
+                <div className="relative rounded-lg overflow-hidden bg-gray-100">
+                  {idImage ? (
+                    <div className="relative">
+                      <img 
+                        src={idImage} 
+                        alt="ID Document" 
+                        className="w-full rounded-lg"
+                      />
+                      <div className="absolute bottom-4 right-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setIdImage(null)}
+                          className="bg-white"
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2" />
+                          Upload New
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center p-12 border-2 border-dashed rounded-lg">
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        accept="image/*"
+                        className="hidden"
+                      />
+                      <Button 
+                        onClick={() => fileInputRef.current?.click()}
+                        variant="outline"
+                        className="w-full"
+                      >
+                        <Upload className="h-6 w-6 mr-2" />
+                        Upload ID Document
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Selfie Section */}
+              <div className="space-y-4">
+                <label className="text-sm font-medium">Selfie Verification</label>
+                <div className="relative rounded-lg overflow-hidden bg-gray-100">
+                  {showCamera ? (
+                    <div className="relative">
+                      <Webcam
+                        audio={false}
+                        ref={webcamRef}
+                        screenshotFormat="image/jpeg"
+                        videoConstraints={WEBCAM_CONFIG}
+                        className="w-full rounded-lg"
+                      />
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-4">
+                        <Button
+                          onClick={capture}
+                          className="bg-green-600 hover:bg-green-300 text-white dark:text-black"
+                        >
+                          <Camera className="h-4 w-4 mr-2" />
+                          Capture
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowCamera(false)}
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : selfieImage ? (
+                    <div className="relative">
+                      <img 
+                        src={selfieImage} 
+                        alt="Selfie" 
+                        className="w-full rounded-lg"
+                      />
+                      <div className="absolute bottom-4 right-4">
+                        <Button
+                          variant="outline"
+                          onClick={() => setSelfieImage(null)}
+                        >
+                          <RefreshCw className="h-4 w-4 mr-2 text-black dark:text-white" />
+                          Retake
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button 
+                      onClick={() => setShowCamera(true)}
+                      variant="outline"
+                      className="w-full py-12"
+                    >
+                      <Camera className="h-6 w-6 mr-2" />
+                      Take Selfie
+                    </Button>
+                  )}
+                </div>
+              </div>
+
+              <Button 
+                onClick={handleSubmit}
+                disabled={loading || !idType || !idImage || !selfieImage}
+                className="w-full bg-green-600 hover:bg-green-300 text-white dark:text-black"
+              >
+                {loading ? (
+                  <span className="flex items-center gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    Verifying...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    Submit for Verification
+                    <Check className="h-4 w-4" />
+                  </span>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+    </div>
   );
 } 

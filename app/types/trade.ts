@@ -10,6 +10,19 @@ export enum TradeStatus {
   FAILED = 'FAILED'
 }
 
+export interface TradeRateResponse {
+  rate: number;
+  amount: number;
+  total: number;
+  fees: {
+    platform: number;    // trustBank fee
+    processing: number;  // Network/processing fee
+    quidax: number;     // Quidax fee
+    total: number;      // Combined fees
+  };
+  expiresAt: number;
+}
+
 export interface TradeParams {
   user_id: string;
   type: TradeType;
@@ -18,19 +31,11 @@ export interface TradeParams {
   rate: number;
   total: number;
   fees: {
-    service: number;
-    network: number;
+    service: number;    // Combined platform + quidax fees
+    network: number;    // Processing/network fees
   };
-  reference: string;
   paymentMethod: PaymentMethodType;
-}
-
-export interface SwapDetails {
-  fromCurrency: string;
-  toCurrency: string;
-  amount: number;
-  estimatedReceived: number;
-  rate: number;
+  reference: string;
 }
 
 export interface TradeDetails {
@@ -42,90 +47,51 @@ export interface TradeDetails {
   rate: number;
   total: number;
   fees: {
+    platform: number;    // trustBank fee
+    processing: number;  // Quidax fee
+    total: number;      // Combined fee
+  };
+  payment_method: PaymentMethodType;
+  status: TradeStatus;
+  created_at?: string;
+  updated_at?: string;
+  reference?: string;
+}
+
+export interface TradeQuotation {
+  id: string;
+  fromCurrency: string;
+  toCurrency: string;
+  amount: number;
+  rate: number;
+  estimatedAmount: number;
+  fees: {
     platform: number;
     processing: number;
     total: number;
   };
-  payment_method: PaymentMethodType;
-  status: TradeStatus;
-  quidax_id?: string;
-  quidax_reference?: string;
-  created_at?: string;
-  updated_at?: string;
+  total: number;
+  expiresAt: number;
+  expiresIn: number;
 }
 
-export interface TradeRateRequest {
-  amount: number;
-  currency_pair: string;
-  type: 'buy' | 'sell';
-  bid?: string;
-  ask?: string;
-  unit?: string;
+export interface WalletBalance {
+  [key: string]: number;
 }
 
-export interface TradeRateResponse {
-  data: {
-    amount: string;
-    total: string;
-    fee: string;
-    rate: string;
-  };
-}
-
-export interface QuidaxTradeResponse {
-  id: string;
-  status: string;
-  amount: string;
-  fee: string;
-  total: string;
-}
-
-export interface CreateTradeParams {
-  amount: string;
-  currency_pair: string;
-  type: 'buy' | 'sell';
-}
-
-export type TradeActionType = 'buy' | 'sell' | 'send' | 'receive' | 'swap';
-
-export interface QuidaxRateParams {
-  amount: string;
-  currency_pair: string;
-  type: 'buy' | 'sell';
-}
-
-export interface OrderStatus {
-  id: string;
-  status: string;
-  type: string;
-  amount: string;
-  filled_amount: string;
-  price: string;
-  created_at: string;
-  updated_at: string;
+export interface TradeFormProps {
+  walletBalance?: WalletBalance;
 }
 
 export interface AutomatedTradeRule {
-  id: string;
+  id?: string;
   user_id: string;
   currency: string;
   amount: number;
   target_rate: number;
   trade_type: 'buy' | 'sell';
-  expires_at?: string;
   status: 'active' | 'completed' | 'expired' | 'cancelled';
-  created_at: string;
-  updated_at: string;
-}
-
-export interface TradeRate {
-  rate: number;
-  total: number;
-  expiresAt?: number;
-}
-
-export interface GetRateParams {
-  amount: string;
-  currency_pair: string;
-  type: string;
+  expires_at?: Date;
+  created_at?: string;
+  updated_at?: string;
 }

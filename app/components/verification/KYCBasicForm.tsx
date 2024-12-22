@@ -1,3 +1,4 @@
+// app/components/verification/KYCBasicForm.tsx
 "use client";
 
 import { useState } from "react";
@@ -50,7 +51,7 @@ export function KYCBasicForm() {
     
     setIsSubmitting(true);
     try {
-      await KYCService.submitVerification(user.id, 'basic', {
+      await KYCService.submitVerification(user.id, 'bvn', {
         ...data,
         tier: "tier1"
       });

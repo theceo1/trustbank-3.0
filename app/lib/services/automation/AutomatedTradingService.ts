@@ -1,3 +1,4 @@
+// app/lib/services/automation/AutomatedTradingService.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { Database } from '@/app/types/database';
 import { UnifiedTradeService } from '../unifiedTrade';

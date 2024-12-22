@@ -1,70 +1,44 @@
-// app/api/trades/quote/route.ts
-import { cookies } from 'next/headers';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { NextResponse } from 'next/server';
-import { QuidaxService } from '@/app/lib/services/quidax';
-import debug from 'debug';
-
-const log = debug('api:trades:quote');
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
+import type { Database } from '@/types/supabase';
 
 export async function POST(request: Request) {
   try {
-    log('Processing trade quote request');
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ 
-      cookies: async () => cookieStore 
-    });
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
-    const { data: { session }, error: authError } = await supabase.auth.getSession();
-    if (authError) {
-      log('Auth error:', authError);
-      return NextResponse.json({ error: 'Authentication failed' }, { status: 401 });
-    }
-    if (!session) {
-      log('No session found');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    log('Checking KYC status for user:', session.user.id);
-    const { data: profile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('kyc_verified')
-      .eq('user_id', session.user.id)
-      .single();
-
-    if (profileError) {
-      log('Profile fetch error:', profileError);
-      return NextResponse.json({ error: 'Failed to verify KYC status' }, { status: 500 });
-    }
-
-    if (!profile?.kyc_verified) {
-      log('User not KYC verified');
-      return NextResponse.json(
-        { error: 'KYC verification required to trade' },
-        { status: 403 }
-      );
-    }
-
-    const body = await request.json();
-    log('Getting quote for params:', body);
-
-    const quote = await QuidaxService.getRate({
-      amount: body.amount.toString(),
-      currency_pair: `${body.fromCurrency}_${body.toCurrency}`.toLowerCase(),
-      type: body.type
+    const { fromCurrency, toCurrency, amount } = await request.json();
+    
+    // Get temporary quote first
+    const quote = await QuidaxMarketService.getQuote({
+      market: `${fromCurrency}${toCurrency}`.toLowerCase(),
+      unit: fromCurrency.toLowerCase(),
+      kind: 'ask',
+      volume: amount.toString()
     });
 
-    log('Quote received:', quote);
-    return NextResponse.json(quote);
-  } catch (error: any) {
-    log('Quote error:', error);
+    return NextResponse.json({
+      fromCurrency,
+      toCurrency,
+      amount: parseFloat(quote.volume.amount),
+      rate: parseFloat(quote.price.amount),
+      estimatedAmount: parseFloat(quote.receive.amount),
+      fee: parseFloat(quote.fee.amount),
+      total: parseFloat(quote.total.amount),
+      expiresIn: 14
+    });
+  } catch (error) {
+    console.error('Quote error:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to get quote',
-        details: error.message,
-        code: error.code
-      },
+      { error: 'Failed to get quote' },
       { status: 500 }
     );
   }
-}
+} 

@@ -1,3 +1,4 @@
+// app/api/webhooks/dojah/manage/route.ts
 import { NextResponse } from 'next/server';
 
 const DOJAH_API_URL = process.env.NEXT_PUBLIC_DOJAH_API_URL;
@@ -14,7 +15,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         webhook: process.env.NODE_ENV === 'production' 
           ? 'https://www.trustbank.tech/api/webhooks/dojah'
-          : 'https://a47d-102-67-1-4.ngrok-free.app/api/webhooks/dojah',
+          : 'https://99b2-102-67-1-6.ngrok-free.app/api/webhooks/dojah',
         service: 'kyc_widget'
       })
     });

@@ -2,6 +2,7 @@
 
 import { logger } from '@/app/lib/logger';
 import { createClient } from '@supabase/supabase-js';
+import type { QuidaxWalletUpdate } from '@/app/lib/services/wallet';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -62,6 +63,9 @@ export class QuidaxWebhookService {
           break;
         case 'order.cancelled':
           await this.handleOrderCancelled(webhook.data);
+          break;
+        case 'wallet.update':
+          await this.handleWalletUpdate(webhook.data);
           break;
         default:
           logger.warn(`Unhandled webhook event: ${webhook.event}`);
@@ -211,6 +215,31 @@ export class QuidaxWebhookService {
 
   private async handleOrderCancelled(data: any) {
     await this.updateTransaction(data.id, TransactionStatus.FAILED);
+  }
+
+  private async handleWalletUpdate(data: QuidaxWalletUpdate['data']) {
+    try {
+      const { error } = await supabase
+        .from('wallets')
+        .upsert({
+          user_id: data.id,
+          currency: data.currency.toUpperCase(),
+          balance: parseFloat(data.balance),
+          pending_balance: parseFloat(data.locked),
+          last_transaction_at: data.updated_at,
+          last_synced_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,currency'
+        });
+
+      if (error) {
+        logger.error('Error updating wallet:', error);
+        throw error;
+      }
+    } catch (error) {
+      logger.error('handleWalletUpdate error:', error);
+      throw error;
+    }
   }
 }
 

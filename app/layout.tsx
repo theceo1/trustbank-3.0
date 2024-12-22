@@ -4,6 +4,8 @@ import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import RootLayoutClient from './components/RootLayoutClient';
+import { ErrorBoundary } from '@/app/components/ErrorBoundary';
+import { Suspense } from 'react';
 
 const inter = Inter({ subsets: ['latin'] });
 
@@ -32,15 +34,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <meta 
-          name="viewport" 
-          content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" 
-        />
-        <script defer data-domain="trustbank.tech" src="https://plausible.io/js/script.tagged-events.js" />
-      </head>
       <body className={inter.className}>
-        <RootLayoutClient>{children}</RootLayoutClient>
+        <ErrorBoundary>
+          <Suspense
+            fallback={
+              <div className="min-h-screen flex items-center justify-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+              </div>
+            }
+          >
+            <RootLayoutClient>{children}</RootLayoutClient>
+          </Suspense>
+        </ErrorBoundary>
       </body>
     </html>
   );

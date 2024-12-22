@@ -20,7 +20,14 @@ const supabase = createClient(
 
 // Helper function to create/get auth user
 async function getOrCreateAuthUser(email: string, password: string): Promise<User> {
-  const { data: { users } } = await supabase.auth.admin.listUsers();
+  const { data: { users } } = await supabase.auth.admin.listUsers() as {
+    data: { users: User[] },
+    error: null | {
+      message: string;
+      status: number;
+    }
+  };
+  
   const existingUser = users.find(u => u.email === email);
   
   if (existingUser) return existingUser;

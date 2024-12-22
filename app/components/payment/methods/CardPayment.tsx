@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { PaymentProcessorProps } from '@/app/types/payment';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { PaymentProcessor } from '@/app/lib/services/paymentProcessor';
 import { useToast } from '@/hooks/use-toast';
 
 export default function CardPayment({ trade, onComplete }: PaymentProcessorProps) {
@@ -23,15 +23,13 @@ export default function CardPayment({ trade, onComplete }: PaymentProcessorProps
 
     setIsProcessing(true);
     try {
-      // Initialize card payment with Quidax
-      const result = await QuidaxService.initializeCardPayment({
-        amount: trade.amount,
-        currency: trade.currency,
-        tradeId: trade.id,
-        reference: trade.quidax_reference || `CARD_${trade.id}_${Date.now()}`
+      const result = await PaymentProcessor.initializePayment({
+        ...trade,
+        payment_method: 'card',
+        reference: `CARD_${trade.id}_${Date.now()}`
       });
 
-      // Redirect to Quidax's secure payment page
+      // Redirect to payment page if URL is provided
       if (result.payment_url) {
         window.location.href = result.payment_url;
       }

@@ -21,6 +21,7 @@ import { WalletService } from '@/app/lib/services/wallet';
 import { formatCurrency } from '@/app/lib/utils';
 import { AlertCircle } from "lucide-react";
 import { Transaction } from '@/app/types/transactions';
+import supabase from '@/lib/supabase/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -77,10 +78,18 @@ export default function WalletPage() {
     if (!user) return;
     
     try {
-      const wallet = await WalletService.getWalletBalance(user.id);
-      if (wallet) {
-        setWalletData([wallet]);
-        setWallet(wallet);
+      const { data: walletData, error } = await supabase
+        .from('wallets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('currency', 'NGN')
+        .single();
+
+      if (error) throw error;
+      
+      if (walletData) {
+        setWalletData([walletData]);
+        setWallet(walletData);
       }
     } catch (error) {
       console.error('Error fetching wallet:', error);
@@ -89,8 +98,6 @@ export default function WalletPage() {
         description: "Failed to load wallet data",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
   }, [user, toast]);
 
@@ -113,43 +120,63 @@ export default function WalletPage() {
   }, [user, wallet?.id, wallet?.currency]);
 
   useEffect(() => {
+    let isMounted = true;
+
     const fetchData = async () => {
       if (!user) return;
       
       setIsLoading(true);
       try {
-        await fetchWalletData();
-        if (wallet?.id) {
-          await fetchTransactions();
+        if (isMounted) {
+          await fetchWalletData();
         }
       } catch (error) {
-        console.error('Error fetching data:', error);
+        if (isMounted) {
+          console.error('Error fetching data:', error);
+          setError(error instanceof Error ? error.message : 'Failed to fetch wallet data');
+        }
       } finally {
-        setIsLoading(false);
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
     };
 
     fetchData();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user, fetchWalletData]);
+
+  useEffect(() => {
+    if (!user || !wallet?.id) return;
     
-    if (user && wallet?.id) {
-      const subscription = TransactionService.subscribeToTransactions(
-        user.id,
-        (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setTransactions(prev => {
-              const newTx = payload.new as unknown as Transaction;
-              return [newTx, ...prev.slice(0, 4)] as Transaction[];
-            });
-            fetchWalletData();
-          }
+    let mounted = true;
+    const subscription = supabase
+      .channel('wallet_transactions')
+      .on('postgres_changes', 
+        { 
+          event: 'INSERT', 
+          schema: 'public', 
+          table: 'transactions',
+          filter: `user_id=eq.${user.id}`
+        },
+        async (payload) => {
+          if (!mounted) return;
+          
+          const newTx = payload.new as Transaction;
+          setTransactions(prev => [newTx, ...prev.slice(0, 4)]);
+          await fetchWalletData();
         }
-      );
-    
-      return () => {
-        subscription.unsubscribe();
-      };
-    }
-  }, [user, fetchWalletData, fetchTransactions, wallet?.id]);
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [user, wallet?.id, fetchWalletData]);
 
   const handleDeposit = async () => {
     if (!user || !depositAmount || !wallet?.id) return;
@@ -274,7 +301,7 @@ export default function WalletPage() {
                   </div>
                   <p className="text-2xl font-bold">
                     {showBalance ? 
-                      formatCurrency(wallet.balance, wallet.currency) : 
+                      formatCurrency(wallet.balance) : 
                       '•••••••'
                     }
                   </p>
@@ -299,7 +326,7 @@ export default function WalletPage() {
                 
                 {transactions.map((tx) => (
   <div
-    key={tx.id}
+    key={`${tx.id}-${tx.created_at}`}
     className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
   >
     <div className="flex items-center gap-3">

@@ -1,6 +1,7 @@
+// app/components/kyc/KYCStatus.tsx
 import { useEffect, useState } from 'react';
 import { KYCService } from '@/app/lib/services/kyc';
-import { KYCStatusType } from '@/app/types/kyc';
+import { KYCStatus as KYCStatusType } from '@/app/types/kyc';
 import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { KYCStatusBadge } from '@/app/components/kyc/KYCStatusBadge';
@@ -21,7 +22,7 @@ export default function KYCStatus({ userId, showAction = true }: KYCStatusProps)
     const fetchStatus = async () => {
       try {
         const eligibility = await KYCService.isEligibleForTrade(userId);
-        setStatus(eligibility.eligible ? 'verified' : 'unverified');
+        setStatus(eligibility.eligible ? 'approved' : 'unverified');
       } catch (error) {
         toast({
           id: 'kyc-status-error',
@@ -42,7 +43,7 @@ export default function KYCStatus({ userId, showAction = true }: KYCStatusProps)
   return (
     <div className="flex items-center gap-4">
       <KYCStatusBadge status={status} />
-      {showAction && status !== 'verified' && (
+      {showAction && status !== 'approved' && (
         <Button 
           variant="outline" 
           size="sm"

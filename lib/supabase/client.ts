@@ -6,21 +6,10 @@ let supabaseInstance: ReturnType<typeof createClientComponentClient<Database>>;
 
 function getSupabaseClient() {
   if (!supabaseInstance) {
-    supabaseInstance = createClientComponentClient<Database>({
-      cookieOptions: {
-        name: 'sb-auth-token',
-        domain: process.env.NEXT_PUBLIC_DOMAIN || 'localhost',
-        path: '/',
-        sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production'
-      }
-    });
+    supabaseInstance = createClientComponentClient<Database>();
   }
   return supabaseInstance;
 }
 
 const supabase = getSupabaseClient();
-
 export default supabase;
-
-export const createNewSupabaseClient = () => createClientComponentClient<Database>();

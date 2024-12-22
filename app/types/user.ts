@@ -1,9 +1,16 @@
 export interface User {
   id: string;
   email: string;
-  full_name: string;
-  is_active: boolean;
-  created_at: string;
-  last_sign_in_at?: string;
-  metadata?: Record<string, any>;
+  first_name?: string;
+  last_name?: string;
+  kyc_status?: 'unverified' | 'pending' | 'verified' | 'failed';
+  kyc_level?: number;
+  kyc_data?: {
+    nin?: string;
+    bvn?: string;
+    photo_id?: string;
+    verification_id?: string;
+  };
+  created_at?: string;
+  updated_at?: string;
 } 

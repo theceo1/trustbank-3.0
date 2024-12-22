@@ -1,3 +1,4 @@
+// app/admin/users/UserDetails.tsx
 "use client";
 
 import { useState, useEffect } from "react";
@@ -7,14 +8,22 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { UserCheck, UserX } from "lucide-react";
 import supabase from "@/lib/supabase/client";
-import { User } from "@/app/types/user";
+
+interface Profile {
+  id: string;
+  email: string;
+  full_name: string;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
 
 interface UserDetailsProps {
   userId: string;
 }
 
 export default function UserDetails({ userId }: UserDetailsProps) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<Profile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const router = useRouter();
 

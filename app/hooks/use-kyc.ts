@@ -6,7 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { KYCService } from '@/app/lib/services/kyc';
-import { KYC_TIERS } from '@/app/lib/constants/kyc-tiers';
+import { KYCTier } from '@/app/types/kyc';
 
 export function useKYC() {
   const { toast } = useToast();
@@ -32,17 +32,19 @@ export function useKYC() {
 
   const checkTradeLimits = async (amount: number) => {
     if (!user || !kycInfo) return { allowed: false, reason: 'KYC required' };
-
-    const tierLimits = KYC_TIERS[kycInfo.currentTier];
-    if (!tierLimits) return { allowed: false, reason: 'Invalid KYC tier' };
-
-    if (amount > tierLimits.maxTransactionLimit) {
+  
+    const status = await KYCService.getKYCStatus(user.id);
+    if (!status.isVerified) {
+      return { allowed: false, reason: 'KYC verification required' };
+    }
+  
+    if (amount > status.limits.dailyLimit) {
       return {
         allowed: false,
-        reason: `Amount exceeds your tier limit of ${tierLimits.maxTransactionLimit}. Please upgrade your KYC level.`
+        reason: `Amount exceeds your daily limit of ₦${status.limits.dailyLimit.toLocaleString()}. Please upgrade your KYC level.`
       };
     }
-
+  
     return { allowed: true };
   };
 

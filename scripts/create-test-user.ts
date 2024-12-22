@@ -2,18 +2,16 @@
 // It also sets the user's KYC level to 2, which is required for trading
 // scripts/create-test-user.ts
 import { createClient } from '@supabase/supabase-js';
+import { User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import debug from 'debug';
+import { TestQuidaxService } from './services/test-quidax';
+import crypto from 'crypto';
 
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
-// Setup debug loggers
 const log = debug('setup:test-user');
-const authLog = debug('setup:auth');
-const dbLog = debug('setup:db');
-
-// Enable logging
 debug.enable('setup:*');
 
 const supabase = createClient(
@@ -21,133 +19,188 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-function generateReferralCode(): string {
-  return Math.random().toString(36).substring(2, 8).toUpperCase();
+interface TestUser {
+  email: string;
+  password: string;
+  first_name: string;
+  last_name: string;
+  initial_balance: {
+    ngn: number;
+    usdt: number;
+  };
 }
 
-async function createTestUser() {
-  const testEmail = 'user2@trustbank.tech';
-  
+const TEST_USERS: TestUser[] = [
+  {
+    email: 'user8@trustbank.tech',
+    password: 'SecureUserPass123!',
+    first_name: 'Test',
+    last_name: 'User8',
+    initial_balance: {
+      ngn: 1000000,
+      usdt: 1000
+    }
+  },
+  {
+    email: 'user9@trustbank.tech',
+    password: 'SecureUserPass123!',
+    first_name: 'Test',
+    last_name: 'User9',
+    initial_balance: {
+      ngn: 1000000,
+      usdt: 0
+    }
+  }
+];
+
+interface TestUserResult {
+  email: string;
+  user_id: string;
+  quidax_id: string;
+}
+
+async function setupTestUsers() {
   try {
-    console.log('🚀 Starting test user creation...');
-    console.log('Environment check:', {
-      SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅' : '❌',
-      SUPABASE_KEY: process.env.SUPABASE_SERVICE_ROLE_KEY ? '✅' : '❌'
-    });
+    log('🚀 Starting test users setup...');
+    const results: TestUserResult[] = [];
 
-    // First verify if user exists and delete
-    authLog('Checking for existing user...');
-    const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
-    
-    if (listError) {
-      console.error('❌ Failed to list users:', listError);
-      throw listError;
+    // Get all existing auth users first with proper typing
+    const { data: { users: existingUsers }, error: authListError } = 
+      await supabase.auth.admin.listUsers() as { 
+        data: { users: User[] }, 
+        error: Error | null 
+      };
+
+    if (authListError) {
+      throw new Error(`Failed to list auth users: ${authListError.message}`);
     }
 
-    const existingUser = users.find(u => u.email === testEmail);
-    if (existingUser) {
-      authLog('🔄 Found existing user, deleting...');
-      const { error: deleteError } = await supabase.auth.admin.deleteUser(existingUser.id);
-      if (deleteError) {
-        console.error('❌ Failed to delete existing user:', deleteError);
-        throw deleteError;
-      }
-      authLog('✅ Existing user deleted');
-      // Wait for deletion to propagate
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
+    for (const testUser of TEST_USERS) {
+      log(`📝 Processing user: ${testUser.email}`);
+      
+      // Check existing auth user
+      const existingUser = existingUsers.find(u => u.email === testUser.email);
+      let userId = existingUser?.id;
+      let quidaxId;
 
-    // Create user in auth with auto-confirm
-    authLog('🔑 Creating auth user...');
-    const { data: { user }, error: signUpError } = await supabase.auth.signUp({
-      email: testEmail,
-      password: 'SecureUserPass123!'
-    });
+      if (existingUser) {
+        log(`👤 Found existing auth user: ${testUser.email}`);
+        
+        // Check if profile exists
+        const { data: profile } = await supabase
+          .from('user_profiles')
+          .select('quidax_id')
+          .eq('user_id', existingUser.id)
+          .single();
 
-    if (signUpError) {
-      console.error('❌ Auth user creation failed:', {
-        message: signUpError.message,
-        status: signUpError.status,
-        code: signUpError.code
-      });
-      throw signUpError;
-    }
-    if (!user) throw new Error('User creation returned null');
-
-    authLog('✅ Auth user created:', user.id);
-
-    // Create user profile
-    console.log('👤 Creating user profile...');
-    const { error: userError } = await supabase
-      .from('users')
-      .insert({
-        id: user.id,
-        email: testEmail,
-        first_name: 'Test',
-        last_name: 'User',
-        is_verified: true,
-        kyc_level: 2,
-        kyc_status: 'approved'
-      });
-
-    if (userError) throw userError;
-    console.log('✅ User profile created');
-
-    // Create user_profile entry with more details
-    console.log('🏷️ Creating user profile details...');
-    const referralCode = generateReferralCode();
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .insert({
-        user_id: user.id,
-        referral_code: referralCode,
-        kyc_tier: 'tier2',
-        daily_limit: 1000000,
-        monthly_limit: 50000000,
-        kyc_verified: true,
-        documents: {
-          nin: 'verified',
-          bvn: 'verified'
+        if (profile?.quidax_id) {
+          log(`✅ Existing profile found with Quidax ID: ${profile.quidax_id}`);
+          quidaxId = profile.quidax_id;
+          results.push({
+            email: testUser.email,
+            user_id: existingUser.id,
+            quidax_id: profile.quidax_id
+          });
+          continue;
         }
-      });
-
-    if (profileError) throw profileError;
-    console.log('✅ User profile details created');
-
-    // Create default wallets
-    console.log('💰 Creating wallets...');
-    const currencies = ['ngn', 'btc', 'eth', 'usdt', 'usdc'];
-    for (const currency of currencies) {
-      const { error: walletError } = await supabase
-        .from('wallets')
-        .insert({
-          user_id: user.id,
-          currency: currency.toUpperCase(),
-          balance: currency.toLowerCase() === 'ngn' ? 1000000 : 0,
-          is_test: true
+      } else {
+        // Create new auth user
+        log(`👤 Creating new auth user: ${testUser.email}`);
+        const { data: { user }, error: createError } = await supabase.auth.admin.createUser({
+          email: testUser.email,
+          password: testUser.password,
+          email_confirm: true
         });
 
-      if (walletError) throw walletError;
-      console.log(`✅ ${currency.toUpperCase()} wallet created`);
+        if (createError || !user) {
+          throw new Error(`Auth user creation failed: ${createError?.message}`);
+        }
+        userId = user.id;
+      }
+
+      // Before creating profile or pushing results, validate userId
+      if (!userId) {
+        throw new Error(`User ID is undefined for ${testUser.email}`);
+      }
+
+      // Create Quidax account
+      if (!quidaxId) {
+        log(`🔄 Creating Quidax account for: ${testUser.email}`);
+        const quidaxUser = await TestQuidaxService.createSubAccount({
+          email: testUser.email,
+          first_name: testUser.first_name,
+          last_name: testUser.last_name
+        });
+        quidaxId = quidaxUser.id;
+      }
+
+      // Create or update profile
+      const referralCode = crypto.randomBytes(4).toString('hex').toUpperCase();
+      log(`📋 Creating/updating profile for: ${testUser.email}`);
+      
+      const { error: profileError } = await supabase
+        .from('user_profiles')
+        .upsert({
+          user_id: userId,
+          referral_code: referralCode,
+          kyc_tier: 'tier2',
+          daily_limit: 5000000,
+          monthly_limit: 50000000,
+          kyc_verified: true,
+          quidax_id: quidaxId,
+          documents: {
+            nin: 'verified',
+            bvn: 'verified'
+          }
+        });
+
+      if (profileError) {
+        throw new Error(`Profile creation failed: ${profileError.message}`);
+      }
+
+      // Create or update wallets
+      log(`💰 Setting up wallets for: ${testUser.email}`);
+      const currencies = ['ngn', 'usdt'];
+      
+      for (const currency of currencies) {
+        const { error: walletError } = await supabase
+          .from('wallets')
+          .upsert({
+            user_id: userId,
+            currency: currency.toUpperCase(),
+            balance: testUser.initial_balance[currency as keyof typeof testUser.initial_balance],
+            is_test: true,
+            quidax_wallet_id: quidaxId
+          });
+
+        if (walletError) {
+          throw new Error(`Wallet setup failed for ${currency}: ${walletError.message}`);
+        }
+      }
+
+      results.push({
+        email: testUser.email,
+        user_id: userId,
+        quidax_id: quidaxId as string
+      });
+
+      log(`✅ Setup completed for: ${testUser.email}`);
     }
 
-    console.log('\n✨ Test user setup completed successfully');
-    console.log('Login credentials:');
-    console.log('Email:', testEmail);
-    console.log('Password: SecureUserPass123!');
+    log('🎉 All test users setup completed!');
+    return results;
 
-  } catch (error: any) {
-    console.error('\n❌ Test user creation failed');
-    console.error('Error details:', {
-      message: error.message,
-      status: error?.status,
-      code: error?.code,
-      details: error?.details,
-      hint: error?.hint
-    });
-    process.exit(1);
+  } catch (error) {
+    log('❌ Setup failed:', error);
+    throw error;
   }
 }
 
-// Run with debug output
-createTestUser(); 
+setupTestUsers()
+  .then(results => {
+    console.log('✅ Test users created successfully:', results);
+  })
+  .catch(error => {
+    console.error('Failed to create test users:', error);
+    process.exit(1);
+  }); 

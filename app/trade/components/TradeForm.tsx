@@ -1,286 +1,182 @@
 // app/trade/components/TradeForm.tsx
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
-import { useUser } from '@/app/hooks/use-user';
-import { useKYC } from '@/app/hooks/use-kyc';
+import { useState } from 'react';
+import { useAuth } from '@/context/AuthContext';
+import { useTrade } from '@/app/hooks/use-trade';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
-import { Loader2, ArrowRight } from 'lucide-react';
-import { TradePreview } from './TradePreview';
-import { SwapForm } from './SwapForm';
-import { StandardTradeForm } from './StandardTradeForm';
-import { TradeTypeSelector } from './TradeTypeSelector';
-import { TradeDetails, TradeType, TradeRateResponse, TradeStatus } from '@/app/types/trade';
-import { PaymentMethodType } from '@/app/types/payment';
-import { MarketRateService } from '@/app/lib/services/market-rate';
-import { UnifiedTradeService } from '@/app/lib/services/unified-trade';
-import { KYCService } from '@/app/lib/services/kyc';
-import { FeeService } from '@/app/lib/services/fees';
-import { handleError } from '@/app/lib/utils/errorHandler';
+import { Loader2, Send, Wallet, ArrowDownToLine, ArrowUpFromLine } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { TradeType, TradeFormProps } from '@/app/types/trade';
 
-interface TradeFormProps {
-  initialType?: TradeType;
-}
+const SUPPORTED_CURRENCIES = [
+  { value: 'btc', label: 'Bitcoin (BTC)' },
+  { value: 'eth', label: 'Ethereum (ETH)' },
+  { value: 'usdt', label: 'Tether (USDT)' }
+];
 
-const RATE_EXPIRY_TIME = 30000; // 30 seconds
-const RATE_REFRESH_BUFFER = 5000; // 5 seconds before expiry
+const TRADE_ACTIONS: { value: TradeType; label: string; icon: any }[] = [
+  { value: 'buy', label: 'Buy', icon: ArrowDownToLine },
+  { value: 'sell', label: 'Sell', icon: ArrowUpFromLine },
+  { value: 'send', label: 'Send', icon: Send },
+  { value: 'receive', label: 'Receive', icon: Wallet }
+];
 
-export function TradeForm({ initialType = 'buy' }: TradeFormProps) {
-  const { user } = useUser();
-  const { checkKYCStatus, checkTradeLimits } = useKYC();
-  const router = useRouter();
+export function TradeForm({ walletBalance = {} }: TradeFormProps) {
+  const { user } = useAuth();
   const { toast } = useToast();
-  
-  const [tradeState, setTradeState] = useState({
-    type: initialType,
-    fromCurrency: 'btc',
-    toCurrency: 'eth',
-    amount: '',
-    paymentMethod: 'bank_transfer' as PaymentMethodType,
-    isLoading: false,
-    rate: null as TradeRateResponse | null,
-    showPreview: false,
-    pendingTrade: null as TradeDetails | null
+  const { amount, setAmount, cryptoCurrency, setCryptoCurrency, tradeType, setTradeType, 
+          isLoading, rate, fetchRate, createTrade } = useTrade();
+  const [countdown, setCountdown] = useState<number>(0);
+  const [recipientAddress, setRecipientAddress] = useState('');
+  const [bankDetails, setBankDetails] = useState({ 
+    accountNumber: '', 
+    bankName: '' 
   });
 
-  const setIsLoading = (loading: boolean) => {
-    setTradeState(prev => ({ ...prev, isLoading: loading }));
-  };
-
-  const setShowTradeDetails = (show: boolean) => {
-    setTradeState(prev => ({ ...prev, showPreview: show }));
-  };
-
-  const setPendingTrade = (trade: TradeDetails | null) => {
-    setTradeState(prev => ({ ...prev, pendingTrade: trade }));
-  };
-
-  const handleTradeTypeChange = (type: TradeType) => {
-    setTradeState(prev => ({
-      ...prev,
-      type,
-      rate: null,
-      showPreview: false
-    }));
-  };
-
-  const fetchRate = useCallback(async () => {
-    if (!tradeState.amount || Number(tradeState.amount) <= 0) {
-      setTradeState(prev => ({ ...prev, rate: null }));
+  const handleProceedToTrade = async () => {
+    if (!amount || !cryptoCurrency) {
+      toast({
+        title: "Invalid Input",
+        description: "Please fill in all fields",
+        variant: "destructive"
+      });
       return;
     }
-    
-    try {
-      setIsLoading(true);
-      const rate = await MarketRateService.getRate({
-        amount: Number(tradeState.amount),
-        currency_pair: `${tradeState.fromCurrency}_${tradeState.toCurrency}`,
-        type: tradeState.type as 'buy' | 'sell'
+
+    // Additional validation for send/receive
+    if (tradeType === 'send' && !recipientAddress) {
+      toast({
+        title: "Invalid Input",
+        description: "Please enter recipient address",
+        variant: "destructive"
       });
-  
-      setTradeState(prev => ({
-        ...prev,
-        rate,
-        rateExpiry: Date.now() + RATE_EXPIRY_TIME
-      }));
+      return;
+    }
+
+    try {
+      if (tradeType === 'buy' || tradeType === 'sell') {
+        await fetchRate();
+        setCountdown(15);
+        
+        const timer = setInterval(() => {
+          setCountdown(prev => {
+            if (prev <= 1) {
+              clearInterval(timer);
+              return 0;
+            }
+            return prev - 1;
+          });
+        }, 1000);
+      } else {
+        await createTrade();
+      }
     } catch (error) {
-      console.error('Rate fetch error:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch current rate. Please try again.",
+        description: "Transaction failed",
         variant: "destructive"
       });
-      setTradeState(prev => ({ ...prev, rate: null }));
-    } finally {
-      setIsLoading(false);
     }
-  }, [tradeState.amount, tradeState.type, tradeState.fromCurrency, tradeState.toCurrency, toast]);
-  // Add debounced rate fetching
-  useEffect(() => {
-    const timeoutId = setTimeout(fetchRate, 500);
-    return () => clearTimeout(timeoutId);
-  }, [fetchRate]);
-
-  const handleTradeSubmit = async () => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please login to continue",
-        variant: "destructive"
-      });
-      router.push('/login');
-      return;
-    }
-
-    try {
-      setIsLoading(true);
-      
-      // Check KYC status first
-      const kycStatus = await checkKYCStatus();
-      if (!kycStatus) {
-        toast({
-          title: "KYC Required",
-          description: "Please complete your identity verification to trade this amount",
-          variant: "destructive"
-        });
-        router.push('/profile/verification');
-        return;
-      }
-
-      // Check trade limits
-      const limitCheck = await checkTradeLimits(Number(tradeState.amount));
-      if (!limitCheck.allowed) {
-        toast({
-          title: "Trade Limit Exceeded",
-          description: limitCheck.reason,
-          variant: "destructive"
-        });
-        return;
-      }
-
-      // Proceed with trade
-      const tradeDetails = createTradeDetails();
-      setTradeState(prev => ({
-        ...prev,
-        showPreview: true,
-        pendingTrade: tradeDetails
-      }));
-    } catch (error) {
-      handleError(error, 'Failed to prepare trade');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleTradeConfirm = async () => {
-    try {
-      setIsLoading(true);
-      
-      const trade = await UnifiedTradeService.createTrade(tradeState.pendingTrade!);
-      
-      if (trade) {
-        toast({
-          id: "trade-initiated",
-          title: "Trade Initiated",
-          description: "Proceeding to payment"
-        });
-        router.push(`/trade/payment/${trade.id}`);
-      }
-    } catch (error) {
-      toast({
-        id: "trade-failed",
-        title: "Trade Failed",
-        description: error instanceof Error ? error.message : "Failed to create trade",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const SUPPORTED_CURRENCIES = [
-    { value: 'btc', label: 'Bitcoin (BTC)' },
-    { value: 'eth', label: 'Ethereum (ETH)' },
-    { value: 'usdt', label: 'Tether (USDT)' },
-    { value: 'usdc', label: 'USD Coin (USDC)' }
-  ];
-
-  const PAYMENT_METHODS = {
-    buy: ['bank', 'card', 'wallet'],
-    sell: ['bank'],
-    swap: ['wallet'],
-    send: ['wallet'],
-    receive: ['wallet']
-  };
-
-  const createTradeDetails = (): TradeDetails => {
-    if (!user || !tradeState.rate) throw new Error('Invalid trade state');
-    
-    const totalFees = tradeState.rate.fees.quidax + 
-                      tradeState.rate.fees.platform + 
-                      tradeState.rate.fees.processing;
-    
-    return {
-      user_id: user.id,
-      type: tradeState.type,
-      currency: tradeState.fromCurrency,
-      amount: Number(tradeState.amount),
-      rate: tradeState.rate.rate,
-      total: tradeState.rate.total,
-      fees: {
-        platform: tradeState.rate.fees.platform,
-        processing: tradeState.rate.fees.processing,
-        total: totalFees
-      },
-      payment_method: tradeState.paymentMethod,
-      status: TradeStatus.PENDING
-    };
   };
 
   return (
-    <div className="w-full max-w-md mx-auto space-y-6 p-4 sm:p-6 bg-white dark:bg-gray-900 rounded-xl shadow-xl">
-      <div className="space-y-2">
-        {/* <h2 className="text-2xl font-bold tracking-tight">Trade Crypto</h2> */}
-        <p className="text-sm text-muted-foreground">
-          Buy, sell, swap or send cryptocurrency instantly
-        </p>
+    <div className="space-y-4">
+      <div className="grid grid-cols-4 gap-2 mb-6">
+        {TRADE_ACTIONS.map(({ value, label, icon: Icon }) => (
+          <Button 
+            key={value}
+            variant={tradeType === value ? 'default' : 'outline'}
+            onClick={() => setTradeType(value)}
+            className={`flex flex-col gap-1 h-auto py-2 ${
+              tradeType === value ? 'bg-green-600 hover:bg-green-300' : ''
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {label}
+          </Button>
+        ))}
       </div>
 
-      <TradeTypeSelector 
-        value={tradeState.type} 
-        onChange={handleTradeTypeChange} 
-      />
-      
-      {tradeState.type === 'swap' ? (
-        <SwapForm
-          fromCurrency={tradeState.fromCurrency}
-          toCurrency={tradeState.toCurrency}
-          amount={tradeState.amount}
-          rate={tradeState.rate}
-          onFromCurrencyChange={(currency) => setTradeState(prev => ({ ...prev, fromCurrency: currency }))}
-          onToCurrencyChange={(currency) => setTradeState(prev => ({ ...prev, toCurrency: currency }))}
-          onAmountChange={(amount) => setTradeState(prev => ({ ...prev, amount }))}
+      {/* Show wallet balance only if available */}
+      {walletBalance && (
+        <div className="text-sm text-muted-foreground">
+          Balance: {(walletBalance[cryptoCurrency] || 0).toFixed(8)} {cryptoCurrency.toUpperCase()}
+        </div>
+      )}
+
+      {/* Currency and Amount fields */}
+      <div className="space-y-2">
+        <Label>Currency</Label>
+        <Select value={cryptoCurrency} onValueChange={setCryptoCurrency}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {SUPPORTED_CURRENCIES.map(currency => (
+              <SelectItem key={currency.value} value={currency.value}>
+                {currency.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="space-y-2">
+        <Label>
+          {tradeType === 'buy' || tradeType === 'sell' ? 'Amount (NGN)' : `Amount (${cryptoCurrency.toUpperCase()})`}
+        </Label>
+        <Input
+          type="number"
+          value={amount}
+          onChange={(e) => setAmount(e.target.value)}
+          placeholder={`Enter amount in ${tradeType === 'buy' || tradeType === 'sell' ? 'Naira' : cryptoCurrency.toUpperCase()}`}
+          min="0"
+          step={tradeType === 'buy' || tradeType === 'sell' ? '1' : '0.00000001'}
         />
-      ) : (
-        <StandardTradeForm
-          type={tradeState.type}
-          currency={tradeState.fromCurrency}
-          amount={tradeState.amount}
-          rate={tradeState.rate}
-          onCurrencyChange={(currency) => setTradeState(prev => ({ ...prev, fromCurrency: currency }))}
-          onAmountChange={(amount) => setTradeState(prev => ({ ...prev, amount }))}
-        />
+      </div>
+
+      {/* Additional fields based on trade type */}
+      {tradeType === 'send' && (
+        <div className="space-y-2">
+          <Label>Recipient Address</Label>
+          <Input
+            value={recipientAddress}
+            onChange={(e) => setRecipientAddress(e.target.value)}
+            placeholder={`Enter ${cryptoCurrency.toUpperCase()} address`}
+          />
+        </div>
+      )}
+
+      {/* Rate display for buy/sell */}
+      {rate && countdown > 0 && (tradeType === 'buy' || tradeType === 'sell') && (
+        <div className="text-sm text-muted-foreground space-y-1 bg-muted p-3 rounded-lg">
+          <p>Exchange Rate: ₦{rate.rate}</p>
+          <p>
+            You will {tradeType === 'buy' ? 'receive' : 'send'}: {rate.total} {cryptoCurrency.toUpperCase()}
+          </p>
+          <p>Transaction Fee: ₦{rate.fees.total}</p>
+          <p className="text-xs text-right">Rate expires in {countdown}s</p>
+        </div>
       )}
 
       <Button
-        onClick={handleTradeSubmit}
-        disabled={!tradeState.rate || tradeState.isLoading}
-        className="w-full h-12 bg-gradient-to-r from-green-600 to-green-500"
+        onClick={countdown > 0 ? createTrade : handleProceedToTrade}
+        disabled={isLoading || !amount}
+        className="w-full"
       >
-        {tradeState.isLoading ? (
+        {isLoading ? (
           <span className="flex items-center gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Processing
           </span>
+        ) : countdown > 0 ? (
+          "Confirm Trade"
         ) : (
-          <span className="flex items-center gap-2">
-            Review Trade
-            <ArrowRight className="h-4 w-4" />
-          </span>
+          `${tradeType === 'buy' || tradeType === 'sell' ? 'Get Quote' : 'Proceed'}`
         )}
       </Button>
-
-      {tradeState.showPreview && tradeState.pendingTrade && (
-        <TradePreview
-          tradeDetails={tradeState.pendingTrade}
-          onConfirm={handleTradeConfirm}
-          onCancel={() => setTradeState(prev => ({ ...prev, showPreview: false }))}
-          isLoading={tradeState.isLoading}
-          isOpen={tradeState.showPreview}
-        />
-      )}
     </div>
   );
 }

@@ -1,50 +1,55 @@
+//app/api/trades/confirm/route.ts
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { QuidaxService } from '@/app/lib/services/quidax';
 
 export async function POST(request: Request) {
   try {
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const supabase = createRouteHandlerClient({ 
+      cookies: () => cookieStore 
+    });
+    
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) {
+      return NextResponse.json(
+        { error: 'Please login to continue' }, 
+        { status: 401 }
+      );
     }
 
-    const { tradeId } = await request.json();
-
-    // Get trade details from Supabase
-    const { data: trade } = await supabase
-      .from('trades')
-      .select('*')
-      .eq('id', tradeId)
-      .eq('user_id', user.id)
+    const { quotationId } = await request.json();
+    
+    // Get user's Quidax ID only when confirming the trade
+    const { data: userData } = await supabase
+      .from('users')
+      .select('quidax_id')
+      .eq('id', session.user.id)
       .single();
 
-    if (!trade) {
-      return NextResponse.json({ error: 'Trade not found' }, { status: 404 });
+    if (!userData?.quidax_id) {
+      return NextResponse.json(
+        { error: 'Please complete your account setup to trade' },
+        { status: 400 }
+      );
     }
 
-    // Confirm trade on Quidax
-    const confirmedTrade = await QuidaxService.confirmInstantOrder(trade.quidax_reference);
+    const confirmation = await QuidaxService.confirmSwapQuotation({
+      user_id: userData.quidax_id,
+      quotation_id: quotationId
+    });
 
-    // Update trade status in Supabase
-    await supabase
-      .from('trades')
-      .update({
-        status: confirmedTrade.data.status === 'confirm' ? 'processing' : 'failed',
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', trade.id);
-
-    return NextResponse.json(confirmedTrade);
+    return NextResponse.json(confirmation);
   } catch (error: any) {
     console.error('Trade confirmation error:', error);
+    const errorMessage = error.response?.data?.message || 
+                        error.message || 
+                        'Unable to process trade at this time';
+    
     return NextResponse.json(
-      { error: error.message || 'Failed to confirm trade' },
-      { status: 500 }
+      { error: errorMessage },
+      { status: error.response?.status || 500 }
     );
   }
 } 

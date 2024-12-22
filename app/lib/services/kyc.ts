@@ -1,6 +1,13 @@
 // app/lib/services/kyc.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { KYCVerification, KYCStatusType, KYCInfo, KYCEligibility } from '@/app/types/kyc';
+import { 
+  KYCVerification, 
+  KYCStatus, 
+  KYCInfo, 
+  KYCEligibility,
+  KYCTier,
+  KYC_LIMITS 
+} from '@/app/types/kyc';
 import supabase from "@/lib/supabase/client";
 
 export class KYCService {
@@ -15,7 +22,7 @@ export class KYCService {
       const verificationData = {
         user_id: userId,
         verification_type: type,
-        status: 'pending' as KYCStatusType,
+        status: 'pending' as KYCStatus,
         verification_data: data,
         attempt_count: 1,
         last_attempt_at: new Date().toISOString()
@@ -114,60 +121,55 @@ export class KYCService {
     try {
       const { data: profileData, error: profileError } = await this.supabase
         .from('user_profiles')
-        .select('kyc_tier, kyc_status')
+        .select('kyc_level, kyc_status, kyc_verified')
         .eq('user_id', userId)
         .single();
 
       if (profileError) {
         if (profileError.code === 'PGRST116') {
-          // Create initial profile if it doesn't exist
           const { data: newProfile, error: createError } = await this.supabase
             .from('user_profiles')
             .insert([{
               user_id: userId,
-              kyc_tier: 'unverified',
-              kyc_status: 'pending'
+              kyc_level: KYCTier.NONE,
+              kyc_status: 'pending',
+              kyc_verified: false
             }])
             .select()
             .single();
 
           if (createError) throw createError;
-          return { isVerified: false, tier: 'unverified' };
+          return { 
+            isVerified: false, 
+            tier: KYCTier.NONE,
+            limits: KYC_LIMITS[KYCTier.NONE]
+          };
         }
         throw profileError;
       }
 
+      const tierLevel = profileData.kyc_level as KYCTier;
+      
       return {
-        isVerified: profileData.kyc_status === 'approved',
-        tier: profileData.kyc_tier
+        isVerified: profileData.kyc_verified,
+        tier: tierLevel,
+        limits: KYC_LIMITS[tierLevel]
       };
     } catch (error) {
       console.error('KYC status check failed:', error);
-      return { isVerified: false, tier: 'unverified' };
+      return { 
+        isVerified: false, 
+        tier: KYCTier.NONE,
+        limits: KYC_LIMITS[KYCTier.NONE]
+      };
     }
   }
 
   static async getKYCInfo(userId: string): Promise<KYCInfo> {
     try {
-      // First clean up any duplicate profiles
-      await this.supabase
-        .from('user_profiles')
-        .delete()
-        .eq('user_id', userId)
-        .neq('id', (
-          await this.supabase
-            .from('user_profiles')
-            .select('id')
-            .eq('user_id', userId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .single()
-        ).data?.id);
-
-      // Now proceed with normal flow
       const { data: existingProfile, error: checkError } = await this.supabase
         .from('user_profiles')
-        .select('kyc_tier, kyc_status, kyc_documents')
+        .select('kyc_level, kyc_status, kyc_documents, daily_limit, monthly_limit')
         .eq('user_id', userId)
         .single();
 
@@ -178,40 +180,35 @@ export class KYCService {
             .from('user_profiles')
             .insert([{
               user_id: userId,
-              kyc_tier: 'unverified',
+              kyc_level: KYCTier.NONE,
               kyc_status: 'pending',
-              kyc_documents: {}
+              is_verified: false,
+              kyc_documents: {},
+              daily_limit: KYC_LIMITS[KYCTier.NONE].dailyLimit,
+              monthly_limit: KYC_LIMITS[KYCTier.NONE].monthlyLimit
             }])
             .select()
             .single();
 
-          if (createError) {
-            console.error('Profile creation error:', createError);
-            return {
-              currentTier: 'unverified',
-              status: 'pending',
-              documents: {}
-            };
-          }
-
+          if (createError) throw createError;
           return {
-            currentTier: newProfile.kyc_tier,
-            status: newProfile.kyc_status,
-            documents: newProfile.kyc_documents || {}
+            currentTier: KYCTier.NONE,
+            status: 'pending',
+            documents: {}
           };
         }
         throw checkError;
       }
 
       return {
-        currentTier: existingProfile.kyc_tier,
+        currentTier: existingProfile.kyc_level as KYCTier,
         status: existingProfile.kyc_status,
         documents: existingProfile.kyc_documents || {}
       };
     } catch (error) {
       console.error('KYC fetch error:', error);
       return {
-        currentTier: 'unverified',
+        currentTier: KYCTier.NONE,
         status: 'pending',
         documents: {}
       };
@@ -233,7 +230,7 @@ export class KYCService {
       const verificationData = {
         user_id: userId,
         verification_type: 'intermediate',
-        status: 'pending' as KYCStatusType,
+        status: 'pending' as KYCStatus,
         verification_data: {
           id_type: data.idType,
           id_number: data.idNumber,
@@ -280,7 +277,7 @@ export class KYCService {
       
       return {
         eligible: data.eligible,
-        status: data.status as KYCStatusType,
+        status: data.status as KYCStatus,
         reason: data.reason
       };
     } catch (error) {

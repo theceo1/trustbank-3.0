@@ -1,3 +1,5 @@
+// app/components/RootLayoutClient.tsx
+
 "use client";
 
 import Header from '@/components/Header';
@@ -11,6 +13,7 @@ import { Toaster } from "@/components/ui/toast";
 import { AdminAuthProvider } from '../admin/context/AdminAuthContext';
 import AnalyticsProvider from '@/app/components/PlausibleProvider';
 import { usePathname } from 'next/navigation';
+import { Suspense } from 'react';
 
 export default function RootLayoutClient({
   children,
@@ -21,7 +24,7 @@ export default function RootLayoutClient({
   const isAdminRoute = pathname?.startsWith('/admin');
 
   return (
-    <AnalyticsProvider>
+    <Suspense fallback={null}>
       <ThemeProvider
         attribute="class"
         defaultTheme="system"
@@ -31,16 +34,18 @@ export default function RootLayoutClient({
         <Providers>
           <AuthProvider>
             <AdminAuthProvider>
-              {!isAdminRoute && <Header />}
-              {children}
-              {!isAdminRoute && <Footer />}
+              <AnalyticsProvider>
+                {!isAdminRoute && <Header />}
+                {children}
+                {!isAdminRoute && <Footer />}
+                <Toaster />
+                <Analytics />
+                <SpeedInsights />
+              </AnalyticsProvider>
             </AdminAuthProvider>
           </AuthProvider>
         </Providers>
-        <Toaster />
-        <Analytics />
-        <SpeedInsights />
       </ThemeProvider>
-    </AnalyticsProvider>
+    </Suspense>
   );
 } 

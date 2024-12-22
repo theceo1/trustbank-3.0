@@ -1,3 +1,5 @@
+// scripts/execute-trade.ts
+
 import { QuidaxService } from './services/quidax';
 import debug from 'debug';
 import dotenv from 'dotenv';

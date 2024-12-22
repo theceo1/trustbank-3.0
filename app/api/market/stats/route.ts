@@ -1,34 +1,13 @@
 import { NextResponse } from 'next/server';
-import { getNGNRate } from '@/app/lib/utils/exchange-rates';
-
-const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
 
 export async function GET() {
   try {
-    const [cryptoData, ngnRate] = await Promise.all([
-      fetch(
-        `${COINGECKO_API}/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true`,
-        {
-          headers: {
-            'Accept': 'application/json',
-          },
-          next: { revalidate: 30 }
-        }
-      ),
-      getNGNRate()
-    ]);
-
-    if (!cryptoData.ok) {
-      throw new Error('Failed to fetch crypto price');
-    }
-
-    const data = await cryptoData.json();
-    const btcUsdPrice = data.bitcoin?.usd || 0;
-    const priceChange = data.bitcoin?.usd_24h_change || 0;
-
+    const marketData = await QuidaxMarketService.getMarketTicker('btcngn');
+    
     return NextResponse.json({
-      last_price: btcUsdPrice * ngnRate,
-      price_change_24h: priceChange,
+      last_price: parseFloat(marketData.ticker.last),
+      price_change_24h: parseFloat(marketData.ticker.price_change_percent),
       timestamp: Date.now()
     });
   } catch (error) {

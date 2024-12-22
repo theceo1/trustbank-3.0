@@ -8,9 +8,13 @@ const nextConfig = {
     unoptimized: true,
     domains: ['localhost']
   },
-  webpack: (config, { dev }) => {
+  webpack: (config, { dev, isServer }) => {
     if (dev) {
       config.cache = false;
+    }
+    config.watchOptions = {
+      poll: 1000,
+      aggregateTimeout: 300,
     }
     return config;
   }

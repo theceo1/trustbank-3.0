@@ -11,11 +11,16 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Call the QuidaxService to check the payment status
-    const paymentStatus = await QuidaxService.checkPaymentStatus(reference);
+    // Get trade status from Quidax
+    const status = await QuidaxService.getTradeStatus(reference);
+    
+    // Map the status to our format
+    const paymentStatus = QuidaxService.mapQuidaxStatus(status);
 
-    // Return the payment status
-    return NextResponse.json({ status: 'success', paymentStatus });
+    return NextResponse.json({ 
+      status: 'success', 
+      paymentStatus 
+    });
   } catch (error) {
     console.error('Error verifying payment:', error);
     return NextResponse.json({ error: 'Verification failed' }, { status: 500 });

@@ -28,5 +28,5 @@ export class PaymentSyncService {
       if (error) throw error;
   
       return quidaxStatus;
-    }
+    } 
 }

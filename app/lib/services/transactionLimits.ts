@@ -1,6 +1,7 @@
+// app/lib/services/transactionLimits.ts
 import { createClient } from '@supabase/supabase-js';
-import { KYC_TIERS } from '@/app/lib/constants/kyc-tiers';
 import { KYCService } from './kyc';
+import { KYC_LIMITS, KYCTier } from '@/app/types/kyc';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,8 +18,8 @@ export class TransactionLimitService {
       }
 
       // If user is not verified, use the lowest tier limits
-      const tier = kycStatus.isVerified ? 'verified' : 'unverified';
-      const tierLimits = KYC_TIERS[tier];
+      const tier = kycStatus.isVerified ? kycStatus.tier : KYCTier.NONE;
+      const tierLimits = KYC_LIMITS[tier];
       
       // Calculate daily volume
       const dailyVolume = await this.getDailyTradeVolume(userId);

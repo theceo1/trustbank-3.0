@@ -3,79 +3,70 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import { KYCService } from '@/app/lib/services/kyc';
-import { KYC_TIERS } from '@/app/lib/constants/kyc-tiers';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { motion } from 'framer-motion';
-import Webcam from 'react-webcam';
-import { ArrowRight } from 'lucide-react';
-import BackButton from '@/components/ui/back-button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield, CheckCircle, AlertCircle } from 'lucide-react';
-import { Progress } from '@/components/ui/progress';
+import { ArrowRight, ArrowLeft, Shield, CheckCircle } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useUser } from '@/app/hooks/use-user';
+import { Separator } from '@/components/ui/separator';
+import { KYCTier, KYCTierInfo, KYC_LIMITS } from '@/app/types/kyc';
 
 export default function VerificationPage() {
   const router = useRouter();
-  const { kycInfo, user } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const { user: userData } = useUser();
+  const [loading, setLoading] = useState(false);
+
+  // Get KYC status from user profile
+  const kycStatus = userData?.kyc_status || 'unverified';
+  const kycLevel = userData?.kyc_level || 0;
   
-  const tiers = [
+  const tiers: KYCTierInfo[] = [
     {
-      key: "tier1",
-      name: "Tier 1 - Basic",
-      description: "Start with basic verification to access essential features",
-      requirements: ["Valid NIN (National Identity Number)"],
-      limits: KYC_TIERS.tier1,
+      tier: KYCTier.BASIC,
+      title: "Basic Verification",
+      description: "Perfect for getting started with basic trading",
+      requirements: ["Nigerian National Identity Number (NIN)", "Selfie verification"],
+      limits: KYC_LIMITS[KYCTier.BASIC],
       route: "/profile/verification/nin",
-      requiredDocs: ["nin"]
+      completed: kycLevel >= KYCTier.BASIC
     },
     {
-      key: "tier2",
-      name: "Tier 2 - Intermediate",
-      description: "Unlock higher limits and more features",
-      requirements: ["Valid BVN (Bank Verification Number)"],
-      limits: KYC_TIERS.tier2,
+      tier: KYCTier.INTERMEDIATE,
+      title: "Intermediate Verification",
+      description: "Link your BVN for increased limits",
+      requirements: ["Bank Verification Number (BVN)", "Basic verification required"],
+      limits: KYC_LIMITS[KYCTier.INTERMEDIATE],
       route: "/profile/verification/bvn",
-      requiredDocs: ["bvn"]
+      completed: kycLevel >= KYCTier.INTERMEDIATE
     },
     {
-      key: "tier3",
-      name: "Tier 3 - Advanced",
-      description: "Maximum limits and full platform access",
-      requirements: ["International Passport", "or", "Driver's License"],
-      limits: KYC_TIERS.tier3,
+      tier: KYCTier.ADVANCED,
+      title: "Advanced Verification",
+      description: "Complete full KYC for highest limits",
+      requirements: ["Government-issued Photo ID", "Selfie verification", "Intermediate verification required"],
+      limits: KYC_LIMITS[KYCTier.ADVANCED],
       route: "/profile/verification/id",
-      requiredDocs: ["international_passport", "drivers_license"]
+      completed: kycLevel >= KYCTier.ADVANCED
     }
   ];
 
-  const handleStartVerification = (tier: typeof tiers[0]) => {
-    // Check if user can proceed to this tier
-    if (tier.key === 'tier2' && (!kycInfo || kycInfo.currentTier === 'unverified')) {
+  const handleStartVerification = (tierInfo: KYCTierInfo) => {
+    // Check if previous tier is completed
+    if (tierInfo.tier > KYCTier.BASIC && kycLevel < tierInfo.tier - 1) {
       toast({
-        id: "tier1-required",
-        title: "Complete Tier 1 First",
-        description: "Please complete basic verification before proceeding to intermediate",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (tier.key === 'tier3' && (!kycInfo || kycInfo.currentTier !== 'tier2')) {
-      toast({
-        id: "tier2-required",
-        title: "Complete Tier 2 First",
-        description: "Please complete intermediate verification before proceeding to advanced",
+        title: "Complete Previous Tier",
+        description: "Please complete the previous verification level first",
         variant: "destructive"
       });
       return;
     }
 
     // If already verified this tier
-    if (kycInfo?.currentTier === tier.key) {
+    if (tierInfo.completed) {
       toast({
-        id: "tier-already-verified",
         title: "Already Verified",
         description: "You have already completed this verification level",
         variant: "default"
@@ -84,80 +75,103 @@ export default function VerificationPage() {
     }
 
     // Proceed with verification
-    router.push(tier.route);
-  };
-
-  const fadeInUp = {
-    initial: { opacity: 0, y: 20 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.5 }
+    router.push(tierInfo.route);
   };
 
   return (
-    <div className="container max-w-4xl mx-auto px-4 py-8">
-      <BackButton />
-      <motion.div 
-        className="text-center mb-8"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-      >
-        <h1 className="text-3xl font-bold mb-2">Identity Verification</h1>
-        <p className="text-gray-600">Complete verification to unlock platform features</p>
-      </motion.div>
-
-      <div className="grid gap-6 md:grid-cols-3">
-        {tiers.map((tier, index) => (
-          <motion.div
-            key={tier.key}
-            {...fadeInUp}
-            animate="animate"
-            transition={{ 
-              duration: 0.5,
-              delay: index * 0.2 
-            }}
+    <div className="min-h-screen flex flex-col pt-16">
+      <div className="container max-w-6xl mx-auto px-4 py-8 flex-grow">
+        <div className="flex items-center mb-8">
+          <Button
+            variant="ghost"
+            onClick={() => router.back()}
+            className="mr-4"
           >
-            <Card className="h-full relative overflow-hidden">
-              {kycInfo?.currentTier === tier.key && (
-                <div className="absolute top-2 right-2">
-                  <CheckCircle className="text-green-500 h-6 w-6" />
-                </div>
-              )}
-              
-              <CardHeader>
-                <Shield className="h-8 w-8 mb-2 text-green-600" />
-                <h3 className="text-xl font-semibold">{tier.name}</h3>
-              </CardHeader>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back
+          </Button>
+          <div>
+            <h1 className="text-lg font-bold">Identity Verification</h1>
+            <p className="text-gray-600">Verify your identity to unlock higher trading limits</p>
+          </div>
+        </div>
 
-              <CardContent className="space-y-4">
-                <Progress 
-                  value={kycInfo?.currentTier === tier.key ? 100 : 0} 
-                  className="h-2"
-                />
-                <p className="text-sm text-gray-600">{tier.description}</p>
-                <div className="space-y-2">
-                  <h4 className="font-medium">Requirements:</h4>
-                  <ul className="text-sm space-y-1">
-                    {tier.requirements.map((req, i) => (
-                      <li key={i} className="flex items-center gap-2">
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                        {req}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              </CardContent>
+        <div className="grid gap-8 md:grid-cols-3 place-items-center">
+          {tiers.map((tier, index) => (
+            <motion.div
+              key={tier.tier}
+              className="w-full max-w-md"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.2 }}
+            >
+              <Card className="h-full relative overflow-hidden border-2 hover:border-green-500 transition-all">
+                {tier.completed && (
+                  <div className="absolute top-2 right-2">
+                    <CheckCircle className="text-green-600 h-6 w-6" />
+                  </div>
+                )}
+                
+                <CardHeader>
+                  <Shield className="h-8 w-8 mb-2 text-green-600" />
+                  <CardTitle className="text-xl font-semibold">
+                    {tier.title}
+                  </CardTitle>
+                  <CardDescription>{tier.description}</CardDescription>
+                </CardHeader>
 
-                  <CardFooter>
-                <Button
-                  onClick={() => handleStartVerification(tier)}
-                  className="w-full bg-green-600 hover:bg-green-300 text-white hover:text-black transition-all duration-300"
-                >
-                  {kycInfo?.currentTier === tier.key ? 'Verified' : 'Start Verification'}
-                </Button>
-              </CardFooter>
-            </Card>
-          </motion.div>
-        ))}
+                <CardContent className="space-y-6">
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Trading Limits:</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-3 bg-green-50 rounded-lg">
+                        <p className="text-xs text-gray-600">Daily Limit</p>
+                        <p className="font-bold text-green-600">₦{tier.limits.dailyLimit.toLocaleString()}</p>
+                      </div>
+                      <div className="p-3 bg-green-50 rounded-lg">
+                        <p className="text-xs text-gray-600">Monthly Limit</p>
+                        <p className="font-bold text-green-600">₦{tier.limits.monthlyLimit.toLocaleString()}</p>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  <div className="space-y-2">
+                    <h4 className="font-medium">Requirements:</h4>
+                    <ul className="text-sm space-y-1">
+                      {tier.requirements.map((req, i) => (
+                        <li key={i} className="flex items-center gap-2">
+                          {tier.completed ? (
+                            <CheckCircle className="h-4 w-4 text-green-600" />
+                          ) : (
+                            <Shield className="h-4 w-4 text-muted-foreground" />
+                          )}
+                          {req}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <Button
+                    onClick={() => handleStartVerification(tier)}
+                    className="w-full bg-green-600 hover:bg-green-300 text-black dark:text-black dark:hover:text-black"
+                    disabled={loading || tier.completed}
+                  >
+                    {tier.completed ? (
+                      'Verified'
+                    ) : (
+                      <span className="flex items-center gap-2">
+                        Start Verification
+                        <ArrowRight className="h-4 w-4" />
+                      </span>
+                    )}
+                  </Button>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </div>
   );

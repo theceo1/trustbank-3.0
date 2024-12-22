@@ -1,6 +1,11 @@
+// scripts/verify-test-user.ts
 import { createClient, User } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
+import debug from 'debug';
+
+const log = debug('verify:test-user');
+debug.enable('verify:*');
 
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
@@ -9,18 +14,18 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-async function verifyTestUser() {
-  const testEmail = 'user2@trustbank.tech';
-  
+async function verifyTestUser(testEmail: string) {
   try {
+    log(`🔍 Verifying user: ${testEmail}`);
+    
     // 1. Check if user exists in auth
     const { data: { users }, error: authError } = await supabase.auth.admin.listUsers();
     if (authError) throw authError;
     
     const authUser = (users as User[]).find(u => u.email === testEmail);
-    console.log('Auth user exists:', !!authUser);
+    log('Auth user exists:', !!authUser);
     if (authUser) {
-      console.log('Auth user details:', {
+      log('Auth user details:', {
         id: authUser.id,
         email: authUser.email,
         emailConfirmed: authUser.email_confirmed_at,
@@ -28,29 +33,44 @@ async function verifyTestUser() {
       });
     }
 
-    // 2. Check user profile
+    // 2. Check user profiles
     const { data: profile, error: profileError } = await supabase
-      .from('users')
+      .from('user_profiles')
       .select('*')
-      .eq('email', testEmail)
+      .eq('user_id', authUser?.id)
       .single();
       
-    console.log('\nUser profile exists:', !!profile);
-    if (profile) console.log('Profile details:', profile);
+    log('\nUser profile exists:', !!profile);
+    if (profile) log('Profile details:', profile);
 
-    // 3. Try test login
+    // 3. Check wallets
+    const { data: wallets, error: walletsError } = await supabase
+      .from('wallets')
+      .select('*')
+      .eq('user_id', authUser?.id);
+
+    log('\nWallets:', wallets);
+    if (walletsError) log('Wallet error:', walletsError);
+
+    // 4. Try test login
     const { data: session, error: loginError } = await supabase.auth.signInWithPassword({
       email: testEmail,
-      password: 'SecureUserPass123!'
+      password: 'TestPass123!'
     });
 
-    console.log('\nLogin test:', loginError ? 'Failed' : 'Successful');
-    if (loginError) console.log('Login error:', loginError);
-    if (session) console.log('Session created successfully');
+    log('\nLogin test:', loginError ? 'Failed' : 'Successful');
+    if (loginError) log('Login error:', loginError);
+    if (session) log('Session created successfully');
 
   } catch (error) {
-    console.error('Verification failed:', error);
+    log('❌ Verification failed:', error);
   }
 }
 
-verifyTestUser(); 
+// Verify both test users
+async function verifyAllTestUsers() {
+  await verifyTestUser('user8@trustbank.tech');
+  await verifyTestUser('user9@trustbank.tech');
+}
+
+verifyAllTestUsers(); 

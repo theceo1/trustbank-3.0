@@ -544,38 +544,34 @@ export class TestQuidaxService {
     try {
       console.log(`Creating deposit for ${currency} wallet for user ${userId} with ${amount}`);
       
-      // Create the deposit
-      const deposit = await this.initiateDeposit({
-        user_id: userId,
-        currency: currency.toLowerCase(),
-        amount: amount
-      });
-
-      console.log('Deposit created:', deposit);
-
-      // Monitor the deposit status
-      let attempts = 0;
-      const maxAttempts = 10;
-      const checkInterval = 2000; // 2 seconds
-
-      while (attempts < maxAttempts) {
-        const depositStatus = await this.getDeposits(userId, {
-          currency: currency.toLowerCase(),
-          state: 'submitted'
-        });
-
-        console.log(`Deposit status check ${attempts + 1}/${maxAttempts}:`, depositStatus);
-
-        if (depositStatus?.data?.some((d: any) => d.status === 'accepted')) {
-          console.log('Deposit accepted');
-          return depositStatus.data[0];
-        }
-
-        await new Promise(resolve => setTimeout(resolve, checkInterval));
-        attempts++;
+      // First check if wallet exists
+      const wallet = await this.getWalletInfo(userId, currency);
+      if (!wallet) {
+        throw new Error(`Wallet not found for currency ${currency}`);
       }
 
-      throw new Error('Deposit monitoring timeout');
+      // For test environment, we'll use the direct wallet credit endpoint
+      const response = await axios.post(
+        `${this.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}/credit`,
+        {
+          amount: amount,
+          reason: 'test_funding'
+        },
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      console.log('Wallet credit response:', response.data);
+      
+      // Verify the updated balance
+      const updatedWallet = await this.getWalletInfo(userId, currency);
+      console.log('Updated wallet balance:', updatedWallet.balance);
+
+      return response.data.data;
     } catch (error: any) {
       const errorDetails = {
         message: error.message,
@@ -585,6 +581,24 @@ export class TestQuidaxService {
         data: error.config?.data
       };
       console.error('Wallet funding error:', errorDetails);
+      throw error;
+    }
+  }
+
+  static async getWalletInfo(userId: string, currency: string) {
+    try {
+      const response = await axios.get(
+        `${this.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.secretKey}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Get wallet info error:', error.response?.data || error);
       throw error;
     }
   }
