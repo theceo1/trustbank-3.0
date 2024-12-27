@@ -1,3 +1,4 @@
+//app/types/markets.ts
 export interface ChartData {
   timestamp: number;
   price: number;
@@ -110,4 +111,38 @@ export interface MarketRate {
 
 export interface MarketStatsProps {
   currency: string;
+}
+
+export interface MarketTicker {
+  name: string;
+  base_unit: string;
+  quote_unit: string;
+  low: string;
+  high: string;
+  last: string;
+  volume: string;
+  change: string;
+}
+
+export interface MarketQuote {
+  price: {
+    unit: string;
+    amount: string;
+  };
+  total: {
+    unit: string;
+    amount: string;
+  };
+  volume: {
+    unit: string;
+    amount: string;
+  };
+  fee: {
+    unit: string;
+    amount: string;
+  };
+  receive: {
+    unit: string;
+    amount: string;
+  };
 }

@@ -1,6 +1,10 @@
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
+import debug from 'debug';
+
+const log = debug('auth:fix');
+debug.enable('auth:*');
 
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
@@ -11,54 +15,68 @@ const pool = new Pool({
 async function fixAuthSetup() {
   let client;
   try {
-    console.log('🔧 Fixing auth setup...');
     client = await pool.connect();
-
-    // 1. Create required extensions
-    console.log('\nCreating required extensions...');
+    
+    // 1. Set role to postgres
+    await client.query('SET ROLE postgres');
+    
+    // 2. Create auth schema if it doesn't exist
     await client.query(`
-      CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-      CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+      CREATE SCHEMA IF NOT EXISTS auth;
+      GRANT USAGE ON SCHEMA auth TO postgres, supabase_auth_admin;
     `);
 
-    // 2. Fix permissions
-    console.log('\nFixing permissions...');
+    // 3. Create the auth.users table if it doesn't exist
     await client.query(`
-      ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON TABLES TO service_role;
-      ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON SEQUENCES TO service_role;
-      ALTER DEFAULT PRIVILEGES IN SCHEMA auth GRANT ALL ON FUNCTIONS TO service_role;
-      
-      GRANT USAGE ON SCHEMA auth TO service_role;
-      GRANT ALL ON ALL TABLES IN SCHEMA auth TO service_role;
-      GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO service_role;
-      GRANT ALL ON ALL FUNCTIONS IN SCHEMA auth TO service_role;
+      CREATE TABLE IF NOT EXISTS auth.users (
+        id uuid NOT NULL PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+        email text,
+        email_confirmed_at timestamp with time zone,
+        encrypted_password text,
+        confirmation_token text,
+        confirmation_sent_at timestamp with time zone,
+        recovery_token text,
+        recovery_sent_at timestamp with time zone,
+        email_change_token text,
+        email_change text,
+        email_change_sent_at timestamp with time zone,
+        last_sign_in_at timestamp with time zone,
+        raw_app_meta_data jsonb,
+        raw_user_meta_data jsonb,
+        is_super_admin boolean,
+        created_at timestamp with time zone,
+        updated_at timestamp with time zone,
+        phone text,
+        phone_confirmed_at timestamp with time zone,
+        phone_change text,
+        phone_change_token text,
+        phone_change_sent_at timestamp with time zone,
+        confirmed_at timestamp with time zone,
+        email_change_confirm_status smallint,
+        banned_until timestamp with time zone,
+        reauthentication_token text,
+        reauthentication_sent_at timestamp with time zone,
+        is_sso_user boolean DEFAULT false NOT NULL,
+        deleted_at timestamp with time zone
+      );
     `);
 
-    // 3. Create required triggers
-    console.log('\nCreating required triggers...');
+    // 4. Grant necessary permissions
     await client.query(`
-      CREATE OR REPLACE FUNCTION auth.handle_user_update()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = now();
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql;
-
-      DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
-      CREATE TRIGGER on_auth_user_updated
-        BEFORE UPDATE ON auth.users
-        FOR EACH ROW
-        EXECUTE FUNCTION auth.handle_user_update();
+      GRANT ALL ON auth.users TO postgres, supabase_auth_admin;
+      GRANT ALL ON ALL SEQUENCES IN SCHEMA auth TO postgres, supabase_auth_admin;
     `);
 
-    console.log('✅ Auth setup fixed successfully');
+    log('✅ Auth setup fixed successfully');
 
-  } catch (error: any) {
-    console.error('❌ Fix failed:', error?.message);
+  } catch (error) {
+    log('❌ Failed to fix auth setup:', error);
     throw error;
   } finally {
-    if (client) client.release();
+    if (client) {
+      await client.query('RESET ROLE');
+      client.release();
+    }
   }
 }
 

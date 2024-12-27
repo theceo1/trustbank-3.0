@@ -7,8 +7,8 @@ import type { QuidaxSwapTransaction } from '@/app/types/quidax';
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore });
     
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
@@ -34,22 +34,22 @@ export async function POST(request: Request) {
       );
     }
 
-    // Create swap quotation if not provided
+    // Create quotation if not provided
     let quotationId = quoteId;
     if (!quotationId) {
-      const quotation = await QuidaxService.createSwapQuotation({
-        user_id: userData.quidax_id,
-        from_currency: fromCurrency.toLowerCase(),
-        to_currency: toCurrency.toLowerCase(),
-        from_amount: amount.toString()
+      const quotation = await QuidaxService.createQuotation({
+        userId: userData.quidax_id,
+        fromCurrency: fromCurrency.toLowerCase(),
+        toCurrency: toCurrency.toLowerCase(),
+        fromAmount: amount.toString()
       });
       quotationId = quotation.id;
     }
 
     // Confirm the trade
-    const trade = await QuidaxService.confirmSwapQuotation({
-      user_id: userData.quidax_id,
-      quotation_id: quotationId
+    const trade = await QuidaxService.confirmQuotation({
+      userId: userData.quidax_id,
+      quotationId
     }) as QuidaxSwapTransaction;
 
     // Store trade in database

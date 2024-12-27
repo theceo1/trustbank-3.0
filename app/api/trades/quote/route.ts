@@ -1,13 +1,22 @@
+//app/api/trades/quote/route.ts
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
+import { QuidaxService } from '@/app/lib/services/quidax';
 import type { Database } from '@/types/supabase';
+
+interface QuoteResponse {
+  volume: { amount: string };
+  price: { amount: string };
+  receive: { amount: string };
+  fee: { amount: string };
+  total: { amount: string };
+}
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const cookieStore = await cookies();
+    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore });
     
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
@@ -17,12 +26,12 @@ export async function POST(request: Request) {
     const { fromCurrency, toCurrency, amount } = await request.json();
     
     // Get temporary quote first
-    const quote = await QuidaxMarketService.getQuote({
+    const quote = await QuidaxService.getQuote({
       market: `${fromCurrency}${toCurrency}`.toLowerCase(),
       unit: fromCurrency.toLowerCase(),
       kind: 'ask',
       volume: amount.toString()
-    });
+    }) as QuoteResponse;
 
     return NextResponse.json({
       fromCurrency,

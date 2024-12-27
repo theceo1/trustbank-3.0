@@ -34,17 +34,17 @@ export function Trade() {
   const [quotation, setQuotation] = useState<TradeQuotation | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [quotationTimer, setQuotationTimer] = useState<number>(0);
+  const [isLoadingBalance, setIsLoadingBalance] = useState(false);
 
   const fetchWalletBalance = useCallback(async () => {
-    if (!user?.id) return;
-    
+    if (!user?.id || isLoadingBalance) return;
     try {
       const token = await getToken();
       if (!token) {
         throw new Error('No authentication token available');
       }
-
-      const response = await fetch(`/api/wallet/balance/${selectedCurrency.toLowerCase()}`, {
+      
+      const response = await fetch(`/api/wallet/users/me/wallets/${selectedCurrency.toLowerCase()}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -59,7 +59,7 @@ export function Trade() {
       }
       
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error('Failed to fetch balance');
       }
       
       const data = await response.json();
@@ -69,13 +69,11 @@ export function Trade() {
       setWalletBalance(0);
       toast({
         title: "Error",
-        description: "Unable to fetch balance. Please try logging in again.",
+        description: "Unable to fetch balance. Please try again later.",
         variant: "destructive"
       });
-      
-      if (error instanceof Error && error.message.includes('401')) {
-        router.push('/auth/login');
-      }
+    } finally {
+      setIsLoadingBalance(false);
     }
   }, [selectedCurrency, user?.id, getToken, toast, router]);
 
@@ -178,18 +176,24 @@ export function Trade() {
     }
   };
 
+  const handleCurrencyChange = (value: string) => {
+    setSelectedCurrency(value);
+    setWalletBalance(0); // Reset balance when currency changes
+    fetchWalletBalance(); // Fetch new balance
+  };
+
   useEffect(() => {
     if (user?.id) {
       fetchWalletBalance();
     }
-  }, [user?.id, fetchWalletBalance]);
+  }, [user?.id]); // Only fetch on mount and user change
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4">
         <Select
           value={selectedCurrency}
-          onValueChange={setSelectedCurrency}
+          onValueChange={handleCurrencyChange}
         >
           <SelectTrigger>
             <SelectValue placeholder="Select currency" />
@@ -204,7 +208,11 @@ export function Trade() {
         </Select>
 
         <div className="text-sm text-gray-500">
-          Available balance: {formatCryptoBalance(walletBalance, selectedCurrency)}
+          {isLoadingBalance ? (
+            "Loading balance..."
+          ) : (
+            `Available balance: ${formatCryptoBalance(walletBalance, selectedCurrency)}`
+          )}
         </div>
 
         <Input

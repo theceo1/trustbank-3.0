@@ -50,7 +50,9 @@
     "fix:password": "DEBUG=fix:* ts-node scripts/fix-user-password.ts",
     "fix:kyc": "DEBUG=fix:* ts-node scripts/fix-kyc-schema.ts",
     "fix:kyc-schema": "DEBUG=fix:* ts-node scripts/fix-kyc-schema.ts",
-    "migrate": "ts-node scripts/fix-kyc-schema.ts"
+    "migrate": "ts-node scripts/fix-kyc-schema.ts",
+    "fix:users": "DEBUG=fix:* ts-node scripts/fix-users.ts",
+    "fix:auth-setup": "DEBUG=auth:* ts-node scripts/fix-auth-setup.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",
@@ -87,7 +89,7 @@
     "@react-three/fiber": "^8.17.10",
     "@supabase/auth-helpers-nextjs": "^0.10.0",
     "@supabase/auth-helpers-react": "^0.5.0",
-    "@supabase/supabase-js": "^2.47.9",
+    "@supabase/supabase-js": "^2.47.10",
     "@tanstack/react-query": "^5.59.16",
     "@types/express": "^5.0.0",
     "@types/file-saver": "^2.0.7",

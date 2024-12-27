@@ -1,5 +1,5 @@
 // app/lib/services/wallet.ts
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/supabase';
 import supabase from '@/lib/supabase/client';
 
@@ -36,7 +36,29 @@ export interface QuidaxWalletUpdate {
 }
 
 export class WalletService {
-  private static supabase = createClientComponentClient<Database>();
+  private static supabase = supabase;
+
+  static async getWalletInfo(userId: string) {
+    const { data, error } = await this.supabase
+      .from('wallets')
+      .select('*')
+      .eq('user_id', userId);
+
+    if (error) throw error;
+    return data;
+  }
+
+  static async getWalletAddress(userId: string, currency: string) {
+    const { data, error } = await this.supabase
+      .from('wallet_addresses')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('currency', currency)
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
 
   static async getWalletBalance(userId: string): Promise<WalletData | null> {
     const { data, error } = await supabase

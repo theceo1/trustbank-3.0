@@ -6,6 +6,8 @@ import { User } from '@supabase/supabase-js';
 import supabase from '@/lib/supabase/client';
 import { KYCInfo } from '@/app/types/kyc';
 import { useRouter } from 'next/navigation';
+import { refreshSession } from '@/app/lib/auth/sessionRefresh';
+import { clearAuthData } from '@/app/lib/auth/clearAuth';
 
 export interface AuthContextType {
   user: User | null;
@@ -39,45 +41,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        setUser(session?.user ?? null);
+        const { session, error } = await refreshSession();
+        if (error) throw error;
         
-        const {
-          data: { subscription },
-        } = supabase.auth.onAuthStateChange(async (event, session) => {
-          if (event === 'SIGNED_OUT') {
-            setUser(null);
-            router.push('/auth/login');
-          } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-            setUser(session?.user ?? null);
-          }
+        if (mounted) {
+          setUser(session?.user ?? null);
           setLoading(false);
-        });
-
-        return () => subscription.unsubscribe();
+        }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        setUser(null);
-      } finally {
-        setLoading(false);
+        if (mounted) {
+          setUser(null);
+          setLoading(false);
+        }
       }
     };
 
     initAuth();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (mounted) {
+        setUser(session?.user ?? null);
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [router]);
 
   const signIn = async (email: string, password: string) => {
     try {
+      // Skip the user existence check and go straight to sign in
       const { data, error } = await supabase.auth.signInWithPassword({ 
         email, 
         password
       });
       
-      if (error) throw error;
+      if (error) {
+        if (error.message.includes('Invalid login credentials')) {
+          return { user: null, error: new Error('User not found or invalid password') };
+        }
+        throw error;
+      }
       
-      // After successful sign in, get a fresh session
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         setUser(session.user);
@@ -92,9 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       await supabase.auth.signOut();
+      clearAuthData();
       router.push('/auth/login');
     } catch (error) {
-      console.error('Sign out error:', error);
+      console.error('Error signing out:', error);
     }
   };
 

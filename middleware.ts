@@ -26,16 +26,21 @@ export async function middleware(req: NextRequest) {
     
     const {
       data: { session },
+      error
     } = await supabase.auth.getSession();
 
-    if (!session) {
-      if (req.nextUrl.pathname.startsWith('/api/')) {
-        return NextResponse.json(
-          { error: 'No active session' }, 
-          { status: 401 }
-        );
-      }
+    // Clear cookies and redirect on refresh token errors
+    if (error?.message?.includes('Refresh Token')) {
+      const response = NextResponse.redirect(new URL('/auth/login', req.url));
+      
+      // Clear auth cookies
+      response.cookies.delete('sb-access-token');
+      response.cookies.delete('sb-refresh-token');
+      
+      return response;
+    }
 
+    if (!session) {
       const redirectUrl = new URL('/auth/login', req.url);
       redirectUrl.searchParams.set('redirect', req.url);
       return NextResponse.redirect(redirectUrl);

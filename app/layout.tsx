@@ -34,7 +34,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className="relative min-h-screen">
         <ErrorBoundary>
           <Suspense
             fallback={

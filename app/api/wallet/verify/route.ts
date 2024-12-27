@@ -3,11 +3,20 @@ import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 
 export async function GET(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ 
+    cookies: () => cookieStore 
+  });
+  
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get('userId');
 
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { data: wallet } = await supabase
       .from('wallets')
       .select('*')
@@ -30,6 +39,7 @@ export async function GET(request: Request) {
       transactions: transactions
     });
   } catch (error) {
+    console.error('Wallet verify error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

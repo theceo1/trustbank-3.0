@@ -30,14 +30,11 @@ export default function Login() {
     setError('');
     
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
+      const { user, error } = await signIn(email, password);
+      
       if (error) throw error;
 
-      if (data.session) {
+      if (user) {
         const redirectTo = searchParams?.get('redirect') || '/dashboard';
         window.location.href = redirectTo;
       }

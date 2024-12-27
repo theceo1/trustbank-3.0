@@ -4,12 +4,12 @@ import type { Database } from '@/types/supabase';
 
 let supabaseInstance: ReturnType<typeof createClientComponentClient<Database>>;
 
-function getSupabaseClient() {
+export function getSupabaseClient() {
   if (!supabaseInstance) {
     supabaseInstance = createClientComponentClient<Database>();
   }
   return supabaseInstance;
 }
 
-const supabase = getSupabaseClient();
-export default supabase;
+// Export a default instance for convenience
+export default getSupabaseClient();

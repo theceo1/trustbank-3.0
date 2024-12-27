@@ -87,6 +87,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       setAdminUser(null);
+      
       if (!session) {
         setIsAdmin(false);
         setAdminUser(null);
@@ -99,10 +100,13 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
         .from('admin_profiles')
         .select('id, user_id, role, is_active, last_active')
         .eq('user_id', session.user.id)
-        .single();
+        .maybeSingle();
 
-      if (error || !adminData) {
-        throw error || new Error('No admin data found');
+      if (!adminData || error) {
+        setIsAdmin(false);
+        setAdminUser(null);
+        router.push('/dashboard');
+        return;
       }
 
       if (adminData.is_active) {
@@ -125,7 +129,6 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
             last_active: new Date().toISOString()
           })
           .eq('user_id', session.user.id);
-
       } else {
         setIsAdmin(false);
         setAdminUser(null);

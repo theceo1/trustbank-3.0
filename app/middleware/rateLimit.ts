@@ -8,7 +8,7 @@ const redis = new Redis({
 });
 
 const WINDOW_SIZE = 60 * 1000; // 1 minute
-const MAX_REQUESTS = 30; // requests per minute
+const MAX_REQUESTS = 100; // Increase to 100 requests per minute
 
 export async function rateLimit(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for') ?? '127.0.0.1';

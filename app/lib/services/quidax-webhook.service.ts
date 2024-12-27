@@ -2,7 +2,14 @@
 
 import { logger } from '@/app/lib/logger';
 import { createClient } from '@supabase/supabase-js';
-import type { QuidaxWalletUpdate } from '@/app/lib/services/wallet';
+import { WebhookLogger } from './webhookLogger';
+import { QuidaxService } from './quidax';
+import { 
+  QuidaxWebhookEvent, 
+  TransactionType, 
+  TransactionStatus 
+} from '@/app/types/webhook';
+import type { QuidaxWallet } from '@/app/types/quidax';
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -10,27 +17,16 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
-// Define types
-enum TransactionType {
-  BUY = 'buy',
-  SELL = 'sell',
-  WITHDRAWAL = 'withdrawal'
-}
-
-enum TransactionStatus {
-  COMPLETED = 'completed',
-  FAILED = 'failed',
-  PENDING = 'pending'
-}
-
-type WebhookEvent = {
-  event: string;
-  data: any;
-}
-
 export class QuidaxWebhookService {
-  async handleWebhook(webhook: WebhookEvent) {
+  async handleWebhook(webhook: QuidaxWebhookEvent, signature?: string) {
+    const logId = await WebhookLogger.logWebhook('quidax', webhook);
+
     try {
+      // Verify webhook signature
+      if (!QuidaxService.verifyWebhookSignature(webhook, signature)) {
+        throw new Error('Invalid webhook signature');
+      }
+
       logger.info(`Processing ${webhook.event} webhook`);
 
       switch (webhook.event) {
@@ -70,8 +66,15 @@ export class QuidaxWebhookService {
         default:
           logger.warn(`Unhandled webhook event: ${webhook.event}`);
       }
+
+      await WebhookLogger.updateWebhookStatus(logId, 'processed');
     } catch (error) {
       logger.error('Webhook handling error:', error);
+      await WebhookLogger.updateWebhookStatus(
+        logId, 
+        'failed', 
+        error instanceof Error ? error.message : 'Unknown error'
+      );
       throw error;
     }
   }
@@ -217,7 +220,7 @@ export class QuidaxWebhookService {
     await this.updateTransaction(data.id, TransactionStatus.FAILED);
   }
 
-  private async handleWalletUpdate(data: QuidaxWalletUpdate['data']) {
+  private async handleWalletUpdate(data: QuidaxWallet) {
     try {
       const { error } = await supabase
         .from('wallets')
