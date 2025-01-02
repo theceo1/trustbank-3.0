@@ -1,5 +1,6 @@
 //app/lib/services/quidax-wallet.ts
-import { APIError } from '@/lib/api-utils';
+import { Database } from '@/app/types/supabase';
+import supabaseClient from '@/lib/supabase/client';
 
 interface WalletBalance {
   currency: string;
@@ -10,8 +11,13 @@ interface WalletBalance {
 
 class QuidaxWalletService {
   private static instance: QuidaxWalletService;
+  private baseUrl: string;
+  private apiKey: string;
 
-  private constructor() {}
+  private constructor() {
+    this.baseUrl = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+    this.apiKey = process.env.NEXT_PUBLIC_QUIDAX_API_KEY || '';
+  }
 
   public static getInstance(): QuidaxWalletService {
     if (!QuidaxWalletService.instance) {
@@ -19,24 +25,40 @@ class QuidaxWalletService {
     }
     return QuidaxWalletService.instance;
   }
+ 
+  private async getHeaders() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.apiKey}`,
+      'X-User-Token': session?.access_token || '',
+    };
+  }
 
   async getAllWallets(): Promise<WalletBalance[]> {
     try {
-      const response = await fetch('/api/wallet/balances');
+      const headers = await this.getHeaders();
+      const response = await fetch(`${this.baseUrl}/wallets`, {
+        method: 'GET',
+        headers,
+      });
+
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch wallet balances');
+        throw new Error('Failed to fetch wallet balances');
       }
+
       const data = await response.json();
-      return data.wallets;
-    } catch (error: any) {
-      console.error('Error fetching wallet balances:', error);
+      return data.data.map((wallet: any) => ({
+        currency: wallet.currency,
+        balance: wallet.balance,
+        locked: wallet.locked,
+        total: (parseFloat(wallet.balance) + parseFloat(wallet.locked)).toString(),
+      }));
+    } catch (error) {
+      console.error('Error fetching wallets:', error);
       throw error;
     }
   }
 }
 
-// Export a function to get the singleton instance
-export function getWalletService(): QuidaxWalletService {
-  return QuidaxWalletService.getInstance();
-} 
+export const getWalletService = () => QuidaxWalletService.getInstance(); 

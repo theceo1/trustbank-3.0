@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 
 export default function AdminHeader() {
-  const { adminUser, logout } = useAdminAuth();
+  const { user, signOut } = useAdminAuth();
   const [notifications] = useState<{ id: string; title: string; unread: boolean }[]>([
     { id: '1', title: 'New user registration', unread: true },
     { id: '2', title: 'System update available', unread: true }
@@ -75,7 +75,7 @@ export default function AdminHeader() {
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                 <Avatar className="h-8 w-8">
-                  <AvatarImage src="/avatars/admin.png" alt={adminUser?.id} />
+                  <AvatarImage src="/avatars/admin.png" alt={user?.id} />
                   <AvatarFallback>AD</AvatarFallback>
                 </Avatar>
               </Button>
@@ -92,7 +92,7 @@ export default function AdminHeader() {
                 Settings
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => logout()}>
+              <DropdownMenuItem onClick={() => signOut()}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Log out
               </DropdownMenuItem>

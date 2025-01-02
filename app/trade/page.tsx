@@ -2,9 +2,10 @@
 "use client";
 
 import { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MarketStats } from './components/MarketStats';
-import { TradeHistory } from './components/TradeHistory';
+import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
+import MarketStats from '@/app/components/trade/MarketStats';
+import { TradeHistory } from '@/app/components/trade/TradeHistory';
+import TradeForm from '@/app/components/trade/TradeForm';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
@@ -18,7 +19,19 @@ export default function TradePage() {
     }
   }, [user, router]);
 
-  if (!user) return null;
+  if (!user) {
+    return (
+      <div className="container mx-auto py-8 px-4 space-y-6 mt-12">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-center text-muted-foreground">
+              Please sign in to access the trading page
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-8 px-4 space-y-6 mt-12">
@@ -28,6 +41,7 @@ export default function TradePage() {
             <CardTitle>Trade Crypto</CardTitle>
           </CardHeader>
           <CardContent>
+            <TradeForm />
           </CardContent>
         </Card>
 
@@ -41,7 +55,7 @@ export default function TradePage() {
           <CardTitle>Trade History</CardTitle>
         </CardHeader>
         <CardContent>
-          <TradeHistory trades={[]} />
+          <TradeHistory />
         </CardContent>
       </Card>
     </div>

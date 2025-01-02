@@ -1,14 +1,12 @@
 "use client";
 
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { ReactNode } from "react";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from '@/components/theme-provider';
+import { Toaster } from 'sonner';
+import { SessionProvider } from 'next-auth/react';
 
-const queryClient = new QueryClient();
-
-export function Providers({ children }: { children: ReactNode }) {
+export function Providers({ children }: { children: React.ReactNode }) {
   return (
-    <QueryClientProvider client={queryClient}>
+    <SessionProvider>
       <ThemeProvider
         attribute="class"
         defaultTheme="system"
@@ -16,7 +14,8 @@ export function Providers({ children }: { children: ReactNode }) {
         disableTransitionOnChange
       >
         {children}
+        <Toaster richColors position="top-right" />
       </ThemeProvider>
-    </QueryClientProvider>
+    </SessionProvider>
   );
 }

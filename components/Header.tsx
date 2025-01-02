@@ -1,254 +1,163 @@
 // components/Header.tsx
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { ModeToggle } from "@/components/mode-toggle";
-import { useAuth } from '@/context/AuthContext';
-import { Menu, X } from "lucide-react";
-import {
-  NavigationMenu,
-  NavigationMenuContent,
-  NavigationMenuItem,
-  NavigationMenuLink,
-  NavigationMenuList,
-  NavigationMenuTrigger,
-} from "@/components/ui/navigation-menu";
-import { ThemeToggle } from "@/components/theme-toggle";
+import { useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
+import { useAuth } from "@/app/context/AuthContext";
+import { Button } from "./ui/button";
+import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "./ui/navigation-menu";
+import { ThemeToggle } from "./theme-toggle";
 import { useToast } from "@/hooks/use-toast";
 import { useAdminAuth } from '@/app/admin/context/AdminAuthContext';
+import { Menu, X } from "lucide-react";
 
 export default function Header() {
-  const pathname = usePathname();
-  const { user, loading, signOut } = useAuth();
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const { toast } = useToast();
   const { isAdmin } = useAdminAuth();
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setIsMenuOpen(false);
-      }
-    };
-
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  // Admin redirect effect
-  useEffect(() => {
-    if (isAdmin && pathname === '/dashboard') {
-      router.push('/admin/dashboard');
-    }
-  }, [isAdmin, pathname, router]);
-
-  // Define menu items based on auth state
-  const menuItems = user ? [
-    { href: '/market', label: 'Market' },
-    { href: '/calculator', label: 'Calculator' },
-    { href: '/dashboard', label: 'Dashboard' },
-    { href: '/trade', label: 'Trade' },
-    { href: '/profile/wallet', label: 'Wallet' }, 
-    { href: '/profile', label: 'Profile' }
-  ] : [
-    { href: '/market', label: 'Market' },
-    { href: '/calculator', label: 'Calculator' }
-  ];
-
-  const aboutItems = [
-    { href: "/about/vision", label: "Vision" },
-    { href: "/about/mission", label: "Mission" },
-    { href: "/about/blog", label: "Blog" },
-    { href: "/about/faq", label: "FAQ" },
-    { href: "/about/contact", label: "Contact Us" }
-  ];
+  const { user, loading, signOut } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const handleSignOut = async () => {
     try {
       await signOut();
-      setIsMenuOpen(false); // Close mobile menu if open
       toast({
-        id: "signout-success",
         title: "Signed out successfully",
-        description: "You have been signed out of your account",
+        description: "You have been signed out of your account.",
       });
       router.push('/auth/login');
     } catch (error) {
-      console.error('Error signing out:', error);
       toast({
-        id: "signout-error",
-        title: "Error",
-        description: "Failed to sign out. Please try again.",
+        title: "Error signing out",
+        description: "There was a problem signing out. Please try again.",
         variant: "destructive",
       });
     }
   };
 
-  // Early return for admin pages
-  if (isAdmin && user) {
-    return null;
-  }
-
-  // Early return for loading state
-  if (loading) {
-    return (
-      <header className="bg-background border-b fixed top-0 left-0 right-0 z-50">
-        <div className="container mx-auto flex justify-between items-center py-4 px-4 md:px-0">
-          <Link href="/" className="text-xl md:text-2xl font-bold">
-            trustBank
-          </Link>
-          <ThemeToggle />
-        </div>
-      </header>
-    );
-  }
-
   return (
-    <header className="bg-background border-b fixed top-0 left-0 right-0 z-50">
-      <div className="container mx-auto flex justify-between items-center py-4 px-4 md:px-0">
-        <Link href="/" className="text-xl md:text-2xl font-bold">
-          trustBank
-        </Link>
-        <nav className="hidden md:flex space-x-4 items-center">
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center justify-between">
+        <div className="flex items-center">
+          <Link href="/" className="flex items-center space-x-2">
+            <span className="font-bold text-xl">
+              trustBank
+            </span>
+          </Link>
+        </div>
+
+        <div className="hidden md:flex items-center space-x-6 ml-auto">
+          <NavigationMenu>
+            <NavigationMenuList>
+              <NavigationMenuItem>
+                <Link href="/market" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                  Market
+                </Link>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <Link href="/calculator" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                  Calculator
+                </Link>
+              </NavigationMenuItem>
+              <NavigationMenuItem>
+                <Link href="/about" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                  About
+                </Link>
+              </NavigationMenuItem>
+              {user && (
+                <>
+                  <NavigationMenuItem>
+                    <Link href="/trade" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      Trade
+                    </Link>
+                  </NavigationMenuItem>
+                  <NavigationMenuItem>
+                    <Link href="/dashboard" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      Dashboard
+                    </Link>
+                  </NavigationMenuItem>
+                </>
+              )}
+              {isAdmin && (
+                <NavigationMenuItem>
+                  <Link href="/admin" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                    Admin
+                  </Link>
+                </NavigationMenuItem>
+              )}
+            </NavigationMenuList>
+          </NavigationMenu>
+
+          <ThemeToggle />
+
           {!loading && (
             <>
-              {menuItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={`text-sm ${pathname === item.href ? "font-bold" : ""}`}
-                >
-                  {item.label}
-                </Link>
-              ))}
-              <NavigationMenu>
-                <NavigationMenuList>
-                  <NavigationMenuItem>
-                    <NavigationMenuTrigger className="text-sm">About</NavigationMenuTrigger>
-                    <NavigationMenuContent>
-                      <ul className="grid w-[100px] gap-3 p-4 md:w-[400px] md:grid-cols-2">
-                        {aboutItems.map((item) => (
-                          <li key={item.href}>
-                            <NavigationMenuLink asChild>
-                              <Link
-                                href={item.href}
-                                className="block select-none space-y-1 rounded-md p-3 text-sm leading-none no-underline outline-none transition-colors hover:text-green-600 focus:text-green-600"
-                              >
-                                {item.label}
-                              </Link>
-                            </NavigationMenuLink>
-                          </li>
-                        ))}
-                      </ul>
-                    </NavigationMenuContent>
-                  </NavigationMenuItem>
-                </NavigationMenuList>
-              </NavigationMenu>
               {user ? (
-                <Button variant="outline" size="sm" onClick={handleSignOut}>
-                  Sign Out
-                </Button>
+                <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
               ) : (
-                <Button asChild variant="outline" size="sm">
-                  <Link href="/auth/login">Login</Link>
-                </Button>
+                <>
+                  <Button variant="outline" asChild>
+                    <Link href="/auth/login">Sign In</Link>
+                  </Button>
+                  <Button asChild>
+                    <Link href="/auth/register">Get Started</Link>
+                  </Button>
+                </>
               )}
-              <ThemeToggle />
             </>
           )}
-        </nav>
+        </div>
+
         <div className="md:hidden">
-          <Button variant="ghost" size="sm" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-            {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsOpen(!isOpen)}
+            aria-label="Toggle menu"
+          >
+            {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
         </div>
-      </div>
-      {isMenuOpen && (
-        <div
-          ref={menuRef}
-          className="fixed inset-y-0 right-0 w-64 bg-background shadow-lg z-50 transform transition-transform duration-300 ease-in-out overflow-y-auto"
-          style={{
-            transform: isMenuOpen ? 'translateX(0)' : 'translateX(100%)',
-          }}
-        >
-          <nav className="flex flex-col p-4 space-y-4">
-            <Button variant="ghost" size="sm" className="self-end" onClick={() => setIsMenuOpen(false)}>
-              <X size={20} />
-            </Button>
-            {menuItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`text-sm ${
-                  pathname === item.href ? "font-bold" : ""
-                } transition-colors duration-200 hover:text-primary`}
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {item.label}
-              </Link>
-            ))}
-            <NavigationMenu orientation="vertical">
-              <NavigationMenuList>
-                <NavigationMenuItem>
-                  <NavigationMenuTrigger className="text-sm">About</NavigationMenuTrigger>
-                  <NavigationMenuContent>
-                    <ul className="grid w-full gap-3 p-4">
-                      {aboutItems.map((item) => (
-                        <li key={item.href}>
-                          <NavigationMenuLink
-                            href={item.href}
-                            className="block select-none space-y-1 rounded-md p-3 text-sm leading-none no-underline outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground"
-                            onClick={() => setIsMenuOpen(false)}
-                          >
-                            {item.label}
-                          </NavigationMenuLink>
-                        </li>
-                      ))}
-                    </ul>
-                  </NavigationMenuContent>
-                </NavigationMenuItem>
-              </NavigationMenuList>
-            </NavigationMenu>
-            {!loading && (
-              <>
-                {user ? (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      handleSignOut();
-                      setIsMenuOpen(false);
-                    }}
-                    className="mt-4"
-                  >
-                    Sign Out
-                  </Button>
-                ) : (
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    className="mt-4"
-                    onClick={() => setIsMenuOpen(false)}
-                  >
-                    <Link href="/auth/login">Login</Link>
-                  </Button>
+
+        {isOpen && (
+          <div ref={menuRef} className="absolute top-full left-0 right-0 bg-background border-b md:hidden">
+            <div className="container py-4">
+              <nav className="flex flex-col space-y-4">
+                <Link href="/market" className="text-sm font-medium">Market</Link>
+                <Link href="/calculator" className="text-sm font-medium">Calculator</Link>
+                <Link href="/about" className="text-sm font-medium">About</Link>
+                {user && (
+                  <>
+                    <Link href="/trade" className="text-sm font-medium">Trade</Link>
+                    <Link href="/dashboard" className="text-sm font-medium">Dashboard</Link>
+                  </>
                 )}
-              </>
-            )}
-            <div className="mt-4">
-              <ThemeToggle />
+                {isAdmin && (
+                  <Link href="/admin" className="text-sm font-medium">Admin</Link>
+                )}
+                {!loading && (
+                  <>
+                    {user ? (
+                      <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+                    ) : (
+                      <>
+                        <Button variant="outline" asChild>
+                          <Link href="/auth/login">Sign In</Link>
+                        </Button>
+                        <Button asChild>
+                          <Link href="/auth/register">Get Started</Link>
+                        </Button>
+                      </>
+                    )}
+                  </>
+                )}
+              </nav>
             </div>
-          </nav>
-        </div>
-      )}
+          </div>
+        )}
+      </div>
     </header>
   );
 }

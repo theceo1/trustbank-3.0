@@ -6,13 +6,12 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAuth, AuthContextType } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import Link from 'next/link';
 import { FcGoogle } from 'react-icons/fc';
-import { ThemeToggle } from "@/components/theme-toggle";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2, Mail, Lock, ArrowLeft } from "lucide-react";
-import supabase from '@/lib/supabase/client';
+import { toast } from 'sonner';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -20,7 +19,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signIn, signInWithGoogle } = useAuth() as AuthContextType;
+  const { signIn, signInWithGoogle } = useAuth();
   const searchParams = useSearchParams();
   const redirect = searchParams?.get('redirect');
 
@@ -35,8 +34,9 @@ export default function Login() {
       if (error) throw error;
 
       if (user) {
-        const redirectTo = searchParams?.get('redirect') || '/dashboard';
-        window.location.href = redirectTo;
+        const redirectTo = redirect || '/dashboard';
+        router.push(redirectTo);
+        toast.success('Welcome back!');
       }
     } catch (err) {
       console.error('Login error:', err);
@@ -51,17 +51,12 @@ export default function Login() {
     setError('');
     
     try {
-      const result = await signInWithGoogle();
-      if (!result) return;
-      
-      const { data, error } = result;
+      const { error } = await signInWithGoogle();
       if (error) throw error;
-
-      // No need to check for session immediately as OAuth redirects to another page
+      // OAuth redirects automatically
     } catch (err) {
       console.error('Google sign in error:', err);
       setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -72,7 +67,6 @@ export default function Login() {
       <div className="absolute inset-0 z-0">
         {/* Floating Circles */}
         {[...Array(5)].map((_, i) => {
-          // Calculate values once during render
           const width = 150 + Math.floor(i * 50);
           const height = 150 + Math.floor(i * 50);
           const left = `${20 + (i * 15)}%`;
@@ -160,7 +154,7 @@ export default function Login() {
           </motion.div>
         </div>
 
-        {/* Login Form - Keep existing code but update container */}
+        {/* Login Form */}
         <div className="flex-1 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8">
           <div className="w-full max-w-md">
             <motion.div
@@ -175,6 +169,21 @@ export default function Login() {
                   Continue your journey with <span className="text-green-600 font-semibold">trustBank</span>
                 </p>
               </div>
+
+              <AnimatePresence mode="wait">
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Alert variant="destructive" className="mb-6">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  </motion.div>
+                )}
+              </AnimatePresence>
 
               <form onSubmit={handleLogin} className="space-y-6">
                 <div className="space-y-4">
@@ -259,7 +268,7 @@ export default function Login() {
                 Sign in with Google
               </Button>
 
-              <p className="text-center text-sm text-gray-600">
+              <p className="text-center text-sm text-gray-600 mt-6">
                 Don&apos;t have an account?{' '}
                 <Link href="/auth/signup" className="font-medium text-green-600 hover:text-green-300">
                   Sign up

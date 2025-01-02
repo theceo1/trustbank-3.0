@@ -47,14 +47,19 @@ export async function GET() {
 
     // Fetch wallet balances from Quidax
     const quidaxClient = getQuidaxClient();
-    const wallets = await quidaxClient.get(`/users/${profile.quidax_id}/wallets`);
+    const response = await quidaxClient.get(`/users/${profile.quidax_id}/wallets`);
 
-    return NextResponse.json({ wallets });
+    return NextResponse.json({
+      status: 'success',
+      message: 'Wallet balances retrieved successfully',
+      data: response
+    });
+
   } catch (error: any) {
     console.error('Error fetching wallet balances:', error);
     return NextResponse.json(
-      { message: error.message || 'Internal server error' },
-      { status: error.status || 500 }
+      { message: error.message || 'Failed to fetch wallet balances' },
+      { status: 500 }
     );
   }
 } 

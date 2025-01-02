@@ -14,6 +14,8 @@ const PUBLIC_PATHS = [
   '/manifest.json'
 ];
 
+const ADMIN_PATHS = ['/admin'];
+
 export async function middleware(req: NextRequest) {
   const res = NextResponse.next();
 
@@ -40,6 +42,23 @@ export async function middleware(req: NextRequest) {
       return response;
     }
 
+    // Check if trying to access admin routes
+    if (ADMIN_PATHS.some(path => req.nextUrl.pathname.startsWith(path))) {
+      if (!session) {
+        const redirectUrl = new URL('/auth/login', req.url);
+        redirectUrl.searchParams.set('redirect', req.url);
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      // Check if user is admin
+      if (!session.user.app_metadata?.is_admin) {
+        return NextResponse.redirect(new URL('/auth/login', req.url));
+      }
+
+      return res;
+    }
+
+    // For non-admin routes
     if (!session) {
       const redirectUrl = new URL('/auth/login', req.url);
       redirectUrl.searchParams.set('redirect', req.url);

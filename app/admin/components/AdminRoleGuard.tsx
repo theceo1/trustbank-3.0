@@ -5,9 +5,9 @@ interface AdminRoleGuardProps {
 }
 
 export function AdminRoleGuard({ children }: AdminRoleGuardProps) {
-  const { adminUser } = useAdminAuth();
+  const { user, isAdmin } = useAdminAuth();
 
-  if (!adminUser) {
+  if (!user || !isAdmin) {
     return null;
   }
 

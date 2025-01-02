@@ -3,182 +3,143 @@
 
 import { createContext, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import supabase from '@/lib/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import { AdminRole, AdminPermission } from '../types/admin';
-import { Database } from '@/types/supabase';
-
-type AdminProfileRow = Database['public']['Tables']['admin_profiles']['Row'];
-
-interface AdminUser {
-  id: string;
-  user_id: string;
-  role: AdminRole;
-  permissions: AdminPermission;
-  is_active: boolean;
-  last_active: string;
-}
+import supabaseClient from '@/app/lib/supabase/client';
+import { toast } from 'sonner';
+import { AdminService } from '@/app/lib/services/admin';
 
 interface AdminAuthContextType {
+  user: any;
+  signIn: (email: string, password: string) => Promise<{ user: any; error: any }>;
+  signOut: () => Promise<void>;
+  loading: boolean;
+  hasPermission: (resource: string, action: string) => boolean;
   isAdmin: boolean;
   isLoading: boolean;
-  adminUser: AdminUser | null;
-  hasPermission: (resource: string, action: string) => boolean;
-  refreshAdminStatus: () => Promise<void>;
-  logout: () => Promise<void>;
 }
 
-const AdminAuthContext = createContext<AdminAuthContextType>({
-  isAdmin: false,
-  isLoading: true,
-  adminUser: null,
-  hasPermission: () => false,
-  refreshAdminStatus: async () => {},
-  logout: async () => {}
-});
+const AdminAuthContext = createContext<AdminAuthContextType | undefined>(undefined);
 
-const RolePermissions: Record<AdminRole, AdminPermission> = {
-  super_admin: {
-    canManageUsers: true,
-    canManageAdmins: true,
-    canViewReports: true,
-    canManageSettings: true,
-    canHandleSupport: true,
-    canViewTransactions: true,
-    canManageReferrals: true
-  },
-  admin: {
-    canManageUsers: true,
-    canManageAdmins: false,
-    canViewReports: true,
-    canManageSettings: false,
-    canHandleSupport: true,
-    canViewTransactions: true,
-    canManageReferrals: true
-  },
-  moderator: {
-    canManageUsers: false,
-    canManageAdmins: false,
-    canViewReports: false,
-    canManageSettings: false,
-    canHandleSupport: true,
-    canViewTransactions: true,
-    canManageReferrals: false
-  },
-  support: {
-    canManageUsers: false,
-    canManageAdmins: false,
-    canViewReports: false,
-    canManageSettings: false,
-    canHandleSupport: true,
-    canViewTransactions: true,
-    canManageReferrals: false
-  }
-};
-
-export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
+export function AdminProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [permissions, setPermissions] = useState<Record<string, string[]>>({});
   const [isAdmin, setIsAdmin] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const router = useRouter();
-  const { toast } = useToast();
-
-  const refreshAdminStatus = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      setAdminUser(null);
-      
-      if (!session) {
-        setIsAdmin(false);
-        setAdminUser(null);
-        setIsLoading(false);
-        router.push('/auth/login?redirect=/admin/dashboard');
-        return;
-      }
-
-      const { data: adminData, error } = await supabase
-        .from('admin_profiles')
-        .select('id, user_id, role, is_active, last_active')
-        .eq('user_id', session.user.id)
-        .maybeSingle();
-
-      if (!adminData || error) {
-        setIsAdmin(false);
-        setAdminUser(null);
-        router.push('/dashboard');
-        return;
-      }
-
-      if (adminData.is_active) {
-        const adminUserData: AdminUser = {
-          id: adminData.id,
-          user_id: adminData.user_id,
-          role: adminData.role as AdminRole,
-          is_active: adminData.is_active,
-          last_active: adminData.last_active,
-          permissions: RolePermissions[adminData.role as AdminRole]
-        };
-
-        setIsAdmin(true);
-        setAdminUser(adminUserData);
-
-        // Update last active timestamp
-        await supabase
-          .from('admin_profiles')
-          .update({
-            last_active: new Date().toISOString()
-          })
-          .eq('user_id', session.user.id);
-      } else {
-        setIsAdmin(false);
-        setAdminUser(null);
-        router.push('/dashboard');
-      }
-    } catch (error) {
-      console.error('Admin check error:', error);
-      toast({
-        title: "Authentication Error",
-        description: "Failed to verify admin status",
-        variant: "destructive"
-      });
-      router.push('/dashboard');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const hasPermission = (resource: string, action: string) => {
-    return adminUser?.permissions[resource] || false;
-  };
-
-  const logout = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (!error) {
-      setIsAdmin(false);
-      setAdminUser(null);
-      router.push('/auth/login');
-    }
-  };
 
   useEffect(() => {
-    refreshAdminStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    // Check active sessions and set the user
+    const checkUser = async () => {
+      try {
+        const { data: { session }, error } = await supabaseClient.auth.getSession();
+        
+        if (error) throw error;
+        
+        if (session?.user) {
+          if (!session.user.app_metadata?.is_admin) {
+            toast.error('Access denied. This area is for administrators only.');
+            router.push('/auth/login');
+            return;
+          }
+          setUser(session.user);
+          setIsAdmin(true);
+          
+          // Fetch admin permissions
+          const { permissions: adminPermissions } = await AdminService.checkAdminAccess(session.user.id);
+          setPermissions(adminPermissions);
+        }
+      } catch (error) {
+        console.error('Error checking user session:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    checkUser();
+
+    // Listen for auth state changes
+    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        if (!session.user.app_metadata?.is_admin) {
+          toast.error('Access denied. This area is for administrators only.');
+          router.push('/auth/login');
+          return;
+        }
+        setUser(session.user);
+        setIsAdmin(true);
+        
+        // Fetch admin permissions
+        const { permissions: adminPermissions } = await AdminService.checkAdminAccess(session.user.id);
+        setPermissions(adminPermissions);
+      } else {
+        setUser(null);
+        setPermissions({});
+        setIsAdmin(false);
+      }
+      setLoading(false);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [router]);
+
+  const signIn = async (email: string, password: string) => {
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      if (!data.user?.app_metadata?.is_admin) {
+        throw new Error('Access denied. This area is for administrators only.');
+      }
+
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error('Error signing in:', error);
+      return { user: null, error };
+    }
+  };
+
+  const signOut = async () => {
+    try {
+      const { error } = await supabaseClient.auth.signOut();
+      if (error) throw error;
+      router.push('/admin/auth/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast.error('Failed to sign out');
+    }
+  };
+
+  const hasPermission = (resource: string, action: string): boolean => {
+    if (!permissions[resource]) return false;
+    return permissions[resource].includes(action);
+  };
+
+  const value = {
+    user,
+    signIn,
+    signOut,
+    loading,
+    hasPermission,
+    isAdmin,
+    isLoading: loading,
+  };
 
   return (
-    <AdminAuthContext.Provider 
-      value={{ 
-        isAdmin, 
-        isLoading, 
-        adminUser, 
-        hasPermission,
-        refreshAdminStatus,
-        logout 
-      }}
-    >
+    <AdminAuthContext.Provider value={value}>
       {children}
     </AdminAuthContext.Provider>
   );
 }
 
-export const useAdminAuth = () => useContext(AdminAuthContext);
+export const useAdminAuth = () => {
+  const context = useContext(AdminAuthContext);
+  if (context === undefined) {
+    throw new Error('useAdminAuth must be used within an AdminProvider');
+  }
+  return context;
+};

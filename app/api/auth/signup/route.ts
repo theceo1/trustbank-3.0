@@ -1,92 +1,66 @@
 // app/api/auth/signup/route.ts
-import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+import { createClient } from '@/lib/supabase/server';
+import { QuidaxClient } from '@/app/lib/services/quidax-client';
+import { APIError, handleApiError } from '@/app/lib/api-utils';
 
 export async function POST(request: Request) {
   try {
-    const { email, password, name } = await request.json();
+    const body = await request.json();
+    const { email, password, name } = body;
 
-    // Create Quidax account first
-    const quidaxResponse = await QuidaxWalletService.createSubAccount(email, name)
-      .catch(error => {
-        console.error('Failed to create Quidax account:', error);
-        throw new Error(`Quidax account creation failed: ${error.message}`);
-      });
-
-    if (!quidaxResponse?.data?.id) {
-      throw new Error('Invalid response from Quidax: Missing sub-account ID');
-    }
-
-    // Create Supabase auth user
-    const { data: user, error: authError } = await supabase.auth.signUp({
+    // Create Supabase user
+    const supabase = createClient();
+    const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
-      options: {
-        data: {
-          full_name: name
-        }
-      }
     });
 
     if (authError) {
-      // If auth fails, we should log this as a critical error since we already created the Quidax account
-      console.error('Auth failed after Quidax account creation:', {
-        quidaxId: quidaxResponse.data.id,
-        error: authError
-      });
-      return NextResponse.json(
-        { error: authError.message },
-        { status: 400 }
-      );
+      throw new APIError(authError.message, 400);
     }
 
-    if (!user.user?.id) {
-      throw new Error('User creation failed: No user ID returned');
-    }
-
-    // Create user profile with Quidax ID
-    const { error: profileError } = await supabase
-      .from('user_profiles')
-      .insert({
-        user_id: user.user.id,
-        quidax_id: quidaxResponse.data.id,
-        full_name: name,
-        email: email,
-        kyc_level: 0,  // Starting at level 0 (unverified)
-        is_verified: false,
-        kyc_status: 'pending',  // pending, verified, rejected
-        kyc_submitted_at: null,
-        kyc_verified_at: null
+    // Create Quidax sub-account
+    try {
+      const response = await QuidaxClient.post('/users/create-subaccount', {
+        email,
+        name
       });
 
-    if (profileError) {
-      console.error('Failed to create user profile:', {
-        userId: user.user.id,
-        quidaxId: quidaxResponse.data.id,
-        error: profileError
+      if (!response.ok) {
+        throw new Error('Failed to create Quidax sub-account');
+      }
+
+      const data = await response.json();
+      if (data.status !== 'success') {
+        throw new Error(data.message || 'Failed to create Quidax sub-account');
+      }
+
+      // Update user profile with Quidax ID
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ quidax_id: data.data.id })
+        .eq('id', authData.user!.id);
+
+      if (updateError) {
+        throw new Error('Failed to update user profile');
+      }
+
+      return NextResponse.json({
+        status: 'success',
+        data: {
+          user: authData.user,
+          quidax_id: data.data.id
+        }
       });
-      return NextResponse.json(
-        { error: 'Failed to create user profile' },
-        { status: 500 }
-      );
+    } catch (error: unknown) {
+      // If Quidax account creation fails, delete the Supabase user
+      if (authData.user) {
+        await supabase.auth.admin.deleteUser(authData.user.id);
+      }
+      throw error;
     }
-
-    return NextResponse.json({
-      status: 'success',
-      message: 'User created successfully'
-    });
-
-  } catch (error: any) {
-    console.error('Signup error:', error);
-    return NextResponse.json(
-      { error: error.message || 'Failed to create account' },
-      { status: 500 }
-    );
+  } catch (error: unknown) {
+    return handleApiError(error);
   }
 } 

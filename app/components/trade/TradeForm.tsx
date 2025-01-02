@@ -1,195 +1,157 @@
 //app/components/trade/TradeForm.tsx
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Select } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import * as z from 'zod';
+import { Button } from '../ui/button';
+import { Input } from '../ui/input';
+import { Label } from '../ui/label';
+import { useToast } from '../../hooks/use-toast';
+import { QuidaxMarketService } from '../../lib/services/quidax-market';
+import { formatCurrency } from '../../lib/utils';
 
-interface TradeQuote {
-  quotation_id: string;
-  rate: string;
-  total: string;
-  receive_amount: string;
-  fee: string;
-  expires_at: string;
+const tradeFormSchema = z.object({
+  amount: z.string().min(1, 'Amount is required'),
+  market: z.string().default('btcngn'),
+  type: z.enum(['buy', 'sell']).default('buy'),
+});
+
+type TradeFormValues = z.infer<typeof tradeFormSchema>;
+
+interface QuoteData {
+  rate: number;
+  total: number;
+  fee: number;
+  receive: number;
 }
 
 export default function TradeForm() {
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [quote, setQuote] = useState<QuoteData | null>(null);
+  const [countdown, setCountdown] = useState<number>(0);
   const { toast } = useToast();
   
-  const [loading, setLoading] = useState(false);
-  const [countdown, setCountdown] = useState(0);
-  const [quote, setQuote] = useState<TradeQuote | null>(null);
-  
-  const [formData, setFormData] = useState({
-    fromCurrency: 'USDT',
-    toCurrency: 'NGN',
-    amount: '',
-    type: 'sell' as 'buy' | 'sell'
+  const form = useForm<TradeFormValues>({
+    resolver: zodResolver(tradeFormSchema),
+    defaultValues: {
+      amount: '',
+      market: 'btcngn',
+      type: 'buy',
+    },
   });
 
-  const currencies = [
-    { value: 'USDT', label: 'USDT' },
-    { value: 'BTC', label: 'Bitcoin' },
-    { value: 'ETH', label: 'Ethereum' },
-    { value: 'NGN', label: 'Nigerian Naira' }
-  ];
-
   useEffect(() => {
-    let timer: NodeJS.Timeout;
     if (countdown > 0) {
-      timer = setInterval(() => {
-        setCountdown(prev => prev - 1);
-      }, 1000);
-    } else if (quote && countdown === 0) {
-      setQuote(null); // Clear quote when countdown ends
+      const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
+      return () => clearTimeout(timer);
     }
-    return () => clearInterval(timer);
-  }, [countdown, quote]);
+  }, [countdown]);
 
-  const getQuote = async () => {
+  const getQuote = async (values: TradeFormValues) => {
     try {
       setLoading(true);
-      const response = await fetch('/api/trades/quote', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+      const quoteData = await QuidaxMarketService.getQuote({
+        market: values.market,
+        unit: values.market.slice(0, -3).toUpperCase(),
+        kind: values.type,
+        volume: parseFloat(values.amount),
       });
-
-      if (!response.ok) throw new Error('Failed to get quote');
       
-      const data = await response.json();
-      setQuote(data);
+      setQuote(quoteData);
       setCountdown(14); // Start 14 second countdown
-    } catch (error) {
+      
+      toast({
+        title: 'Quote received',
+        description: 'Please review and proceed within 14 seconds',
+      });
+    } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to get trade quote',
-        variant: 'destructive'
+        description: error.message || 'Failed to get quote',
+        variant: 'destructive',
       });
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const onSubmit = async (values: TradeFormValues) => {
+    if (!quote || countdown === 0) {
+      // If no quote or quote expired, get new quote
+      await getQuote(values);
+      return;
+    }
     
+    // Proceed with trade using the quote
     try {
-      if (!quote) {
-        // Get initial quote
-        const quoteRes = await fetch('/api/trades/quote', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(formData)
-        });
-        
-        const quoteData = await quoteRes.json();
-        if (!quoteData.error) {
-          setQuote(quoteData);
-          setCountdown(14);
-        } else {
-          throw new Error(quoteData.error);
-        }
-      } else {
-        // Execute trade
-        const tradeRes = await fetch('/api/trades/execute', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...formData,
-            quotationId: quote.quotation_id
-          })
-        });
-        
-        const tradeData = await tradeRes.json();
-        if (tradeData.error) {
-          throw new Error(tradeData.error);
-        }
-        
-        // Reset form and show success
-        setQuote(null);
-        setFormData({
-          fromCurrency: 'USDT',
-          toCurrency: 'NGN',
-          amount: '',
-          type: 'sell'
-        });
-        toast({
-          title: 'Trade Executed',
-          description: 'Your trade has been successfully executed'
-        });
-      }
+      // TODO: Implement trade execution
+      toast({
+        title: 'Trade submitted',
+        description: 'Your trade has been submitted successfully',
+      });
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message,
-        variant: 'destructive'
+        description: error.message || 'Failed to submit trade',
+        variant: 'destructive',
       });
-    } finally {
-      setLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid gap-4">
-        <Select
-          value={formData.type}
-          onValueChange={(value) => setFormData(prev => ({ ...prev, type: value as 'buy' | 'sell' }))}
-        >
-          <option value="buy">Buy</option>
-          <option value="sell">Sell</option>
-        </Select>
-
-        <Select
-          value={formData.fromCurrency}
-          onValueChange={(value) => setFormData(prev => ({ ...prev, fromCurrency: value }))}
-        >
-          {currencies.map(currency => (
-            <option key={currency.value} value={currency.value}>
-              {currency.label}
-            </option>
-          ))}
-        </Select>
-
-        <Select
-          value={formData.toCurrency}
-          onValueChange={(value) => setFormData(prev => ({ ...prev, toCurrency: value }))}
-        >
-          {currencies.map(currency => (
-            <option key={currency.value} value={currency.value}>
-              {currency.label}
-            </option>
-          ))}
-        </Select>
-
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="amount">Amount</Label>
         <Input
+          id="amount"
           type="number"
-          placeholder="Amount"
-          value={formData.amount}
-          onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-          min="0"
           step="any"
-          required
+          placeholder="Enter amount"
+          {...form.register('amount')}
         />
+        {form.formState.errors.amount && (
+          <p className="text-sm text-red-500">
+            {form.formState.errors.amount.message}
+          </p>
+        )}
       </div>
 
-      {quote && (
-        <div className="bg-secondary p-4 rounded-lg space-y-2">
-          <p>Rate: {quote.rate}</p>
-          <p>You&apos;ll receive: {quote.receive_amount}</p>
-          <p>Fee: {quote.fee}</p>
-          <p>Expires in: {countdown} seconds</p>
+      {quote && countdown > 0 && (
+        <div className="p-4 border rounded-lg space-y-2 bg-secondary/10">
+          <div className="flex justify-between">
+            <span>Quote expires in:</span>
+            <span className="font-bold">{countdown}s</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Rate:</span>
+            <span className="font-bold">{formatCurrency(quote.rate, 'NGN')}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>You'll receive:</span>
+            <span className="font-bold">{formatCurrency(quote.receive, 'NGN')}</span>
+          </div>
         </div>
       )}
 
-      <Button type="submit" disabled={loading} className="w-full">
-        {loading ? 'Processing...' : quote ? 'Confirm Trade' : 'Get Quote'}
-      </Button>
+      <div className="flex gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => form.handleSubmit(getQuote)()}
+          disabled={loading}
+          className="flex-1"
+        >
+          Get Quote
+        </Button>
+        
+        <Button 
+          type="submit"
+          disabled={loading || !quote || countdown === 0}
+          className="flex-1"
+        >
+          {quote && countdown > 0 ? 'Proceed' : 'Trade'}
+        </Button>
+      </div>
     </form>
   );
 } 

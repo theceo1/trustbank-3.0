@@ -3,12 +3,12 @@
 
 import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { useAdminAuth } from "./context/AdminAuthContext";
+import { useAdminAuth, AdminProvider } from "./context/AdminAuthContext";
 import AdminHeader from "./components/AdminHeader";
 import AdminSidebar from "./components/AdminSidebar";
 import { useToast } from "@/hooks/use-toast";
 
-export default function AdminLayout({
+function AdminLayoutContent({
   children,
 }: {
   children: React.ReactNode;
@@ -43,5 +43,19 @@ export default function AdminLayout({
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  return (
+    <AdminProvider>
+      <AdminLayoutContent>
+        {children}
+      </AdminLayoutContent>
+    </AdminProvider>
   );
 }

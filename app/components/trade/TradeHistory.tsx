@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/app/components/ui/card";
 import { formatDate, formatCurrency } from "@/app/lib/utils";
 import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
 import { TradeDetails, TradeStatus } from '@/app/types/trade';
-import { useToast } from '@/hooks/use-toast';
+import { useToast } from '@/app/hooks/use-toast';
 import { useAuth } from '@/context/AuthContext';
+import { Button } from '@/app/components/ui/button';
+import { RefreshCw } from 'lucide-react';
 
 const statusColors: Record<TradeStatus, string> = {
   PENDING: 'text-yellow-600',
@@ -13,37 +15,37 @@ const statusColors: Record<TradeStatus, string> = {
   FAILED: 'text-red-600'
 } as const;
 
-interface TradeHistoryProps {
-  userId: string;
-}
-
 export function TradeHistory() {
   const [trades, setTrades] = useState<TradeDetails[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchTrades = async () => {
-      if (!user) return;
-      
-      try {
-        const userTrades = await UnifiedTradeService.getTradeHistory(user.id);
-        setTrades(userTrades);
-      } catch (error) {
-        toast({
-          id: "trade-history-error",
-          title: 'Error',
-          description: 'Failed to load trade history',
-          variant: 'destructive'
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
+  const fetchTrades = async () => {
+    if (!user) return;
+    
+    try {
+      setLoading(true);
+      setError(null);
+      const userTrades = await UnifiedTradeService.getTradeHistory(user.id);
+      setTrades(userTrades);
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to load trade history';
+      setError(errorMessage);
+      toast({
+        title: 'Error',
+        description: errorMessage,
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     fetchTrades();
-  }, [user, toast]);
+  }, [user]);
 
   if (loading) {
     return (
@@ -57,8 +59,60 @@ export function TradeHistory() {
     );
   }
 
+  if (error) {
+    return (
+      <Card className="bg-destructive/10">
+        <CardContent className="p-6">
+          <div className="flex flex-col items-center space-y-4">
+            <p className="text-destructive text-sm">{error}</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={fetchTrades}
+              className="flex items-center space-x-2"
+            >
+              <RefreshCw className="h-4 w-4" />
+              <span>Retry</span>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (trades.length === 0) {
+    return (
+      <Card>
+        <CardContent className="p-8 text-center">
+          <p className="text-muted-foreground">No trades found</p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchTrades}
+            className="mt-4"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={fetchTrades}
+          className="flex items-center space-x-2"
+        >
+          <RefreshCw className="h-4 w-4" />
+          <span>Refresh</span>
+        </Button>
+      </div>
+
       {trades.map((trade) => (
         <Card key={trade.id}>
           <CardContent className="p-4">
@@ -81,14 +135,6 @@ export function TradeHistory() {
           </CardContent>
         </Card>
       ))}
-
-      {trades.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center text-muted-foreground">
-            No trades found
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

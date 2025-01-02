@@ -8,9 +8,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import supabase from '@/lib/supabase/client';  
-import { Modal } from "@/app/components/ui/modal";
+import { Modal } from "@/components/ui/modal";
 import { Mail, Phone, MapPin, MessageSquare, Loader2, Globe, Twitter, Instagram, Facebook } from 'lucide-react';
-import { Separator } from "@/components/ui/separator";
 import Link from 'next/link';
 
 export default function ContactPage() {
@@ -22,7 +21,7 @@ export default function ContactPage() {
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setIsSubmitting(true);
     setError(null);

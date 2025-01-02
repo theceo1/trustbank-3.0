@@ -7,8 +7,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { useAuth, AuthContextType } from '@/context/AuthContext';
+import { Checkbox } from "@/app/components/ui/checkbox";
+import { useAuth, AuthContextType } from '@/app/context/AuthContext';
 import Link from 'next/link';
 import { FcGoogle } from 'react-icons/fc';
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -18,8 +18,8 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { generateReferralCode, validateReferralCode } from '@/utils/referral';
+} from "@/app/components/ui/tooltip";
+import { generateReferralCode, validateReferralCode } from '@/app/utils/referral';
 import supabase from '@/lib/supabase/client';
 import { useToast } from "@/hooks/use-toast";
 
@@ -151,7 +151,7 @@ export default function SignUp() {
     setError('');
     
     try {
-      const { data, error } = await signInWithGoogle();
+      const { error } = await signInWithGoogle();
       if (error) throw error;
       
       // Google OAuth will handle the redirect automatically
