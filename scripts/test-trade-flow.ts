@@ -3,7 +3,9 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import debug from 'debug';
-import { QuidaxService } from './services/quidax';
+import { QuidaxWalletService } from '../app/lib/services/quidax-wallet';
+import { QuidaxMarketService } from '../app/lib/services/quidax-market';
+import { QuidaxSwapService } from '../app/lib/services/quidax-swap';
 
 const log = debug('test:trade');
 debug.enable('test:*');
@@ -41,20 +43,17 @@ async function testTradeFlow() {
 
     // Check initial balances
     log('📊 Checking initial balances...');
-    const user3Balance = await QuidaxService.checkWalletBalance(
-      user3.quidax_id,
-      'usdt'
-    );
+    const user3Balance = await QuidaxWalletService.getWallet(user3.quidax_id, 'usdt');
     log('User3 USDT Balance:', user3Balance);
 
     // Get market rate for reference
     log('📊 Checking current market rate...');
-    const marketRate = await QuidaxService.getMarketStats('usdtngn');
+    const marketRate = await QuidaxMarketService.getMarketTicker('usdtngn');
     log('Current USDT/NGN rate:', marketRate);
 
     // Create swap quotation
     log(`💱 Creating swap quotation for ${USDT_AMOUNT} USDT...`);
-    const quotation = await QuidaxService.createSwapQuotation({
+    const quotation = await QuidaxSwapService.createSwapQuotation({
       user_id: user3.quidax_id,
       from_currency: 'usdt',
       to_currency: 'ngn',
@@ -66,13 +65,13 @@ async function testTradeFlow() {
 
     // Confirm the swap
     log('🔄 Confirming swap...');
-    const confirmedSwap = await QuidaxService.confirmSwapQuotation({
-      user_id: user3.quidax_id,
-      quotation_id: quotation.id
-    });
+    const confirmedSwap = await QuidaxSwapService.confirmSwap(
+      user3.quidax_id,
+      quotation.id
+    );
 
     // Check final balances
-    const user3FinalBalance = await QuidaxService.checkWalletBalance(
+    const user3FinalBalance = await QuidaxWalletService.getWallet(
       user3.quidax_id,
       'usdt'
     );

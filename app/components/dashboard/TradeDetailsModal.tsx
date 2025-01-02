@@ -1,3 +1,4 @@
+//app/components/dashboard/TradeDetailsModal.tsx
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { PaymentMethodType } from "@/app/types/payment";
 import { formatCurrency } from "@/app/lib/utils";

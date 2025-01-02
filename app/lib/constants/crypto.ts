@@ -1,3 +1,4 @@
+//app/lib/constants/crypto.ts
 export const currencyIds = {
   BTC: 'bitcoin',
   ETH: 'ethereum',
@@ -14,9 +15,10 @@ export const SUPPORTED_CRYPTOCURRENCIES = [
 
 export const FIAT_CURRENCIES = ['NGN'] as const;
 
-export const TRADING_PAIRS = SUPPORTED_CRYPTOCURRENCIES.map(crypto => 
-  `${crypto.symbol}_ngn`
-);
+export const TRADING_PAIRS = [
+  ...SUPPORTED_CRYPTOCURRENCIES.map(crypto => `${crypto.symbol}_ngn`),
+  'ngn_usd'
+] as const;
 
 export const DEFAULT_TRADING_PAIR = 'btc_ngn';
 

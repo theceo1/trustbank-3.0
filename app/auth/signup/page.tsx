@@ -37,8 +37,10 @@ export default function SignUp() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('Starting signup process...');
     
     if (!acceptedTerms) {
+      console.log('Terms not accepted');
       toast({
         title: "Terms Required",
         description: "Please accept the terms and conditions to continue",
@@ -51,18 +53,70 @@ export default function SignUp() {
     setError('');
     
     try {
-      const { data: { user: newUser }, error: signUpError } = await supabase.auth.signUp({
+      console.log('Attempting to create auth user with:', { email, name });
+      
+      // First create the user with minimal data
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
-        password,
-        options: {
-          data: {
-            full_name: name
-          }
-        }
+        password
       });
 
-      if (signUpError) throw signUpError;
-      if (!newUser) throw new Error('Failed to create account');
+      console.log('Auth signup response:', { data, error: signUpError });
+
+      if (signUpError) {
+        console.error('Signup error details:', {
+          message: signUpError.message,
+          status: signUpError.status,
+          name: signUpError.name
+        });
+        throw signUpError;
+      }
+
+      if (!data.user) {
+        console.error('No user data returned from signup');
+        throw new Error('Failed to create account');
+      }
+
+      console.log('Auth user created successfully:', {
+        userId: data.user.id,
+        email: data.user.email
+      });
+
+      // Update user metadata separately
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { full_name: name }
+      });
+
+      if (updateError) {
+        console.error('Error updating user metadata:', updateError);
+      }
+
+      // Create user profile after successful signup
+      console.log('Attempting to create user profile for:', data.user.id);
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .insert({
+          id: data.user.id,
+          user_id: data.user.id,
+          full_name: name,
+          is_verified: false,
+          kyc_level: 0,
+          is_test: false
+        })
+        .select()
+        .single();
+
+      if (profileError) {
+        console.error('Profile creation error details:', {
+          message: profileError.message,
+          code: profileError.code,
+          details: profileError.details,
+          hint: profileError.hint
+        });
+        throw new Error(`Failed to create user profile: ${profileError.message}`);
+      }
+
+      console.log('User profile created successfully:', profileData);
 
       router.push('/dashboard');
       
@@ -72,7 +126,14 @@ export default function SignUp() {
         variant: "default"
       });
     } catch (error) {
-      console.error('Signup error:', error);
+      console.error('Signup process failed:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
       setError(error instanceof Error ? error.message : 'Failed to create account');
       toast({
         title: "Error",
@@ -81,6 +142,7 @@ export default function SignUp() {
       });
     } finally {
       setIsLoading(false);
+      console.log('Signup process completed');
     }
   };
 

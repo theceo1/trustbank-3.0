@@ -3,7 +3,6 @@
 
 import { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { TradeForm } from './components/TradeForm';
 import { MarketStats } from './components/MarketStats';
 import { TradeHistory } from './components/TradeHistory';
 import { useAuth } from '@/context/AuthContext';
@@ -29,7 +28,6 @@ export default function TradePage() {
             <CardTitle>Trade Crypto</CardTitle>
           </CardHeader>
           <CardContent>
-            <TradeForm />
           </CardContent>
         </Card>
 

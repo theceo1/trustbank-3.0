@@ -1,7 +1,7 @@
 // app/lib/services/unifiedTrade.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { TradeParams, TradeDetails, TradeStatus } from '@/app/types/trade';
-import { QuidaxService } from './quidax';
+import { QuidaxSwapService } from './quidax-swap';
 import { Database } from '@/app/types/database';
 import { handleError } from '@/app/lib/utils/errorHandler';
 import { MarketRateService } from './market-rate';
@@ -12,7 +12,7 @@ export class UnifiedTradeService {
   static async createTrade(params: TradeParams): Promise<TradeDetails> {
     try {
       // Create swap quotation in Quidax
-      const quotation = await QuidaxService.createSwapQuotation({
+      const quotation = await QuidaxSwapService.createSwapQuotation({
         user_id: params.user_id,
         from_currency: params.currency.toLowerCase(),
         to_currency: 'ngn',

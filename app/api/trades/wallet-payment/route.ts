@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxSwapService } from '@/app/lib/services/quidax-swap';
 
 export async function POST(request: NextRequest) {
   try {
@@ -39,10 +39,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Confirm the quotation
-    const result = await QuidaxService.confirmQuotation({
-      userId: trade.users.quidax_id,
-      quotationId: trade.quidax_reference
-    });
+    const result = await QuidaxSwapService.confirmSwap(
+      trade.users.quidax_id,
+      trade.quidax_reference
+    );
 
     // Update trade status
     await supabase

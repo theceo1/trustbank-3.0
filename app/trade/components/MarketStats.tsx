@@ -19,31 +19,24 @@ export function MarketStats() {
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
-        const response = await fetch('/api/crypto/prices?' + new URLSearchParams({
-          ids: 'bitcoin,ethereum,tether',
-          vs_currencies: 'usd'
-        }));
+        const response = await fetch('/api/market/prices?market=btcngn');
         
         if (!response.ok) throw new Error('Failed to fetch market data');
         
-        const data = await response.json();
-        const formattedData = {
-          btc: {
-            current_price: data.bitcoin?.usd || 0,
-            price_change_percentage_24h: 0,
-            symbol: 'btc'
-          },
-          eth: {
-            current_price: data.ethereum?.usd || 0,
-            price_change_percentage_24h: 0,
-            symbol: 'eth'
-          },
-          usdt: {
-            current_price: data.tether?.usd || 0,
-            price_change_percentage_24h: 0,
-            symbol: 'usdt'
-          }
-        };
+        const { status, data } = await response.json();
+        
+        if (status !== 'success' || !data) {
+          throw new Error('Invalid response format');
+        }
+
+        const formattedData = data.reduce((acc: Record<string, CryptoData>, market: any) => {
+          acc[market.symbol] = {
+            current_price: market.price,
+            price_change_percentage_24h: market.change24h,
+            symbol: market.symbol
+          };
+          return acc;
+        }, {});
         
         setMarketData(formattedData);
         setError(null);
@@ -95,7 +88,7 @@ export function MarketStats() {
                 <TrendingDown className="h-4 w-4 text-red-500" />
               }
             </div>
-            <p className="text-2xl font-bold mt-2">{formatCurrency(data.current_price)}</p>
+            <p className="text-2xl font-bold mt-2">{formatCurrency(data.current_price, 'ngn')}</p>
             <p className={`text-sm ${data.price_change_percentage_24h > 0 ? 'text-green-500' : 'text-red-500'}`}>
               {data.price_change_percentage_24h > 0 ? '+' : ''}
               {data.price_change_percentage_24h.toFixed(2)}%

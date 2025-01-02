@@ -1,34 +1,100 @@
-// app/lib/services/quidax.ts
+import { QuidaxUser, QuidaxWebhookEvent } from '@/app/types/quidax';
+import { QuidaxMarketService } from './quidax-market';
+import { QuidaxSwapService } from './quidax-swap';
+import { QuidaxWalletService } from './quidax-wallet';
 import { createHmac } from 'crypto';
-import { QuidaxError } from '@/app/types/errors';
-import { PaymentStatus } from '@/app/types/payment';
-import { QuidaxWallet, QuidaxQuotation, QuidaxSwapTransaction } from '@/app/types/quidax';
 
 export class QuidaxService {
-  private baseUrl: string;
-  private apiKey: string;
+  private static baseUrl = process.env.QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static apiKey = process.env.QUIDAX_SECRET_KEY;
+  private static webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
 
-  constructor() {
-    this.baseUrl = process.env.QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
-    this.apiKey = process.env.QUIDAX_SECRET_KEY || '';
+  static async createUser(params: {
+    email: string;
+    first_name: string;
+    last_name: string;
+    phone?: string;
+    country?: string;
+  }): Promise<QuidaxUser> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/users`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(params)
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create user');
+      }
+
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.error('Create user error:', error);
+      throw error;
+    }
   }
 
-  async getWallet(userId: string, currency: string) {
-    const response = await fetch(
-      `${this.baseUrl}/users/${userId}/wallets/${currency}`,
-      {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json'
+  static async getUser(userId: string): Promise<QuidaxUser> {
+    try {
+      const response = await fetch(
+        `${this.baseUrl}/users/${userId}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${this.apiKey}`,
+            'Accept': 'application/json'
+          }
         }
-      }
-    );
+      );
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch wallet: ${response.statusText}`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch user details');
+      }
+
+      const data = await response.json();
+      return data.data;
+    } catch (error) {
+      console.error('Get user error:', error);
+      throw error;
+    }
+  }
+
+  static verifyWebhookSignature(webhook: QuidaxWebhookEvent, signature?: string): boolean {
+    if (!this.webhookSecret || !signature) {
+      return false;
     }
 
-    return response.json();
+    const hmac = createHmac('sha256', this.webhookSecret);
+    const calculatedSignature = hmac
+      .update(JSON.stringify(webhook))
+      .digest('hex');
+
+    return signature === calculatedSignature;
   }
-}
+
+  // Market-related methods
+  static getMarketTicker = QuidaxMarketService.getMarketTicker;
+  static getAllMarketTickers = QuidaxMarketService.getAllMarketTickers;
+  static getQuote = QuidaxMarketService.getQuote;
+
+  // Swap-related methods
+  static createSwapQuotation = QuidaxSwapService.createSwapQuotation;
+  static confirmSwap = QuidaxSwapService.confirmSwap;
+  static getSwapTransaction = QuidaxSwapService.getSwapTransaction;
+  static getTemporaryQuotation = QuidaxSwapService.getTemporaryQuotation;
+
+  // Wallet-related methods
+  static getWallet = QuidaxWalletService.getWallet;
+  static getAllWallets = QuidaxWalletService.getAllWallets;
+  static getWalletAddress = QuidaxWalletService.getWalletAddress;
+  static createWalletAddress = QuidaxWalletService.createWalletAddress;
+  static createSubAccount = QuidaxWalletService.createSubAccount;
+} 

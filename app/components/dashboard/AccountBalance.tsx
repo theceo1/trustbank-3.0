@@ -1,144 +1,159 @@
-//app/components/dassboard/AccountBalance
+//app/components/dashboard/AccountBalance
 "use client";
 
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import Modal from '@/components/ui/modal';
-import { useAuth } from '@/context/AuthContext';
-import { Eye, EyeOff } from 'lucide-react';
-import { motion } from "framer-motion";
-import { WalletService } from "@/app/lib/services/wallet";
-import supabase from '@/lib/supabase/client';
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Loader2, AlertCircle, Link as LinkIcon } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
-interface BalanceData {
-  balance: number;
-  total_deposits: number;
-  total_withdrawals: number;
-  total: number;
-  available: number;
-  pending: number;
+interface Balance {
   currency: string;
+  balance: number;
 }
 
-export default function AccountBalance() {
-  const [balance, setBalance] = useState<BalanceData>({
-    balance: 0,
-    total_deposits: 0,
-    total_withdrawals: 0,
-    total: 0,
-    available: 0,
-    pending: 0,
-    currency: '₦'
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [showBalance, setShowBalance] = useState(false);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const { user } = useAuth();
+export function AccountBalance() {
+  const { toast } = useToast();
+  const [balances, setBalances] = useState<Balance[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
+
+  const fetchBalance = async () => {
+    try {
+      setError(null);
+      setErrorMessage(null);
+      setRedirectTo(null);
+      const response = await fetch('/api/wallet/balances');
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        if (response.status === 403 && errorData.redirectTo) {
+          setRedirectTo(errorData.redirectTo);
+          setErrorMessage(errorData.message);
+        }
+        throw new Error(errorData?.error || 'Failed to fetch balance');
+      }
+
+      const data = await response.json();
+      setBalances(data);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch balance';
+      setError(errorMessage);
+      console.error('Error fetching balance:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchBalance = async () => {
-      if (!user) return;
-      
-      try {
-        const wallet = await WalletService.getWalletBalance(user.id);
-        if (wallet) {
-          setBalance({
-            ...wallet,
-            total: wallet.balance,
-            available: wallet.balance - (wallet.pending_balance || 0),
-            pending: wallet.pending_balance || 0,
-            currency: '₦'
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching balance:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchBalance();
+    const interval = setInterval(fetchBalance, 30000); // Update every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
-    // Keep subscription code the same
-    const subscription = supabase
-      .channel('wallets')
-      .on('postgres_changes', 
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'wallets',
-          filter: `user_id=eq.${user?.id} AND currency=eq.NGN` 
-        },
-        (payload: any) => {
-          if (payload.new) {
-            setBalance({
-              ...payload.new,
-              total: payload.new.balance,
-              available: payload.new.balance - (payload.new.pending_balance || 0),
-              pending: payload.new.pending_balance || 0,
-              currency: '₦'
-            });
-          }
-        }
-      )
-      .subscribe();
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Balance</CardTitle>
+        </CardHeader>
+        <CardContent className="flex items-center justify-center p-6">
+          <Loader2 className="h-6 w-6 animate-spin" />
+        </CardContent>
+      </Card>
+    );
+  }
 
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [user]);
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-    >
+  if (error === 'KYC verification required' && errorMessage && redirectTo) {
+    return (
       <Card>
         <CardHeader>
           <CardTitle>Account Balance</CardTitle>
         </CardHeader>
         <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center py-4">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between">
-                <div className="text-2xl font-bold">
-                  {showBalance ? (
-                    `${balance.currency} ${balance.available.toFixed(2)}`
-                  ) : (
-                    '****'
-                  )}
-                </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShowBalance(!showBalance)}
-                >
-                  {showBalance ? <EyeOff /> : <Eye />}
-                </Button>
-              </div>
-              <div className="mt-2 text-sm text-gray-500">
-                <div>Pending: {balance.currency} {balance.pending.toFixed(2)}</div>
-                <div>Total: {balance.currency} {balance.total.toFixed(2)}</div>
-              </div>
-              <Button 
-                onClick={() => setIsModalOpen(true)} 
-                className="mt-4 w-full bg-black text-gray-100 hover:bg-gray-800"
-              >
-                Deposit
-              </Button>
-            </>
-          )}
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {errorMessage}
+              <Link href={redirectTo} className="flex items-center mt-2 text-primary hover:underline">
+                <LinkIcon className="h-4 w-4 mr-1" />
+                Complete KYC
+              </Link>
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Deposit Funds">
-        <p className="text-green-600">Deposit feature coming soon.</p>
-      </Modal>
-    </motion.div>
+    );
+  }
+
+  if (error === 'Quidax account not linked') {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Balance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Please link your Quidax account to view your balance.
+              <Link href="/settings/integrations" className="flex items-center mt-2 text-primary hover:underline">
+                <LinkIcon className="h-4 w-4 mr-1" />
+                Link Account
+              </Link>
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Account Balance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Account Balance</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {balances.length === 0 ? (
+            <p className="text-muted-foreground">No balances to display</p>
+          ) : (
+            balances.map((balance) => (
+              <div key={balance.currency} className="flex justify-between items-center">
+                <span className="font-medium">{balance.currency.toUpperCase()}</span>
+                <span>{balance.balance.toLocaleString()}</span>
+              </div>
+            ))
+          )}
+          <div className="flex justify-end mt-4">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/wallet">
+                View Wallet
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

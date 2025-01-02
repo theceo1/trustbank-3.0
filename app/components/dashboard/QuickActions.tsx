@@ -1,60 +1,64 @@
 "use client";
 
-import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import Link from "next/link";
-import { ArrowUpRight, Wallet, User, Shield, History } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ArrowUpDown, Wallet, History, Settings } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
 
-export default function QuickActions() {
+interface QuickActionsProps {
+  className?: string;
+}
+
+export function QuickActions({ className }: QuickActionsProps) {
+  const router = useRouter();
+
   const actions = [
     {
-      title: "Trade Now",
+      label: "Trade",
+      icon: ArrowUpDown,
       href: "/trade",
-      icon: <ArrowUpRight className="h-5 w-5" />,
-      color: "bg-green-600"
+      description: "Buy and sell cryptocurrencies"
     },
     {
-      title: "Deposit",
-      href: "/profile/wallet",
-      icon: <Wallet className="h-5 w-5" />,
-      color: "bg-blue-600"
+      label: "Manage Funds",
+      icon: Wallet,
+      href: "/wallet",
+      description: "Deposit and withdraw funds"
     },
     {
-      title: "Profile",
-      href: "/profile",
-      icon: <User className="h-5 w-5" />,
-      color: "bg-purple-600"
+      label: "Transaction History",
+      icon: History,
+      href: "/transactions",
+      description: "View your transaction history"
     },
     {
-      title: "History",
-      href: "/history",
-      icon: <History className="h-5 w-5" />,
-      color: "bg-orange-600"
+      label: "Account Settings",
+      icon: Settings,
+      href: "/settings",
+      description: "Manage your account settings"
     }
   ];
 
   return (
-    <Card>
+    <Card className={cn(className)}>
       <CardHeader>
         <CardTitle>Quick Actions</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-4">
-        {actions.map((action, index) => (
-          <motion.div
-            key={action.title}
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ delay: index * 0.1 }}
+      <CardContent className="grid gap-4">
+        {actions.map((action) => (
+          <Button
+            key={action.label}
+            variant="outline"
+            className="w-full justify-start space-x-2"
+            onClick={() => router.push(action.href)}
           >
-            <Link href={action.href}>
-              <div className={`p-4 rounded-lg ${action.color} text-white hover:opacity-90 transition-opacity cursor-pointer`}>
-                <div className="flex items-center space-x-2">
-                  {action.icon}
-                  <span>{action.title}</span>
-                </div>
-              </div>
-            </Link>
-          </motion.div>
+            <action.icon className="h-4 w-4" />
+            <div className="flex flex-col items-start">
+              <span>{action.label}</span>
+              <span className="text-xs text-muted-foreground">{action.description}</span>
+            </div>
+          </Button>
         ))}
       </CardContent>
     </Card>

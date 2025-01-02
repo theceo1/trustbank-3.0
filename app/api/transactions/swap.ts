@@ -1,6 +1,7 @@
 //app/api/transactions/swap.ts
 import { createClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
+import { TransactionLimitService } from '@/app/lib/services/transaction-limits';
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -15,6 +16,22 @@ export const createSwapTransaction = async (
   receiverId: string, 
   amount: number
 ) => {
+  // Check transaction limits first
+  const limitCheck = await TransactionLimitService.checkTransactionLimits(senderId, amount);
+  
+  if (!limitCheck.allowed) {
+    throw new Error(limitCheck.reason + (limitCheck.nextTierLimits ? 
+      `\nUpgrade your verification level for higher limits: ₦${limitCheck.nextTierLimits.daily.toLocaleString()} daily` : 
+      ''));
+  }
+
+  // Ensure we have limits
+  if (!limitCheck.currentLimits) {
+    throw new Error('Transaction limits not properly configured');
+  }
+
+  const { currentLimits, nextTierLimits } = limitCheck;
+
   // Create trade record
   const { data: trade, error: tradeError } = await supabase
     .from('trades')
@@ -27,7 +44,11 @@ export const createSwapTransaction = async (
       status: 'pending' as TransactionStatus,
       payment_method: "wallet",
       crypto_amount: amount,
-      fiat_amount: amount
+      fiat_amount: amount,
+      limits: {
+        current: currentLimits,
+        next: nextTierLimits
+      }
     })
     .select()
     .single();
@@ -45,7 +66,13 @@ export const createSwapTransaction = async (
         amount: -amount,
         status: 'pending' as TransactionStatus,
         currency: "USDT",
-        description: `USDT transfer to ${receiverId}`
+        description: `USDT transfer to ${receiverId}`,
+        limits: {
+          current: currentLimits,
+          next: nextTierLimits,
+          daily_remaining: currentLimits.daily - amount,
+          monthly_remaining: currentLimits.monthly - amount
+        }
       })
       .select()
       .single(),

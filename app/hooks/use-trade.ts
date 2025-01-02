@@ -36,33 +36,41 @@ export function useTrade() {
   }, []);
 
   const fetchRate = useCallback(async (silent = false) => {
-    if (!tradeState.amount || !tradeState.cryptoCurrency) return;
+    if (!tradeState.amount || !tradeState.cryptoCurrency || isNaN(Number(tradeState.amount))) {
+      return;
+    }
 
     try {
       if (!silent) {
         setTradeState(prev => ({ ...prev, isLoading: true }));
       }
 
-      const response = await fetch(
-        `/api/transactions/rate?` + 
-        new URLSearchParams({
-          currency: tradeState.cryptoCurrency,
-          amount: tradeState.amount.toString(),
-          type: tradeState.tradeType
-        })
-      );
+      const params = new URLSearchParams({
+        currency: tradeState.cryptoCurrency.toLowerCase(),
+        amount: tradeState.amount.toString(),
+        type: tradeState.tradeType
+      });
+
+      const response = await fetch(`/api/transactions/rate?${params}`);
 
       if (!response.ok) {
-        throw new Error('Failed to fetch rate');
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch rate');
       }
 
       const data = await response.json();
+      
+      if (!data || !data.rate) {
+        throw new Error('Invalid rate response');
+      }
+
       setTradeState(prev => ({
         ...prev,
         rate: data,
         rateExpiry: Date.now() + RATE_EXPIRY_TIME
       }));
     } catch (error) {
+      console.error('Rate fetch error:', error);
       toast({
         id: `trade-rate-error-${Date.now()}`,
         title: "Error",

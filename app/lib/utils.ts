@@ -1,35 +1,66 @@
-export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: 'NGN',
-  }).format(amount);
-};
+import { type ClassValue, clsx } from "clsx"
+import { twMerge } from "tailwind-merge"
 
-export const formatDate = (date: string) => {
-  return new Intl.DateTimeFormat('en-NG', {
-    dateStyle: 'medium',
-    timeStyle: 'short'
-  }).format(new Date(date));
-};
-
-export const formatPercentage = (value: number): string => {
-  return `${(value * 100).toFixed(2)}%`;
-};
-
-export const formatCryptoAmount = (amount: number): string => {
-  return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 8,
-  }).format(amount);
-};
-
-export function cn(...classes: string[]) {
-  return classes.filter(Boolean).join(' ');
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }
 
-export const formatNumber = (value: number, decimals: number = 2): string => {
+export function formatCurrency(amount: number, currency: string = 'USD') {
   return new Intl.NumberFormat('en-US', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: decimals,
-  }).format(value);
-};
+    style: 'currency',
+    currency: currency,
+  }).format(amount)
+}
+
+export function formatDate(date: string | Date) {
+  return new Intl.DateTimeFormat('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  }).format(new Date(date))
+}
+
+export function formatNumber(number: number) {
+  return new Intl.NumberFormat('en-US').format(number)
+}
+
+export function truncateText(text: string, length: number = 50) {
+  if (text.length <= length) return text
+  return text.slice(0, length) + '...'
+}
+
+export function generateId() {
+  return Math.random().toString(36).substring(2) + Date.now().toString(36)
+}
+
+export function debounce<T extends (...args: any[]) => any>(
+  func: T,
+  wait: number
+): (...args: Parameters<T>) => void {
+  let timeout: NodeJS.Timeout
+
+  return function executedFunction(...args: Parameters<T>) {
+    const later = () => {
+      clearTimeout(timeout)
+      func(...args)
+    }
+
+    clearTimeout(timeout)
+    timeout = setTimeout(later, wait)
+  }
+}
+
+export function throttle<T extends (...args: any[]) => any>(
+  func: T,
+  limit: number
+): (...args: Parameters<T>) => void {
+  let inThrottle: boolean
+  
+  return function executedFunction(...args: Parameters<T>) {
+    if (!inThrottle) {
+      func(...args)
+      inThrottle = true
+      setTimeout(() => inThrottle = false, limit)
+    }
+  }
+}

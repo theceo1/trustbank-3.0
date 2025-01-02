@@ -3,28 +3,17 @@
 import './globals.css';
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
-import RootLayoutClient from './components/RootLayoutClient';
-import { ErrorBoundary } from '@/app/components/ErrorBoundary';
-import { Suspense } from 'react';
+import './globals.css';
+import { AuthProvider } from '@/context/AuthContext';
+import Header from '@/components/Header';
+import Footer from '@/components/Footer';
+import { Toaster } from "@/app/components/ui/toaster";
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'trustBank',
-  description: 'Your trusted cryptocurrency exchange',
-  icons: {
-    icon: [
-      { url: '/favicon/favicon.ico' },
-      { url: '/favicon/favicon-16x16.png', sizes: '16x16', type: 'image/png' },
-      { url: '/favicon/favicon-32x32.png', sizes: '32x32', type: 'image/png' },
-    ],
-    apple: [
-      { url: '/favicon/apple-touch-icon.png', sizes: '180x180', type: 'image/png' },
-    ],
-    other: [
-      { rel: 'manifest', url: '/favicon/site.webmanifest' }
-    ]
-  }
+  title: 'TrustBank - Secure Digital Banking',
+  description: 'Your trusted digital banking partner',
 };
 
 export default function RootLayout({
@@ -33,19 +22,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="relative min-h-screen">
-        <ErrorBoundary>
-          <Suspense
-            fallback={
-              <div className="min-h-screen flex items-center justify-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
-              </div>
-            }
-          >
-            <RootLayoutClient>{children}</RootLayoutClient>
-          </Suspense>
-        </ErrorBoundary>
+    <html lang="en">
+      <body className={inter.className}>
+        <AuthProvider>
+          <Header />
+          <main>{children}</main>
+          <Footer />
+          <Toaster />
+        </AuthProvider>
       </body>
     </html>
   );

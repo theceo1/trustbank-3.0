@@ -1,3 +1,4 @@
+// app/types/payment.ts
 import { TradeDetails } from "./trade";
 
 export const PLATFORM_FEES = {

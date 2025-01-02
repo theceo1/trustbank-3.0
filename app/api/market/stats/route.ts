@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'; 
 import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
 
 export async function GET() {

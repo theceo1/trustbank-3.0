@@ -156,3 +156,36 @@ export interface QuidaxRateResponse {
     amount: string;
   };
 }
+
+export interface QuidaxQuote {
+  price: QuidaxAmount;
+  total: QuidaxAmount;
+  volume: QuidaxAmount;
+  fee: QuidaxAmount;
+  receive: QuidaxAmount;
+}
+
+export interface QuidaxTicker {
+  low: string;
+  high: string;
+  last: string;
+  open: string;
+  volume: string;
+  sell: string;
+  buy: string;
+  at?: number;
+  name?: string;
+  price_change_percent?: string;
+}
+
+export interface QuidaxMarketTicker {
+  at: number;
+  ticker: QuidaxTicker;
+}
+
+export interface QuidaxTradeCalculation {
+  amount: number;
+  fee: number;
+  receive: number;
+  rate: number;
+}

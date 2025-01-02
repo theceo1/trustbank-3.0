@@ -1,3 +1,5 @@
+"use client";
+
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -40,7 +42,19 @@ export function LineChart({ data, className, gradient }: ChartProps) {
           legend: {
             display: false,
           }
-        }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false,
+            },
+          },
+          y: {
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)',
+            },
+          },
+        },
       }} />
     </div>
   );
@@ -52,6 +66,23 @@ export function BarChart({ data, className }: ChartProps) {
       <Bar data={data} options={{
         responsive: true,
         maintainAspectRatio: false,
+        plugins: {
+          legend: {
+            display: false,
+          }
+        },
+        scales: {
+          x: {
+            grid: {
+              display: false,
+            },
+          },
+          y: {
+            grid: {
+              color: 'rgba(0, 0, 0, 0.1)',
+            },
+          },
+        },
       }} />
     </div>
   );

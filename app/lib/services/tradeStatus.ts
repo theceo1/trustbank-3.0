@@ -1,7 +1,7 @@
 // app/lib/services/tradeStatus.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 import { TradeDetails, TradeStatus } from '@/app/types/trade';
-import { QuidaxService } from './quidax';
+import { QuidaxSwapService } from './quidax-swap';
 import { PaymentService } from './payment';
 import { PaymentProcessorFactory } from './payment/PaymentProcessorFactory';
 import { PaymentMethodType, PaymentStatus } from '@/app/types/payment';
@@ -21,7 +21,7 @@ export class TradeStatusService {
         
         if (!response.ok) throw new Error(data.error);
         
-        const paymentStatus = QuidaxService.mapQuidaxStatus(data.status);
+        const paymentStatus = QuidaxSwapService.mapQuidaxStatus(data.status);
         const tradeStatus = this.mapPaymentStatusToTradeStatus(paymentStatus);
         onStatusChange(tradeStatus);
         
