@@ -9,14 +9,12 @@ import { Button } from "./ui/button";
 import { NavigationMenu, NavigationMenuItem, NavigationMenuList } from "./ui/navigation-menu";
 import { ThemeToggle } from "./theme-toggle";
 import { useToast } from "@/hooks/use-toast";
-import { useAdminAuth } from '@/app/admin/context/AdminAuthContext';
 import { Menu, X } from "lucide-react";
 
-export default function Header() {
+export function Header() {
+  const { user, signOut } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const { isAdmin } = useAdminAuth();
-  const { user, loading, signOut } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -51,61 +49,53 @@ export default function Header() {
         <div className="hidden md:flex items-center space-x-6 ml-auto">
           <NavigationMenu>
             <NavigationMenuList>
-              <NavigationMenuItem>
-                <Link href="/market" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
-                  Market
-                </Link>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <Link href="/calculator" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
-                  Calculator
-                </Link>
-              </NavigationMenuItem>
-              <NavigationMenuItem>
-                <Link href="/about" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
-                  About
-                </Link>
-              </NavigationMenuItem>
-              {user && (
+              {user ? (
                 <>
                   <NavigationMenuItem>
-                    <Link href="/trade" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
-                      Trade
+                    <Link href="/dashboard" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      Overview
                     </Link>
                   </NavigationMenuItem>
                   <NavigationMenuItem>
-                    <Link href="/dashboard" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
-                      Dashboard
+                    <Link href="/trade" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      Buy/Sell
+                    </Link>
+                  </NavigationMenuItem>
+                  <NavigationMenuItem>
+                    <Link href="/wallet" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      Wallet
                     </Link>
                   </NavigationMenuItem>
                 </>
-              )}
-              {isAdmin && (
-                <NavigationMenuItem>
-                  <Link href="/admin" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
-                    Admin
-                  </Link>
-                </NavigationMenuItem>
+              ) : (
+                <>
+                  <NavigationMenuItem>
+                    <Link href="/market" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      Market
+                    </Link>
+                  </NavigationMenuItem>
+                  <NavigationMenuItem>
+                    <Link href="/about" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
+                      About
+                    </Link>
+                  </NavigationMenuItem>
+                </>
               )}
             </NavigationMenuList>
           </NavigationMenu>
 
           <ThemeToggle />
 
-          {!loading && (
+          {user ? (
+            <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+          ) : (
             <>
-              {user ? (
-                <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
-              ) : (
-                <>
-                  <Button variant="outline" asChild>
-                    <Link href="/auth/login">Sign In</Link>
-                  </Button>
-                  <Button asChild>
-                    <Link href="/auth/register">Get Started</Link>
-                  </Button>
-                </>
-              )}
+              <Button variant="outline" asChild>
+                <Link href="/auth/login">Sign In</Link>
+              </Button>
+              <Button asChild>
+                <Link href="/auth/register">Get Started</Link>
+              </Button>
             </>
           )}
         </div>
@@ -125,32 +115,28 @@ export default function Header() {
           <div ref={menuRef} className="absolute top-full left-0 right-0 bg-background border-b md:hidden">
             <div className="container py-4">
               <nav className="flex flex-col space-y-4">
-                <Link href="/market" className="text-sm font-medium">Market</Link>
-                <Link href="/calculator" className="text-sm font-medium">Calculator</Link>
-                <Link href="/about" className="text-sm font-medium">About</Link>
-                {user && (
+                {user ? (
                   <>
-                    <Link href="/trade" className="text-sm font-medium">Trade</Link>
-                    <Link href="/dashboard" className="text-sm font-medium">Dashboard</Link>
+                    <Link href="/dashboard" className="text-sm font-medium">Overview</Link>
+                    <Link href="/trade" className="text-sm font-medium">Buy/Sell</Link>
+                    <Link href="/wallet" className="text-sm font-medium">Wallet</Link>
+                  </>
+                ) : (
+                  <>
+                    <Link href="/market" className="text-sm font-medium">Market</Link>
+                    <Link href="/about" className="text-sm font-medium">About</Link>
                   </>
                 )}
-                {isAdmin && (
-                  <Link href="/admin" className="text-sm font-medium">Admin</Link>
-                )}
-                {!loading && (
+                {user ? (
+                  <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
+                ) : (
                   <>
-                    {user ? (
-                      <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
-                    ) : (
-                      <>
-                        <Button variant="outline" asChild>
-                          <Link href="/auth/login">Sign In</Link>
-                        </Button>
-                        <Button asChild>
-                          <Link href="/auth/register">Get Started</Link>
-                        </Button>
-                      </>
-                    )}
+                    <Button variant="outline" asChild>
+                      <Link href="/auth/login">Sign In</Link>
+                    </Button>
+                    <Button asChild>
+                      <Link href="/auth/register">Get Started</Link>
+                    </Button>
                   </>
                 )}
               </nav>

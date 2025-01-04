@@ -98,14 +98,16 @@ export async function GET(request: Request, { params }: { params: { userId: stri
     };
 
     // Check KYC verification status
-    if (!userProfile.tier1_verified) {
+    if (!userProfile.tier1_verified || userProfile.kyc_status !== 'approved') {
       return NextResponse.json({ 
         error: 'KYC verification required',
         kyc_status: userProfile.kyc_status,
         kyc_level: userProfile.kyc_level,
         verification_needed: true,
         verification_status: verificationStatus,
-        message: 'Please complete Tier 1 (NIN & Selfie) verification to access basic features'
+        message: userProfile.tier1_verified 
+          ? 'Your KYC verification is pending approval. Please wait for verification to be completed.'
+          : 'Please complete Tier 1 (NIN & Selfie) verification to access basic features'
       }, { status: 403 });
     }
 
@@ -120,7 +122,8 @@ export async function GET(request: Request, { params }: { params: { userId: stri
 
     // Fetch wallet data from Quidax using the correct endpoint structure
     try {
-      const walletData = await QuidaxWalletService.getWallet(
+      const walletService = new QuidaxWalletService();
+      const walletData = await walletService.getWallet(
         userProfile.quidax_id,
         params.currency.toLowerCase()
       );

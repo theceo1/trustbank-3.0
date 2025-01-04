@@ -4,7 +4,7 @@ import { formatDate, formatCurrency } from "@/app/lib/utils";
 import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
 import { TradeDetails, TradeStatus } from '@/app/types/trade';
 import { useToast } from '@/app/hooks/use-toast';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { Button } from '@/app/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 

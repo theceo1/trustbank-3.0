@@ -6,10 +6,16 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number, currency: string = 'NGN'): string {
+  // Handle crypto currencies
+  if (['BTC', 'ETH', 'USDT'].includes(currency.toUpperCase())) {
+    return `${amount.toLocaleString()} ${currency.toUpperCase()}`;
+  }
+
+  // Handle fiat currencies
   return new Intl.NumberFormat('en-NG', {
     style: 'currency',
-    currency,
-  }).format(amount)
+    currency: currency.toUpperCase(),
+  }).format(amount);
 }
 
 export function formatDate(date: string | Date): string {

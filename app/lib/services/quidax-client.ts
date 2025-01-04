@@ -1,28 +1,45 @@
-const QUIDAX_API_URL = 'https://www.quidax.com/api/v1';
-
 export class QuidaxClient {
-  static async get(endpoint: string): Promise<Response> {
-    const url = `${QUIDAX_API_URL}${endpoint}`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.QUIDAX_API_KEY}`
-      }
-    });
-    return response;
+  private apiUrl: string;
+  private secretKey: string;
+
+  constructor(apiUrl?: string, secretKey?: string) {
+    this.apiUrl = apiUrl || '';
+    this.secretKey = secretKey || '';
   }
 
-  static async post(endpoint: string, data: any): Promise<Response> {
-    const url = `${QUIDAX_API_URL}${endpoint}`;
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.QUIDAX_API_KEY}`
-      },
-      body: JSON.stringify(data)
+  private getHeaders(): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${this.secretKey}`
+    };
+  }
+
+  async get(path: string) {
+    const response = await fetch(`${this.apiUrl}${path}`, {
+      method: 'GET',
+      headers: this.getHeaders()
     });
-    return response;
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Request failed');
+    }
+
+    return response.json();
+  }
+
+  async post(path: string, body: any) {
+    const response = await fetch(`${this.apiUrl}${path}`, {
+      method: 'POST',
+      headers: this.getHeaders(),
+      body: JSON.stringify(body)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Request failed');
+    }
+
+    return response.json();
   }
 } 

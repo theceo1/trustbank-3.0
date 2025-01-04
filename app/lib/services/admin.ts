@@ -1,69 +1,69 @@
 // app/lib/services/admin.ts
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Database } from '@/app/types/database';
-
-interface AdminRole {
-  permissions: Record<string, string[]>;
-}
-
-interface AdminDataResponse {
-  is_active: boolean;
-  admin_roles: {
-    permissions: Record<string, string[]>;
-  }[];
-}
+import { SupabaseClient } from '@supabase/supabase-js';
 
 export class AdminService {
-  private static supabase = createClientComponentClient<Database>();
+  private static instance: AdminService;
+  private supabase: SupabaseClient<Database>;
 
-  static async checkAdminAccess(userId: string) {
+  private constructor() {
+    this.supabase = getSupabaseClient();
+  }
+
+  public static getInstance(): AdminService {
+    if (!AdminService.instance) {
+      AdminService.instance = new AdminService();
+    }
+    return AdminService.instance;
+  }
+
+  async checkAdminAccess(userId: string): Promise<boolean> {
     try {
-      // First check the cache
-      const { data: cacheData, error: cacheError } = await this.supabase
-        .from('admin_access_cache')
-        .select('is_admin, permissions')
+      const { data, error } = await this.supabase
+        .from('admin_users')
+        .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      // If valid cache entry exists, return it
-      if (cacheData) {
-        return {
-          isAdmin: cacheData.is_admin,
-          permissions: cacheData.permissions as Record<string, Record<string, boolean>>
-        };
+      if (error) {
+        console.error('Error checking admin access:', error);
+        return false;
       }
 
-      // If no cache or error, check admin_users table
-      const { data: adminData, error: adminError } = await this.supabase
-        .from('admin_users')
-        .select(`
-          is_active,
-          admin_roles (
-            permissions
-          )
-        `)
-        .eq('user_id', userId)
-        .single();
-
-      const isAdmin = adminData?.is_active ?? false;
-      const permissions = adminData?.admin_roles?.[0]?.permissions ?? {};
-
-      // Update cache
-      await this.supabase
-        .from('admin_access_cache')
-        .upsert({
-          user_id: userId,
-          is_admin: isAdmin,
-          permissions: permissions,
-          last_checked: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
-        });
-
-      return { isAdmin, permissions };
+      return !!data;
     } catch (error) {
-      console.error('Admin access check error:', error);
-      return { isAdmin: false, permissions: {} };
+      console.error('Error checking admin access:', error);
+      return false;
     }
   }
-} 
+
+  async getAdminUsers() {
+    const { data, error } = await this.supabase
+      .from('admin_users')
+      .select('*');
+
+    if (error) {
+      console.error('Error fetching admin users:', error);
+      throw error;
+    }
+
+    return data;
+  }
+
+  async addAdminUser(userId: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('admin_users')
+      .insert({ user_id: userId });
+
+    if (error) {
+      console.error('Error adding admin user:', error);
+      throw error;
+    }
+  }
+}
+
+// Export singleton instance methods
+export const checkAdminAccess = AdminService.getInstance().checkAdminAccess.bind(AdminService.getInstance());
+export const getAdminUsers = AdminService.getInstance().getAdminUsers.bind(AdminService.getInstance());
+export const addAdminUser = AdminService.getInstance().addAdminUser.bind(AdminService.getInstance()); 

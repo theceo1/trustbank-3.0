@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { KYCService } from '@/app/lib/services/kyc';
 import { KYCTier } from '@/app/types/kyc';
 

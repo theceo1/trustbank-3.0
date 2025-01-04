@@ -1,6 +1,6 @@
 'use client';
 
-import Header from "@/components/Header";
+import { Header } from "@/components/Header";
 import Footer from '@/components/Footer';
 import { SessionProvider } from "next-auth/react";
 import { ThemeProvider } from "@/components/theme-provider";

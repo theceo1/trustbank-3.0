@@ -69,6 +69,17 @@ export class KYCService {
     try {
       const base64Image = selfieImage.split(',')[1];
       
+      // First check if user has already completed NIN verification
+      const { data: existingProfile } = await this.supabase
+        .from('user_profiles')
+        .select('kyc_level, kyc_status, kyc_verified')
+        .eq('user_id', userId)
+        .single();
+        
+      if (existingProfile?.kyc_verified) {
+        return true;
+      }
+      
       const response = await fetch('/api/verify', {
         method: 'POST',
         headers: {
@@ -87,6 +98,12 @@ export class KYCService {
       const data = await response.json();
       
       if (!response.ok || !data.success) {
+        // Log failed attempt
+        await this.submitVerification(userId, 'nin', {
+          status: 'failed',
+          error: data.message || 'NIN verification failed',
+          attempt_at: new Date().toISOString()
+        });
         throw new Error(data.message || 'NIN verification failed');
       }
 
@@ -103,12 +120,38 @@ export class KYCService {
             verification_data: data.data
           }
         })
-        .eq('id', userId);
+        .eq('user_id', userId);
 
       if (error) {
         console.error('Profile update error:', error);
         throw new Error('Failed to update verification status');
       }
+
+      // Log successful verification attempt
+      await this.submitVerification(userId, 'nin', {
+        status: 'success',
+        reference: data.reference,
+        verified_at: new Date().toISOString(),
+        verification_data: data.data
+      });
+
+      // Send notification
+      await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId,
+          type: 'kyc_update',
+          title: 'KYC Verification Update',
+          message: 'Your NIN verification has been submitted successfully. We will review it shortly.',
+          data: {
+            status: 'pending',
+            type: 'nin'
+          }
+        })
+      });
 
       return true;
     } catch (error) {

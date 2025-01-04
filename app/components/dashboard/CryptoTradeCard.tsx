@@ -48,30 +48,38 @@ export function CryptoTradeCard() {
       try {
         setLoading(true);
         setError(null);
-        const response = await fetch(`/api/market/prices?market=${selectedCrypto}ngn&orderBook=true`);
+        
+        const response = await fetch(`/api/market/prices?market=${selectedCrypto}ngn`);
         
         if (!response.ok) {
           const errorData = await response.json().catch(() => null);
           throw new Error(errorData?.error || 'Failed to fetch market data');
         }
 
-        const data = await response.json();
-        if (!data || !Array.isArray(data) || data.length === 0) {
+        const { status, data } = await response.json();
+        
+        if (status !== 'success' || !data) {
+          throw new Error('Invalid response format');
+        }
+
+        const marketData = data[selectedCrypto];
+        if (!marketData) {
           throw new Error('No market data available');
         }
 
-        if (isSubscribed) {
-          setMarketData(data[0]);
-        }
+        setMarketData({
+          symbol: selectedCrypto,
+          price: parseFloat(marketData.last),
+          change24h: ((parseFloat(marketData.last) - parseFloat(marketData.open)) / parseFloat(marketData.open)) * 100,
+          volume: parseFloat(marketData.vol),
+          high24h: parseFloat(marketData.high),
+          low24h: parseFloat(marketData.low)
+        });
       } catch (err) {
-        if (isSubscribed) {
-          setError(err instanceof Error ? err.message : 'Failed to fetch market data. Please try again later.');
-          console.error('Error fetching market data:', err);
-        }
+        setError(err instanceof Error ? err.message : 'Failed to fetch market data. Please try again later.');
+        console.error('Error fetching market data:', err);
       } finally {
-        if (isSubscribed) {
-          setLoading(false);
-        }
+        setLoading(false);
       }
     };
 

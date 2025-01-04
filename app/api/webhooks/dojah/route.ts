@@ -2,124 +2,97 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { WebhookLogger } from '@/app/lib/services/webhookLogger';
+import { logger } from '@/app/lib/logger';
 import { DojahKYCWebhookResponse } from '@/app/types/dojah';
 
-function determineVerificationTier(data: DojahKYCWebhookResponse): { tier: 1 | 2 | 3, verified: boolean } {
-  const govData = data.data.government_data?.data;
-  
-  // Check for Tier 3 (Government ID)
-  if (data.data.id?.data.id_data?.document_type === 'Government ID' || 
-      data.data.id?.data.id_data?.document_type === 'International Passport') {
-    return { tier: 3, verified: data.status };
-  }
-  
-  // Check for Tier 2 (BVN)
-  if (govData?.bvn?.entity.bvn) {
-    return { tier: 2, verified: data.status };
-  }
-  
-  // Default to Tier 1 (NIN & Selfie)
-  return { tier: 1, verified: data.status };
-}
-
 export async function POST(request: Request) {
-  let webhookLogId: string | undefined;
+  const supabase = createRouteHandlerClient({ cookies });
+  const webhookLogger = {
+    info: (message: string, data?: any) => logger.info(`[Dojah Webhook] ${message}`, data),
+    error: (message: string, data?: any) => logger.error(`[Dojah Webhook] ${message}`, data),
+    warn: (message: string, data?: any) => logger.warn(`[Dojah Webhook] ${message}`, data)
+  };
 
   try {
-    // Verify webhook signature
-    const signature = request.headers.get('x-dojah-signature');
-    if (!signature || signature !== process.env.DOJAH_WEBHOOK_SECRET) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    const body: DojahKYCWebhookResponse = await request.json();
+    
+    webhookLogger.info('Received KYC webhook:', { 
+      referenceId: body.reference_id,
+      status: body.verification_status
+    });
+
+    // Extract user metadata if available
+    const metadata = body.metadata || {};
+    const userId = metadata.user_id;
+
+    if (!userId) {
+      webhookLogger.error('No user ID found in webhook metadata');
+      return new NextResponse('Missing user ID', { status: 400 });
     }
 
-    const data = await request.json() as DojahKYCWebhookResponse;
-    const supabase = createRouteHandlerClient({ cookies });
+    // Process verification result
+    if (body.verification_status === 'Completed') {
+      const isVerified = body.status && 
+        body.data?.government_data?.data?.nin?.entity?.nin && 
+        body.data?.selfie?.status;
 
-    // Log webhook received
-    const { data: logEntry } = await supabase
-      .from('webhook_logs')
-      .insert({
-        type: 'dojah',
-        payload: data,
-        status: 'received',
-        reference_id: data.reference_id
-      })
-      .select()
-      .single();
-
-    webhookLogId = logEntry?.id;
-
-    if (data.verification_status === 'Completed') {
-      const govData = data.data.government_data?.data;
-      const idData = data.data.id?.data.id_data;
-      const { tier, verified } = determineVerificationTier(data);
-      
-      const verificationData = {
-        nin: govData?.nin?.entity.nin,
-        bvn: govData?.bvn?.entity.bvn,
-        first_name: idData?.first_name || govData?.nin?.entity.firstname,
-        last_name: idData?.last_name || govData?.nin?.entity.surname,
-        date_of_birth: idData?.date_of_birth || govData?.nin?.entity.birthdate,
-        verification_id: data.reference_id,
-        document_type: idData?.document_type,
-        raw_response: data
-      };
-
-      // Prepare update data based on tier
-      const updateData: any = {
-        [`tier${tier}_verified`]: verified,
-        [`tier${tier}_verified_at`]: verified ? new Date().toISOString() : null,
-        [`tier${tier}_data`]: verificationData,
-        last_verification_attempt: new Date().toISOString()
-      };
-
-      // If it's tier 1 and verified, update the basic KYC status
-      if (tier === 1 && verified) {
-        updateData.kyc_status = 'verified';
-        updateData.kyc_level = 1;
-        updateData.is_verified = true;
-      }
-
-      // Update user's verification status
-      const { error } = await supabase
+      // Update user's KYC status
+      const { error: updateError } = await supabase
         .from('user_profiles')
-        .update(updateData)
-        .eq('verification_ref', data.reference_id);
+        .update({
+          kyc_verified: isVerified,
+          kyc_level: isVerified ? 1 : 0,
+          kyc_status: isVerified ? 'verified' : 'failed',
+          verification_ref: body.reference_id,
+          kyc_documents: {
+            nin: body.data?.government_data?.data?.nin?.entity?.nin,
+            selfie_url: body.selfie_url,
+            verification_data: {
+              nin_data: body.data?.government_data?.data?.nin?.entity,
+              selfie_verification: body.data?.selfie,
+              reference_id: body.reference_id,
+              verified_at: new Date().toISOString()
+            }
+          },
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', userId);
 
-      if (error) {
-        console.error('Error updating user profile:', {
-          error,
-          tier,
-          verified,
-          reference_id: data.reference_id
-        });
-        throw error;
+      if (updateError) {
+        webhookLogger.error('Error updating user KYC status:', updateError);
+        return new NextResponse('Error updating user profile', { status: 500 });
       }
 
-      // Log successful verification
-      console.log('Verification completed:', {
-        tier,
-        verified,
-        reference_id: data.reference_id,
-        verification_data: verificationData
+      webhookLogger.info('User KYC status updated:', {
+        userId,
+        isVerified,
+        referenceId: body.reference_id
+      });
+
+      // Send notification to user
+      await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId,
+          type: 'kyc_update',
+          title: 'Identity Verification Update',
+          message: isVerified 
+            ? 'Your identity has been verified successfully! You can now start trading.'
+            : 'Your identity verification was not successful. Please check your profile for details.',
+          data: {
+            status: isVerified ? 'verified' : 'failed',
+            reference_id: body.reference_id
+          }
+        })
       });
     }
 
-    if (webhookLogId) {
-      await WebhookLogger.updateWebhookStatus(webhookLogId, 'processed');
-    }
+    webhookLogger.info('Webhook processed successfully');
+    return new NextResponse('OK', { status: 200 });
 
-    return NextResponse.json({ received: true });
   } catch (error) {
-    if (webhookLogId) {
-      await WebhookLogger.updateWebhookStatus(
-        webhookLogId, 
-        'failed', 
-        error instanceof Error ? error.message : 'Unknown error'
-      );
-    }
-    console.error('Webhook error:', error);
-    return NextResponse.json({ error: 'Webhook processing failed' }, { status: 500 });
+    webhookLogger.error('Error processing webhook:', error);
+    return new NextResponse('Internal Server Error', { status: 500 });
   }
 } 

@@ -63,6 +63,9 @@ export class QuidaxWebhookService {
         case 'wallet.update':
           await this.handleWalletUpdate(webhook.data);
           break;
+        case 'kyc.verification.completed':
+          await this.handleKYCVerification(webhook.data);
+          break;
         default:
           logger.warn(`Unhandled webhook event: ${webhook.event}`);
       }
@@ -241,6 +244,55 @@ export class QuidaxWebhookService {
       }
     } catch (error) {
       logger.error('handleWalletUpdate error:', error);
+      throw error;
+    }
+  }
+
+  private async handleKYCVerification(data: any) {
+    try {
+      const user = await this.findUserByEmail(data.user.email);
+      
+      // Update user's KYC status
+      const { error } = await supabase
+        .from('user_profiles')
+        .update({
+          kyc_verified: data.status === 'approved',
+          kyc_level: data.status === 'approved' ? (data.tier || 1) : 0,
+          kyc_status: data.status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        logger.error('Error updating user KYC status:', error);
+        throw error;
+      }
+
+      // Send notification
+      await fetch('/api/notifications/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          type: 'kyc_update',
+          title: 'KYC Verification Update',
+          message: data.status === 'approved' 
+            ? 'Your identity verification has been approved. You can now start trading!'
+            : 'Your identity verification needs attention. Please check your profile.',
+          data: {
+            status: data.status,
+            tier: data.tier || 1
+          }
+        })
+      });
+
+      logger.info('KYC verification processed successfully:', {
+        userId: user.id,
+        status: data.status,
+        tier: data.tier
+      });
+    } catch (error) {
+      logger.error('Error handling KYC verification:', error);
       throw error;
     }
   }

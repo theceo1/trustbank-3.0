@@ -1,125 +1,96 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from 'react';
+import { getSupabaseClient } from '@/lib/supabase/client';
+import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
-import supabaseClient from '@/app/lib/supabase/client';
-import { toast } from 'sonner';
 
-export interface AuthContextType {
+interface AuthContextType {
   user: User | null;
+  session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ user: User | null; error: Error | null }>;
-  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: any }>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<{ data: any; error: Error | null }>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  session: null,
+  loading: true,
+  signIn: async () => ({ error: new Error('Not implemented') }),
+  signInWithGoogle: async () => {},
+  signOut: async () => {},
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const supabase = getSupabaseClient();
 
   useEffect(() => {
-    const { data: { subscription } } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
-  const signIn = async (email: string, password: string): Promise<{ user: User | null; error: Error | null }> => {
+  const signIn = async (email: string, password: string) => {
     try {
-      const { data, error } = await supabaseClient.auth.signInWithPassword({
+      const { error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (error) {
-        let errorMessage = 'Failed to sign in';
-        
-        // Provide user-friendly error messages
-        if (error.message.includes('Invalid login credentials')) {
-          errorMessage = 'Invalid email or password';
-        } else if (error.message.includes('Email not confirmed')) {
-          errorMessage = 'Please verify your email address';
-        }
-        
-        toast.error(errorMessage);
-        return { user: null, error: new Error(errorMessage) };
+      if (!error) {
+        router.push('/dashboard');
       }
 
-      toast.success('Successfully signed in!');
-      return { user: data.user, error: null };
-    } catch (err) {
-      const error = err as Error;
-      toast.error(error.message);
-      return { user: null, error };
-    }
-  };
-
-  const signInWithGoogle = async () => {
-    try {
-      const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) {
-        toast.error('Failed to sign in with Google');
-        return { error: new Error(error.message) };
-      }
-
-      return { error: null };
-    } catch (err) {
-      const error = err as Error;
-      toast.error(error.message);
+      return { error };
+    } catch (error) {
       return { error };
     }
   };
 
-  const signUp = async (email: string, password: string) => {
-    try {
-      const { data, error } = await supabaseClient.auth.signUp({
-        email,
-        password,
-      });
-
-      if (error) throw error;
-
-      return { data, error: null };
-    } catch (err) {
-      const error = err as Error;
-      return { data: null, error };
-    }
+  const signInWithGoogle = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
   };
 
   const signOut = async () => {
-    try {
-      await supabaseClient.auth.signOut();
-      router.push('/auth/login');
-      toast.success('Successfully signed out');
-    } catch (error) {
-      toast.error('Error signing out');
-    }
+    await supabase.auth.signOut();
+    router.push('/auth/login');
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signInWithGoogle, signOut, signUp }}>
+    <AuthContext.Provider value={{
+      user,
+      session,
+      loading,
+      signIn,
+      signInWithGoogle,
+      signOut,
+    }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
+export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}; 

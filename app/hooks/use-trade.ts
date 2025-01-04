@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { TradeDetails, TradeType, TradeRateResponse, TradeParams } from '@/app/types/trade';
 import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
-import { supabase } from '@/lib/supabase/client';
+import { useAuth } from '@/app/context/AuthContext';
+import supabaseClient from '@/app/lib/supabase/client';
 import { Database } from '@/app/types/supabase';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
@@ -25,7 +25,7 @@ export function useUserProfile() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('profiles')
         .select('*')
         .eq('id', user!.id)
@@ -49,7 +49,7 @@ export function useUserProfile() {
       setLoading(true);
       setError(null);
 
-      const { data, error } = await supabase
+      const { data, error } = await supabaseClient
         .from('profiles')
         .update(updates)
         .eq('id', user!.id)

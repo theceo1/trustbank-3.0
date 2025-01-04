@@ -29,15 +29,13 @@ export default function Login() {
     setError('');
     
     try {
-      const { user, error } = await signIn(email, password);
+      const { error } = await signIn(email, password);
       
       if (error) throw error;
 
-      if (user) {
-        const redirectTo = redirect || '/dashboard';
-        router.push(redirectTo);
-        toast.success('Welcome back!');
-      }
+      const redirectTo = redirect || '/dashboard';
+      router.push(redirectTo);
+      toast.success('Welcome back!');
     } catch (err) {
       console.error('Login error:', err);
       setError(err instanceof Error ? err.message : 'Failed to sign in');
@@ -51,8 +49,7 @@ export default function Login() {
     setError('');
     
     try {
-      const { error } = await signInWithGoogle();
-      if (error) throw error;
+      await signInWithGoogle();
       // OAuth redirects automatically
     } catch (err) {
       console.error('Google sign in error:', err);

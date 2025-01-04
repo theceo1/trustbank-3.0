@@ -2,7 +2,7 @@
 
 "use client";
 
-import Header from '@/components/Header';
+import { Header } from '@/components/Header';
 import Footer from '@/app/components/Footer';
 import { AuthProvider } from '@/app/context/AuthContext';
 import { Providers } from '../providers';

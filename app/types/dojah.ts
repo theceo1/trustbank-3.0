@@ -21,6 +21,13 @@ export interface DojahKYCWebhookResponse {
         status: boolean;
         message: string;
       };
+      selfie?: {
+        data: {
+          selfie_url: string;
+        };
+        status: boolean;
+        message: string;
+      };
       government_data?: {
         data: {
           nin?: {
@@ -49,6 +56,8 @@ export interface DojahKYCWebhookResponse {
       };
     };
     status: boolean;
+    message: string;
+    selfie_url?: string;
     reference_id: string;
     verification_status: 'Ongoing' | 'Completed' | 'Pending' | 'Failed';
     metadata?: Record<string, any>;

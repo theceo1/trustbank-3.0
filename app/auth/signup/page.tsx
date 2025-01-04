@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { useAuth, AuthContextType } from '@/app/context/AuthContext';
 import Link from 'next/link';
 import { FcGoogle } from 'react-icons/fc';
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -20,8 +19,78 @@ import {
   TooltipTrigger,
 } from "@/app/components/ui/tooltip";
 import { generateReferralCode, validateReferralCode } from '@/app/utils/referral';
-import supabase from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { useToast } from "@/hooks/use-toast";
+
+async function waitForUser(supabase: any, userId: string, maxAttempts = 5): Promise<boolean> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const { data: user, error } = await supabase
+      .from('users')
+      .select('id')
+      .eq('id', userId)
+      .single();
+
+    if (user) return true;
+    
+    // Exponential backoff: 1s, 2s, 4s, 8s, 16s
+    await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+  }
+  return false;
+}
+
+async function createUserProfile(supabase: any, data: {
+  userId: string;
+  name: string;
+  email: string;
+}, maxAttempts = 3): Promise<any> {
+  let lastError;
+  
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      // Check if profile already exists
+      const { data: existingProfile } = await supabase
+        .from('user_profiles')
+        .select()
+        .eq('user_id', data.userId)
+        .single();
+
+      if (existingProfile) {
+        return existingProfile;
+      }
+
+      // Create new profile
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .insert({
+          user_id: data.userId,
+          full_name: data.name,
+          email: data.email,
+          is_verified: false,
+          kyc_level: 0,
+          kyc_status: 'pending',
+          is_test: false,
+          daily_limit: 0,
+          monthly_limit: 0
+        })
+        .select()
+        .single();
+
+      if (error) {
+        lastError = error;
+        // Wait before retrying: 1s, 2s, 4s
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        continue;
+      }
+
+      return profile;
+    } catch (error) {
+      lastError = error;
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    }
+  }
+
+  throw lastError;
+}
 
 export default function SignUp() {
   const [name, setName] = useState('');
@@ -30,17 +99,15 @@ export default function SignUp() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { signUp, signInWithGoogle } = useAuth() as AuthContextType;
   const [referralCode, setReferralCode] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const { toast } = useToast();
+  const supabase = getSupabaseClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Starting signup process...');
     
     if (!acceptedTerms) {
-      console.log('Terms not accepted');
       toast({
         title: "Terms Required",
         description: "Please accept the terms and conditions to continue",
@@ -53,96 +120,79 @@ export default function SignUp() {
     setError('');
     
     try {
-      console.log('Attempting to create auth user with:', { email, name });
-      
-      // First create the user with minimal data
+      // First create the auth user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
-        password
+        password,
+        options: {
+          data: {
+            full_name: name
+          }
+        }
       });
 
-      console.log('Auth signup response:', { data, error: signUpError });
-
       if (signUpError) {
-        console.error('Signup error details:', {
-          message: signUpError.message,
-          status: signUpError.status,
-          name: signUpError.name
-        });
-        throw signUpError;
+        throw new Error(signUpError.message);
       }
 
       if (!data.user) {
-        console.error('No user data returned from signup');
         throw new Error('Failed to create account');
       }
 
-      console.log('Auth user created successfully:', {
-        userId: data.user.id,
-        email: data.user.email
-      });
+      const userId = data.user.id;
 
-      // Update user metadata separately
-      const { error: updateError } = await supabase.auth.updateUser({
-        data: { full_name: name }
-      });
-
-      if (updateError) {
-        console.error('Error updating user metadata:', updateError);
+      // Wait for user record to be available
+      const userExists = await waitForUser(supabase, userId);
+      if (!userExists) {
+        throw new Error('Failed to create user record. Please try again.');
       }
 
-      // Create user profile after successful signup
-      console.log('Attempting to create user profile for:', data.user.id);
-      const { data: profileData, error: profileError } = await supabase
-        .from('user_profiles')
-        .insert({
-          id: data.user.id,
-          user_id: data.user.id,
-          full_name: name,
-          is_verified: false,
-          kyc_level: 0,
-          is_test: false
-        })
-        .select()
-        .single();
-
-      if (profileError) {
-        console.error('Profile creation error details:', {
-          message: profileError.message,
-          code: profileError.code,
-          details: profileError.details,
-          hint: profileError.hint
+      // Create user profile
+      try {
+        const profile = await createUserProfile(supabase, {
+          userId,
+          name,
+          email
         });
-        throw new Error(`Failed to create user profile: ${profileError.message}`);
+
+        toast({
+          title: "Account created",
+          description: "Welcome! Complete your ID verification to start trading.",
+          variant: "default"
+        });
+
+        router.push('/dashboard');
+      } catch (profileError: any) {
+        // Check if profile was actually created despite error
+        const { data: existingProfile } = await supabase
+          .from('user_profiles')
+          .select()
+          .eq('user_id', userId)
+          .single();
+
+        if (existingProfile) {
+          // Profile exists, we can proceed
+          toast({
+            title: "Account created",
+            description: "Welcome! Complete your ID verification to start trading.",
+            variant: "default"
+          });
+          router.push('/dashboard');
+        } else {
+          // Real error, show to user
+          throw new Error('Failed to set up your profile. Please try again or contact support.');
+        }
       }
-
-      console.log('User profile created successfully:', profileData);
-
-      router.push('/dashboard');
-      
-      toast({
-        title: "Account created",
-        description: "Welcome! Complete your ID verification to start trading.",
-        variant: "default"
-      });
     } catch (error) {
-      console.error('Signup process failed:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', {
-          name: error.name,
-          message: error.message,
-          stack: error.stack
-        });
-      }
-      setError(error instanceof Error ? error.message : 'Failed to create account');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
+      setError(errorMessage);
       toast({
         title: "Error",
-        description: error instanceof Error ? error.message : "Failed to create account",
+        description: errorMessage,
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
-      console.log('Signup process completed');
     }
   };
 
@@ -151,14 +201,24 @@ export default function SignUp() {
     setError('');
     
     try {
-      const { error } = await signInWithGoogle();
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`
+        }
+      });
+
       if (error) throw error;
       
       // Google OAuth will handle the redirect automatically
-      // No need to manually check for user/session here
-    } catch (err) {
-      console.error('Google sign in error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to sign in with Google');
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to sign in with Google';
+      setError(errorMessage);
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive"
+      });
     } finally {
       setIsLoading(false);
     }

@@ -74,6 +74,10 @@ export interface QuidaxSwapTransaction {
   to_amount: string;
   from_currency: string;
   to_currency: string;
+  created_at: string;
+  updated_at: string;
+  user: QuidaxUser;
+  swap_quotation: QuidaxQuotation;
 }
 
 export interface QuidaxQuotationParams {
@@ -89,14 +93,17 @@ export interface QuidaxQuotation {
   from_amount: string;
   to_amount: string;
   expires_at: string;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface QuidaxTemporaryQuotation {
-  price: QuidaxAmount;
-  total: QuidaxAmount;
-  volume: QuidaxAmount;
-  fee: QuidaxAmount;
-  receive: QuidaxAmount;
+  from_currency: string;
+  to_currency: string;
+  from_amount: string;
+  to_amount: string;
+  quoted_price: string;
+  quoted_currency: string;
 }
 
 export interface QuidaxWallet {
@@ -180,7 +187,17 @@ export interface QuidaxTicker {
 
 export interface QuidaxMarketTicker {
   at: number;
-  ticker: QuidaxTicker;
+  ticker: {
+    low: string;
+    high: string;
+    last: string;
+    open: string;
+    volume: string;
+    sell: string;
+    buy: string;
+    name?: string;
+    price_change_percent?: string;
+  };
 }
 
 export interface QuidaxTradeCalculation {

@@ -1,7 +1,7 @@
 // app/components/profile/ProfileHeader.tsx
 "use client";
 
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { useEffect, useState } from 'react';
 import VerificationBadge from './VerificationBadge';
 import supabase from '@/lib/supabase/client';

@@ -32,13 +32,7 @@ export interface PaymentMethodSelectionProps {
   walletBalance?: number;
 }
 
-export type PaymentStatus = 
-  | 'initiated'
-  | 'pending'
-  | 'processing'
-  | 'confirming'
-  | 'completed'
-  | 'failed';
+export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface PaymentResult {
   status: PaymentStatus;

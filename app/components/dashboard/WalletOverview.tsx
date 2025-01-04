@@ -5,31 +5,50 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
-import { getWalletService } from '@/app/lib/services/quidax-wallet';
+import { getWalletService } from '@/lib/services/quidax-wallet';
 import { formatCurrency } from '@/lib/utils';
+import { useAuth } from '@/app/context/AuthContext';
+import { useToast } from '@/hooks/use-toast';
 
 interface WalletBalance {
   currency: string;
   balance: string;
-  locked: string;
-  total: string;
+  available_balance: string;
+  pending_balance: string;
 }
 
 export function WalletOverview() {
+  const { user } = useAuth();
+  const { toast } = useToast();
   const [wallets, setWallets] = useState<WalletBalance[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchWallets = async () => {
+      if (!user?.id) {
+        setError('Please sign in to view your wallet balances');
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        setError(null);
         const walletService = getWalletService();
-        const data = await walletService.getAllWallets();
-        setWallets(data);
-      } catch (err: any) {
-        setError(err.message || 'Failed to fetch wallet balances');
+        const response = await walletService.getAllWallets(user.id);
+        
+        if (response.error) {
+          throw new Error(response.error);
+        }
+
+        if (!response.data?.wallets) {
+          throw new Error('No wallet data available');
+        }
+
+        setWallets(response.data.wallets);
+      } catch (error) {
+        console.error('Error fetching wallets:', error);
+        setError(error instanceof Error ? error.message : 'Failed to fetch wallets');
       } finally {
         setLoading(false);
       }
@@ -39,7 +58,7 @@ export function WalletOverview() {
     // Refresh every 30 seconds
     const interval = setInterval(fetchWallets, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [user?.id]);
 
   if (error) {
     return (
@@ -80,13 +99,14 @@ export function WalletOverview() {
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(parseFloat(wallet.total), wallet.currency)}
+                {formatCurrency(parseFloat(wallet.available_balance), wallet.currency)}
               </div>
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                <div>Available: {formatCurrency(parseFloat(wallet.balance), wallet.currency)}</div>
-                {parseFloat(wallet.locked) > 0 && (
-                  <div>Locked: {formatCurrency(parseFloat(wallet.locked), wallet.currency)}</div>
+                <div>Available: {formatCurrency(parseFloat(wallet.available_balance), wallet.currency)}</div>
+                {parseFloat(wallet.pending_balance) > 0 && (
+                  <div>Pending: {formatCurrency(parseFloat(wallet.pending_balance), wallet.currency)}</div>
                 )}
+                <div>Total: {formatCurrency(parseFloat(wallet.available_balance) + parseFloat(wallet.pending_balance), wallet.currency)}</div>
               </div>
             </CardContent>
             {/* Gradient overlay for visual appeal */}

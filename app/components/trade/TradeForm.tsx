@@ -6,37 +6,50 @@ import * as z from 'zod';
 import { Button } from '../ui/button';
 import { Input } from '../ui/input';
 import { Label } from '../ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { useToast } from '../../hooks/use-toast';
-import { QuidaxMarketService } from '../../lib/services/quidax-market';
+import { QuidaxSwapService } from '../../lib/services/quidax-swap';
+import { useAuth } from '@/app/context/AuthContext';
+import { Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
+import { QuidaxQuotation } from '@/app/types/quidax';
 
-const tradeFormSchema = z.object({
+const SUPPORTED_CURRENCIES = [
+  { value: 'btc', label: 'Bitcoin (BTC)' },
+  { value: 'eth', label: 'Ethereum (ETH)' },
+  { value: 'usdt', label: 'Tether (USDT)' },
+  { value: 'sol', label: 'Solana (SOL)' },
+  { value: 'bnb', label: 'BNB' },
+  { value: 'matic', label: 'Polygon (MATIC)' },
+  { value: 'xrp', label: 'Ripple (XRP)' },
+  { value: 'doge', label: 'Dogecoin (DOGE)' },
+  { value: 'ada', label: 'Cardano (ADA)' },
+  { value: 'dot', label: 'Polkadot (DOT)' },
+] as const;
+
+const swapFormSchema = z.object({
+  fromCurrency: z.string().min(1, 'From currency is required'),
+  toCurrency: z.string().min(1, 'To currency is required'),
   amount: z.string().min(1, 'Amount is required'),
-  market: z.string().default('btcngn'),
-  type: z.enum(['buy', 'sell']).default('buy'),
 });
 
-type TradeFormValues = z.infer<typeof tradeFormSchema>;
-
-interface QuoteData {
-  rate: number;
-  total: number;
-  fee: number;
-  receive: number;
-}
+type SwapFormValues = z.infer<typeof swapFormSchema>;
 
 export default function TradeForm() {
   const [loading, setLoading] = useState(false);
-  const [quote, setQuote] = useState<QuoteData | null>(null);
+  const [quotation, setQuotation] = useState<QuidaxQuotation | null>(null);
   const [countdown, setCountdown] = useState<number>(0);
+  const [selectedFromCurrency, setSelectedFromCurrency] = useState('usdt');
+  const [selectedToCurrency, setSelectedToCurrency] = useState('btc');
   const { toast } = useToast();
+  const { user } = useAuth();
   
-  const form = useForm<TradeFormValues>({
-    resolver: zodResolver(tradeFormSchema),
+  const form = useForm<SwapFormValues>({
+    resolver: zodResolver(swapFormSchema),
     defaultValues: {
+      fromCurrency: selectedFromCurrency,
+      toCurrency: selectedToCurrency,
       amount: '',
-      market: 'btcngn',
-      type: 'buy',
     },
   });
 
@@ -47,27 +60,38 @@ export default function TradeForm() {
     }
   }, [countdown]);
 
-  const getQuote = async (values: TradeFormValues) => {
+  const getQuotation = async (values: SwapFormValues) => {
+    console.log('[Trade] Getting quotation with values:', values);
     try {
       setLoading(true);
-      const quoteData = await QuidaxMarketService.getQuote({
-        market: values.market,
-        unit: values.market.slice(0, -3).toUpperCase(),
-        kind: values.type,
-        volume: parseFloat(values.amount),
+      const { data } = await QuidaxSwapService.createSwapQuotation({
+        user_id: user?.id || 'me',
+        from_currency: values.fromCurrency,
+        to_currency: values.toCurrency,
+        from_amount: values.amount,
       });
       
-      setQuote(quoteData);
-      setCountdown(14); // Start 14 second countdown
+      console.log('[Trade] Received quotation:', data);
+      setQuotation(data);
+      setSelectedFromCurrency(values.fromCurrency);
+      setSelectedToCurrency(values.toCurrency);
+      
+      // Calculate countdown from expires_at
+      const expiresAt = new Date(data.expires_at).getTime();
+      const now = new Date().getTime();
+      const timeLeft = Math.floor((expiresAt - now) / 1000);
+      setCountdown(timeLeft);
+      console.log('[Trade] Quote expires in:', timeLeft, 'seconds');
       
       toast({
         title: 'Quote received',
-        description: 'Please review and proceed within 14 seconds',
+        description: 'Please review and confirm the swap within the time limit',
       });
     } catch (error: any) {
+      console.error('[Trade] Error getting quotation:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to get quote',
+        description: error.message || 'Failed to get quotation',
         variant: 'destructive',
       });
     } finally {
@@ -75,48 +99,113 @@ export default function TradeForm() {
     }
   };
 
-  const onSubmit = async (values: TradeFormValues) => {
-    if (!quote || countdown === 0) {
-      // If no quote or quote expired, get new quote
-      await getQuote(values);
+  const executeSwap = async () => {
+    if (!quotation || !user) {
+      console.error('[Trade] Cannot execute swap: missing quotation or user');
       return;
     }
     
-    // Proceed with trade using the quote
+    console.log('[Trade] Executing swap with quotation:', quotation);
     try {
-      // TODO: Implement trade execution
+      setLoading(true);
+      const { data } = await QuidaxSwapService.confirmSwap(user.id, quotation.id);
+      console.log('[Trade] Swap confirmed:', data);
+      
       toast({
-        title: 'Trade submitted',
-        description: 'Your trade has been submitted successfully',
+        title: 'Swap successful',
+        description: `Successfully swapped ${quotation.from_amount} ${selectedFromCurrency.toUpperCase()} to ${quotation.to_amount} ${selectedToCurrency.toUpperCase()}`,
       });
+      
+      // Reset form
+      form.reset();
+      setQuotation(null);
+      setCountdown(0);
     } catch (error: any) {
+      console.error('[Trade] Error executing swap:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to submit trade',
+        description: error.message || 'Failed to execute swap',
         variant: 'destructive',
       });
+    } finally {
+      setLoading(false);
     }
   };
 
+  const onSubmit = async (values: SwapFormValues) => {
+    console.log('[Trade] Form submitted with values:', values);
+    if (!quotation || countdown === 0) {
+      await getQuotation(values);
+      return;
+    }
+    
+    await executeSwap();
+  };
+
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="amount">Amount</Label>
-        <Input
-          id="amount"
-          type="number"
-          step="any"
-          placeholder="Enter amount"
-          {...form.register('amount')}
-        />
-        {form.formState.errors.amount && (
-          <p className="text-sm text-red-500">
-            {form.formState.errors.amount.message}
-          </p>
-        )}
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label>From</Label>
+          <Select
+            onValueChange={(value) => {
+              form.setValue('fromCurrency', value);
+              setSelectedFromCurrency(value);
+            }}
+            defaultValue={selectedFromCurrency}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_CURRENCIES.map((currency) => (
+                <SelectItem key={currency.value} value={currency.value}>
+                  {currency.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>To</Label>
+          <Select
+            onValueChange={(value) => {
+              form.setValue('toCurrency', value);
+              setSelectedToCurrency(value);
+            }}
+            defaultValue={selectedToCurrency}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Select currency" />
+            </SelectTrigger>
+            <SelectContent>
+              {SUPPORTED_CURRENCIES.map((currency) => (
+                <SelectItem key={currency.value} value={currency.value}>
+                  {currency.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Amount</Label>
+          <Input
+            type="number"
+            step="any"
+            placeholder={`Enter amount in ${selectedFromCurrency.toUpperCase()}`}
+            {...form.register('amount')}
+          />
+          {form.formState.errors.amount && (
+            <p className="text-sm text-red-500">
+              {form.formState.errors.amount.message}
+            </p>
+          )}
+        </div>
       </div>
 
-      {quote && countdown > 0 && (
+      {quotation && countdown > 0 && (
         <div className="p-4 border rounded-lg space-y-2 bg-secondary/10">
           <div className="flex justify-between">
             <span>Quote expires in:</span>
@@ -124,34 +213,31 @@ export default function TradeForm() {
           </div>
           <div className="flex justify-between">
             <span>Rate:</span>
-            <span className="font-bold">{formatCurrency(quote.rate, 'NGN')}</span>
+            <span className="font-bold">1 {selectedFromCurrency.toUpperCase()} = {parseFloat(quotation.quoted_price).toFixed(8)} {selectedToCurrency.toUpperCase()}</span>
           </div>
           <div className="flex justify-between">
             <span>You'll receive:</span>
-            <span className="font-bold">{formatCurrency(quote.receive, 'NGN')}</span>
+            <span className="font-bold">{parseFloat(quotation.to_amount).toFixed(8)} {selectedToCurrency.toUpperCase()}</span>
           </div>
         </div>
       )}
 
-      <div className="flex gap-2">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => form.handleSubmit(getQuote)()}
-          disabled={loading}
-          className="flex-1"
-        >
-          Get Quote
-        </Button>
-        
-        <Button 
-          type="submit"
-          disabled={loading || !quote || countdown === 0}
-          className="flex-1"
-        >
-          {quote && countdown > 0 ? 'Proceed' : 'Trade'}
-        </Button>
-      </div>
+      <Button 
+        type="submit"
+        disabled={loading}
+        className="w-full"
+      >
+        {loading ? (
+          <div className="flex items-center">
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            {quotation ? 'Confirming Swap' : 'Getting Quote'}
+          </div>
+        ) : quotation && countdown > 0 ? (
+          'Confirm Swap'
+        ) : (
+          'Get Quote'
+        )}
+      </Button>
     </form>
   );
 } 

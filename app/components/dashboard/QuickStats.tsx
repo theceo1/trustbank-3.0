@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent } from "@/components/ui/card";
 import { Wallet, LineChart, Users } from "lucide-react";
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import supabase from "@/lib/supabase/client";
 import { StatsLoadingSkeleton } from "@/app/components/skeletons";
 

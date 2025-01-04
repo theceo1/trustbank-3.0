@@ -1,28 +1,125 @@
 "use client";
 
-import Calculator from "@/app/components/calculator/Calculator";
-import { motion } from "framer-motion";
-import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ArrowRight, Calculator as CalculatorIcon, RefreshCw } from 'lucide-react';
+
+interface MarketTicker {
+  buy: string;
+  sell: string;
+  low: string;
+  high: string;
+  open: string;
+  last: string;
+  vol: string;
+}
+
+interface CompetitorRate {
+  name: string;
+  rate: number;
+}
+
+const formatNumber = (value: number, currency: string) => {
+  const formatter = new Intl.NumberFormat('en-NG', {
+    style: currency === 'NGN' ? 'currency' : 'decimal',
+    currency: 'NGN',
+    minimumFractionDigits: currency === 'BTC' ? 8 : 2,
+    maximumFractionDigits: currency === 'BTC' ? 8 : 2,
+  });
+  return formatter.format(value).replace('NGN', '₦');
+};
 
 export default function CalculatorPage() {
-  const { data: session, status } = useSession();
-  const router = useRouter();
+  const [amount, setAmount] = useState('');
+  const [fromCurrency, setFromCurrency] = useState('NGN');
+  const [toCurrency, setToCurrency] = useState('USDT');
+  const [result, setResult] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [marketTickers, setMarketTickers] = useState<Record<string, MarketTicker>>({});
+  const [competitorRates, setCompetitorRates] = useState<CompetitorRate[]>([
+    { name: 'trustBank', rate: 1205 },
+    { name: 'Exchange A', rate: 1200 },
+    { name: 'Exchange B', rate: 1198 },
+    { name: 'Exchange C', rate: 1195 }
+  ]);
+
+  const currencies = [
+    { value: 'NGN', label: 'Nigerian Naira (NGN)' },
+    { value: 'USD', label: 'US Dollar (USD)' },
+    { value: 'USDT', label: 'Tether (USDT)' },
+    { value: 'BTC', label: 'Bitcoin (BTC)' },
+    { value: 'ETH', label: 'Ethereum (ETH)' }
+  ];
 
   useEffect(() => {
-    if (status === "unauthenticated") {
-      router.push("/auth/login");
-    }
-  }, [status, router]);
+    fetchMarketTickers();
+    const interval = setInterval(fetchMarketTickers, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
-  if (status === "loading") {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-green-600"></div>
-      </div>
-    );
-  }
+  const fetchMarketTickers = async () => {
+    try {
+      const response = await fetch('/api/market/tickers');
+      if (!response.ok) throw new Error('Failed to fetch market rates');
+      
+      const data = await response.json();
+      if (data.status === 'success' && data.data) {
+        setMarketTickers(data.data);
+      }
+    } catch (error) {
+      console.error('Error fetching market tickers:', error);
+    }
+  };
+
+  const calculateRate = () => {
+    if (!amount || isNaN(parseFloat(amount))) {
+      setError('Please enter a valid amount');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      let rate = 1;
+      const numericAmount = parseFloat(amount);
+
+      if (fromCurrency === 'USD' && toCurrency === 'NGN') {
+        rate = 1200;
+      } else if (fromCurrency === 'NGN' && toCurrency === 'USD') {
+        rate = 1/1200;
+      } else {
+        const marketPair = `${fromCurrency.toLowerCase()}${toCurrency.toLowerCase()}`;
+        const ticker = marketTickers[marketPair];
+        
+        if (ticker) {
+          rate = parseFloat(ticker.last);
+        } else {
+          const reversePair = `${toCurrency.toLowerCase()}${fromCurrency.toLowerCase()}`;
+          const reverseTicker = marketTickers[reversePair];
+          
+          if (reverseTicker) {
+            rate = 1 / parseFloat(reverseTicker.last);
+          } else {
+            throw new Error('Market rate not available for this pair');
+          }
+        }
+      }
+
+      const calculatedResult = numericAmount * rate;
+      setResult(calculatedResult);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : 'Failed to calculate rate');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 dark:from-green-950 dark:to-blue-950">
@@ -38,7 +135,7 @@ export default function CalculatorPage() {
               Crypto Calculator
             </h1>
             <p className="text-muted-foreground mt-2">
-              Get real-time conversion rates for cryptocurrencies
+              Get real-time conversion rates for cryptocurrencies and fiat currencies
             </p>
           </div>
 
@@ -48,15 +145,160 @@ export default function CalculatorPage() {
               Beta
             </span>
           </div>
-          
-          <Calculator />
 
-          <div className="text-sm text-muted-foreground bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg mt-4">
+          <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm dark:bg-black/50">
+            <CardContent className="p-6">
+              <motion.div 
+                className="space-y-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.2 }}
+              >
+                <div className="relative">
+                  <Input
+                    type="number"
+                    placeholder="Enter amount"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    className="text-lg h-12"
+                  />
+                  <div className="absolute right-3 top-3 text-sm text-muted-foreground">
+                    {fromCurrency}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-[1fr,auto,1fr] gap-4 items-center">
+                  <Select value={fromCurrency} onValueChange={setFromCurrency}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder="From" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((currency) => (
+                        <SelectItem key={currency.value} value={currency.value}>
+                          {currency.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+
+                  <motion.div
+                    whileHover={{ scale: 1.2 }}
+                    whileTap={{ scale: 0.9 }}
+                  >
+                    <ArrowRight className="w-6 h-6 text-green-600" />
+                  </motion.div>
+
+                  <Select value={toCurrency} onValueChange={setToCurrency}>
+                    <SelectTrigger className="h-12">
+                      <SelectValue placeholder="To" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currencies.map((currency) => (
+                        <SelectItem key={currency.value} value={currency.value}>
+                          {currency.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <Button 
+                  onClick={calculateRate}
+                  disabled={loading}
+                  className="w-full h-12 text-lg bg-green-600 hover:bg-green-700"
+                >
+                  {loading ? (
+                    <RefreshCw className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <CalculatorIcon className="w-5 h-5 mr-2" />
+                      Calculate Rate
+                    </>
+                  )}
+                </Button>
+
+                {error && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <Alert variant="destructive">
+                      <AlertDescription>{error}</AlertDescription>
+                    </Alert>
+                  </motion.div>
+                )}
+
+                {result !== null && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-6"
+                  >
+                    <div className="p-6 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-100 dark:border-green-800">
+                      <div className="text-2xl font-semibold text-green-900 dark:text-green-100">
+                        {formatNumber(parseFloat(amount), fromCurrency)} {fromCurrency} = 
+                      </div>
+                      <div className="text-3xl font-bold text-green-600 mt-2">
+                        {formatNumber(result, toCurrency)} {toCurrency}
+                      </div>
+                      <div className="text-sm text-muted-foreground mt-3 border-t border-green-100 dark:border-green-800 pt-3">
+                        1 {fromCurrency} = {formatNumber(result / parseFloat(amount), toCurrency)} {toCurrency}
+                      </div>
+                    </div>
+
+                    {(fromCurrency === 'NGN' || toCurrency === 'NGN') && (
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold flex items-center gap-2">
+                          Market Comparison
+                          <span className="text-xs text-muted-foreground">(NGN)</span>
+                        </h3>
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                          {competitorRates.map((competitor, index) => (
+                            <motion.div
+                              initial={{ opacity: 0, y: 20 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              transition={{ delay: index * 0.1 }}
+                              key={competitor.name}
+                              className={`relative overflow-hidden rounded-lg ${
+                                competitor.name === 'trustBank'
+                                  ? 'bg-gradient-to-br from-green-600 to-green-700 text-white'
+                                  : 'bg-white dark:bg-black/40'
+                              } p-4 shadow-sm`}
+                            >
+                              <div className="font-medium">{competitor.name}</div>
+                              <div className="text-lg font-semibold mt-1">
+                                {formatNumber(competitor.rate, 'NGN')}
+                              </div>
+                              {competitor.name === 'trustBank' && (
+                                <>
+                                  <div className="text-xs mt-1 text-green-100">Best Rate!</div>
+                                  <div className="absolute top-0 right-0 w-16 h-16 transform translate-x-8 -translate-y-8">
+                                    <div className="absolute inset-0 bg-white/10 rotate-45"></div>
+                                  </div>
+                                </>
+                              )}
+                            </motion.div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </motion.div>
+            </CardContent>
+          </Card>
+
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+            className="text-sm text-muted-foreground bg-yellow-50 dark:bg-yellow-900/20 p-4 rounded-lg"
+          >
             <p className="font-medium">Note:</p>
             <p>The conversion results shown are estimates. Actual rates may vary slightly at the time of transaction due to market volatility and network conditions.</p>
-          </div>
+          </motion.div>
         </motion.div>
       </div>
     </div>
   );
-}
+} 

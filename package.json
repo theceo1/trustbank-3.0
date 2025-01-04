@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test:trade": "cross-env TEST_USER_EMAIL=user2@trustbank.tech ts-node --project tsconfig.json scripts/test-trade.ts",
+    "test:trade": "ts-node -P scripts/tsconfig.json scripts/test-trade-flow.ts",
     "setup:admin": "ts-node scripts/setup-admin.ts",
     "setup:auth": "npx ts-node scripts/setup-auth-schema.ts",
     "setup:all": "npm run setup:supabase && npm run setup:admin && npm run setup:auth",
@@ -53,7 +53,17 @@
     "migrate": "ts-node scripts/fix-kyc-schema.ts",
     "fix:users": "DEBUG=fix:* ts-node scripts/fix-users.ts",
     "fix:auth-setup": "DEBUG=auth:* ts-node scripts/fix-auth-setup.ts",
-    "migrate:quidax": "DEBUG=migrate:* ts-node scripts/migrate-quidax-ids.ts"
+    "migrate:quidax": "DEBUG=migrate:* ts-node scripts/migrate-quidax-ids.ts",
+    "create:verified-user": "ts-node -P scripts/tsconfig.json scripts/create-verified-user.ts",
+    "swap:usdt-ngn": "ts-node scripts/swap-usdt-to-ngn.ts",
+    "debug:swap:usdt-ngn": "DEBUG=swap:* ts-node scripts/swap-usdt-to-ngn.ts",
+    "debug:all:swap:usdt-ngn": "DEBUG=* ts-node scripts/swap-usdt-to-ngn.ts",
+    "swap:ngn-usdt": "ts-node scripts/swap-ngn-to-usdt-and-transfer.ts",
+    "debug:swap:ngn-usdt": "DEBUG=swap:* ts-node scripts/swap-ngn-to-usdt-and-transfer.ts",
+    "debug:all:swap:ngn-usdt": "DEBUG=* ts-node scripts/swap-ngn-to-usdt-and-transfer.ts",
+    "transfer:usdt-to-receiver": "ts-node scripts/transfer-usdt-to-receiver.ts",
+    "debug:transfer:usdt-to-receiver": "DEBUG=transfer:* ts-node scripts/transfer-usdt-to-receiver.ts",
+    "debug:all:transfer:usdt-to-receiver": "DEBUG=* ts-node scripts/transfer-usdt-to-receiver.ts"
   },
   "dependencies": {
     "@heroicons/react": "^2.1.5",

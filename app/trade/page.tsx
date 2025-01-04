@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/ca
 import MarketStats from '@/app/components/trade/MarketStats';
 import { TradeHistory } from '@/app/components/trade/TradeHistory';
 import TradeForm from '@/app/components/trade/TradeForm';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { useRouter } from 'next/navigation';
 
 export default function TradePage() {

@@ -26,4 +26,5 @@ export enum TransactionType {
     | 'withdraw.rejected'
     | 'order.done'
     | 'order.cancelled'
-    | 'wallet.update';
+    | 'wallet.update'
+    | 'kyc.verification.completed';

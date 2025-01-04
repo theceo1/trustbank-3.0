@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useAuth } from '@/app/context/AuthContext';
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +12,7 @@ import { formatNumber } from '@/app/lib/utils';
 import { debug } from '@/app/lib/utils/debug';
 import { TradeQuotation } from '@/app/types/trade';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { getSupabaseClient } from '@/app/lib/supabase/client';
 
 const SUPPORTED_CURRENCIES = [
   { value: 'USDT', label: 'USDT' },
@@ -21,13 +22,14 @@ const SUPPORTED_CURRENCIES = [
 ];
 
 const formatCryptoBalance = (amount: number, currency: string) => {
-  return `${formatNumber(amount, 8)} ${currency}`;
+  return `${formatNumber(amount)} ${currency}`;
 };
 
 export function Trade() {
   const router = useRouter();
-  const { user, getToken } = useAuth();
+  const { user } = useAuth();
   const { toast } = useToast();
+  const supabase = getSupabaseClient();
   
   const [loading, setLoading] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number>(0);
@@ -60,12 +62,12 @@ export function Trade() {
     if (!user?.id || isLoadingBalance) return;
     setIsLoadingBalance(true);
     try {
-      const token = await getToken();
-      if (!token) throw new Error('No authentication token available');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No authentication session available');
       
       const profileResponse = await fetch('/api/profile', {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         }
       });
@@ -78,7 +80,7 @@ export function Trade() {
         const createResponse = await fetch('/api/create-quidax-account', {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${token}`,
+            'Authorization': `Bearer ${session.access_token}`,
             'Content-Type': 'application/json'
           }
         });
@@ -96,7 +98,7 @@ export function Trade() {
             `/api/wallet/users/${profileData.quidax_user_id}/wallets/${selectedCurrency.toLowerCase()}`,
             {
               headers: {
-                'Authorization': `Bearer ${token}`,
+                'Authorization': `Bearer ${session.access_token}`,
                 'Content-Type': 'application/json'
               }
             }
@@ -126,7 +128,7 @@ export function Trade() {
     } finally {
       setIsLoadingBalance(false);
     }
-  }, [user?.id, selectedCurrency, getToken, toast]);
+  }, [user?.id, selectedCurrency, toast]);
 
   const handleReviewTrade = useCallback(async () => {
     debug.trade('Starting trade review');
@@ -138,15 +140,15 @@ export function Trade() {
     }
 
     try {
-      const token = await getToken();
-      debug.trade('Got auth token');
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No authentication session available');
       
       setIsReviewing(true);
       const response = await fetch('/api/trades/quote', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({
           fromCurrency: selectedCurrency,
@@ -182,7 +184,7 @@ export function Trade() {
     } finally {
       setIsReviewing(false);
     }
-  }, [user?.id, amount, selectedCurrency, getToken, toast, tradeType]);
+  }, [user?.id, amount, selectedCurrency, toast, tradeType, supabase]);
 
   const handleConfirmTrade = async () => {
     debug.trade('Starting trade confirmation...');
@@ -199,7 +201,9 @@ export function Trade() {
     }
     
     try {
-      const token = await getToken();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No authentication session available');
+      
       setLoading(true);
       
       debug.trade('Sending trade confirmation request', {
@@ -211,7 +215,7 @@ export function Trade() {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
+          'Authorization': `Bearer ${session.access_token}`
         },
         body: JSON.stringify({ 
           tradeId: quotation.id,
@@ -248,152 +252,103 @@ export function Trade() {
 
   const handleCurrencyChange = (value: string) => {
     setSelectedCurrency(value);
-    setWalletBalance(0); // Reset balance when currency changes
-    fetchWalletBalance(); // Fetch new balance
+    setAmount('');
+    setQuotation(null);
+    fetchWalletBalance();
   };
 
+  // Fetch initial balance
   useEffect(() => {
-    if (user?.id) {
-      fetchWalletBalance();
-    }
-  }, [user?.id, fetchWalletBalance]); // Add fetchWalletBalance to dependencies
+    fetchWalletBalance();
+  }, [fetchWalletBalance]);
 
   return (
-    <div className="rounded-lg border bg-card text-card-foreground shadow-sm relative">
-      <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold">Trade Cryptocurrency</h3>
-        </div>
-
-        <Tabs defaultValue="buy-sell" className="w-full">
-          <TabsList className="grid grid-cols-4 gap-4 mb-6">
-            <TabsTrigger value="buy-sell">Buy/Sell</TabsTrigger>
-            <TabsTrigger value="swap">Swap</TabsTrigger>
-            <TabsTrigger value="send">Send</TabsTrigger>
-            <TabsTrigger value="receive">Receive</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="buy-sell" className="space-y-4">
-            <div className="grid gap-4">
-              <div className="grid grid-cols-2 gap-2">
-                <Button 
-                  variant={tradeType === 'buy' ? 'default' : 'outline'}
-                  onClick={() => setTradeType('buy')}
-                >
-                  Buy
-                </Button>
-                <Button 
-                  variant={tradeType === 'sell' ? 'default' : 'outline'}
-                  onClick={() => setTradeType('sell')}
-                >
-                  Sell
-                </Button>
-              </div>
-
-              <Select
-                value={selectedCurrency}
-                onValueChange={handleCurrencyChange}
-              >
+    <div className="space-y-6">
+      <Tabs defaultValue="sell" onValueChange={(value) => setTradeType(value as 'buy' | 'sell')}>
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="sell">Sell Crypto</TabsTrigger>
+          <TabsTrigger value="buy">Buy Crypto</TabsTrigger>
+        </TabsList>
+        <TabsContent value="sell" className="space-y-4">
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">Select Currency</label>
+              <Select value={selectedCurrency} onValueChange={handleCurrencyChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select currency" />
                 </SelectTrigger>
                 <SelectContent>
-                  {SUPPORTED_CURRENCIES.map(currency => (
+                  {SUPPORTED_CURRENCIES.map((currency) => (
                     <SelectItem key={currency.value} value={currency.value}>
                       {currency.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <p className="text-sm text-muted-foreground mt-2">
+                Available: {formatCryptoBalance(walletBalance, selectedCurrency)}
+              </p>
+            </div>
 
-              <div className="text-sm text-gray-500">
-                {isLoadingBalance ? (
-                  "Loading balance..."
-                ) : (
-                  `Available balance: ${formatCryptoBalance(walletBalance, selectedCurrency)}`
-                )}
-              </div>
-
+            <div>
+              <label className="text-sm font-medium">Amount</label>
               <Input
                 type="number"
-                placeholder={`Amount to ${tradeType}`}
+                placeholder="0.00"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                max={tradeType === 'sell' ? walletBalance : undefined}
+                min="0"
+                step="0.01"
               />
+            </div>
 
-              {quotation && (
-                <div className="p-4 border rounded-lg bg-muted">
-                  <h4 className="font-medium mb-2">Trade Quote</h4>
-                  <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span>Rate:</span>
-                      <span>₦{formatNumber(quotation.rate)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>You {tradeType}:</span>
-                      <span>{formatCryptoBalance(parseFloat(amount), selectedCurrency)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span>You receive:</span>
-                      <span>₦{formatNumber(quotation.amount)}</span>
-                    </div>
-                    <div className="text-center text-warning mt-2">
-                      Rate expires in: {quotationTimer}s
-                    </div>
+            {quotation && (
+              <div className="p-4 bg-card rounded-lg border">
+                <h3 className="font-medium mb-2">Trade Summary</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span>You're selling:</span>
+                    <span>{formatCryptoBalance(Number(amount), selectedCurrency)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>You'll receive:</span>
+                    <span>₦{formatNumber(Number(quotation.estimatedAmount))}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Rate:</span>
+                    <span>₦{formatNumber(Number(quotation.rate))}</span>
+                  </div>
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>Expires in:</span>
+                    <span>{quotationTimer}s</span>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {!quotation ? (
-                <Button 
-                  onClick={handleReviewTrade} 
-                  disabled={isReviewing || !amount || parseFloat(amount) <= 0}
-                  className="w-full"
-                >
-                  {isReviewing ? 'Getting Quote...' : 'Get Quote'}
-                </Button>
+            <Button
+              className="w-full"
+              onClick={quotation ? handleConfirmTrade : handleReviewTrade}
+              disabled={!amount || loading || isReviewing || isLoadingBalance}
+            >
+              {loading ? (
+                "Processing..."
+              ) : isReviewing ? (
+                "Getting quote..."
+              ) : quotation ? (
+                "Confirm Trade"
               ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  <Button 
-                    onClick={handleConfirmTrade}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    Confirm Trade
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setQuotation(null)}
-                    disabled={loading}
-                    className="w-full"
-                  >
-                    Cancel
-                  </Button>
-                </div>
+                "Review Trade"
               )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="swap" className="space-y-4">
-            <div className="p-4 text-center text-muted-foreground">
-              Swap functionality coming soon
-            </div>
-          </TabsContent>
-
-          <TabsContent value="send" className="space-y-4">
-            <div className="p-4 text-center text-muted-foreground">
-              Send functionality coming soon
-            </div>
-          </TabsContent>
-
-          <TabsContent value="receive" className="space-y-4">
-            <div className="p-4 text-center text-muted-foreground">
-              Receive functionality coming soon
-            </div>
-          </TabsContent>
-        </Tabs>
-      </div>
+            </Button>
+          </div>
+        </TabsContent>
+        <TabsContent value="buy" className="space-y-4">
+          <div className="flex items-center justify-center h-32 bg-card rounded-lg border">
+            <p className="text-muted-foreground">Coming soon...</p>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
