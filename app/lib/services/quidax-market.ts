@@ -32,28 +32,37 @@ interface MarketTickerData {
 
 interface MarketTickersResponse {
   status: string;
-  message: string;
   data: Record<string, MarketTickerData>;
 }
 
+interface MarketPriceResponse {
+  status: string;
+  data: {
+    price: {
+      amount: string;
+      unit: string;
+    };
+  };
+}
+
 export class QuidaxMarketService {
-  private static readonly BASE_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static readonly BASE_URL = '/api/market';
 
   static async getAllMarketTickers(): Promise<MarketTickersResponse> {
     try {
-      const response = await fetch(`${this.BASE_URL}/markets/tickers`, {
+      const response = await fetch(`${this.BASE_URL}/tickers`, {
         headers: {
           'Accept': 'application/json'
         },
-        cache: 'no-store' // Ensure we get fresh rates
+        cache: 'no-store'
       });
 
       if (!response.ok) {
-        throw new Error('Failed to fetch market tickers');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch market data');
       }
 
       const data = await response.json();
-      
       if (data.status !== 'success' || !data.data) {
         throw new Error('Invalid market data received');
       }
@@ -65,69 +74,28 @@ export class QuidaxMarketService {
     }
   }
 
-  static async getMarketTicker(market: string): Promise<MarketTickerData> {
+  static async getMarketPrice(market: string): Promise<MarketPriceResponse> {
     try {
-      const response = await fetch(`${this.BASE_URL}/markets/tickers/${market}`, {
+      const response = await fetch(`${this.BASE_URL}/prices?market=${market}`, {
         headers: {
           'Accept': 'application/json'
         },
-        cache: 'no-store' // Ensure we get fresh rates
+        cache: 'no-store'
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch market ticker for ${market}`);
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to fetch market price');
       }
 
       const data = await response.json();
-      
       if (data.status !== 'success' || !data.data) {
-        throw new Error(`Invalid market data received for ${market}`);
+        throw new Error('Invalid market price data received');
       }
 
-      return data.data;
+      return data;
     } catch (error) {
-      console.error(`Error fetching market ticker for ${market}:`, error);
-      throw error;
-    }
-  }
-
-  static async getQuote(params: QuoteParams): Promise<QuoteResponse> {
-    try {
-      const queryParams = new URLSearchParams({
-        market: params.market,
-        unit: params.unit,
-        kind: params.kind,
-        volume: params.volume.toString()
-      });
-
-      const response = await fetch(
-        `${this.BASE_URL}/quotes?${queryParams.toString()}`,
-        {
-          headers: {
-            'Accept': 'application/json'
-          },
-          cache: 'no-store'
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch quote');
-      }
-
-      const data = await response.json();
-      
-      if (data.status !== 'success' || !data.data) {
-        throw new Error('Invalid quote data received');
-      }
-
-      return {
-        rate: parseFloat(data.data.price.amount),
-        total: parseFloat(data.data.total.amount),
-        fee: parseFloat(data.data.fee.amount),
-        receive: parseFloat(data.data.receive.amount)
-      };
-    } catch (error) {
-      console.error('Error fetching quote:', error);
+      console.error('Error fetching market price:', error);
       throw error;
     }
   }

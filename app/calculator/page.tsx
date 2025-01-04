@@ -43,10 +43,10 @@ export default function CalculatorPage() {
   const [error, setError] = useState<string | null>(null);
   const [marketTickers, setMarketTickers] = useState<Record<string, MarketTicker>>({});
   const [competitorRates, setCompetitorRates] = useState<CompetitorRate[]>([
-    { name: 'trustBank', rate: 1205 },
-    { name: 'Exchange A', rate: 1200 },
-    { name: 'Exchange B', rate: 1198 },
-    { name: 'Exchange C', rate: 1195 }
+    { name: 'trustBank', rate: 0 },
+    { name: 'Exchange A', rate: 0 },
+    { name: 'Exchange B', rate: 0 },
+    { name: 'Exchange C', rate: 0 }
   ]);
 
   const currencies = [
@@ -71,13 +71,69 @@ export default function CalculatorPage() {
       const data = await response.json();
       if (data.status === 'success' && data.data) {
         setMarketTickers(data.data);
+        
+        // Update competitor rates based on USDT/NGN market
+        const usdtngn = data.data.usdtngn;
+        if (usdtngn && usdtngn.ticker && usdtngn.ticker.last) {
+          const marketRate = parseFloat(usdtngn.ticker.last);
+          if (!isNaN(marketRate) && marketRate > 0) {
+            const trustBankRate = marketRate * 1.005; // trustBank offers 0.5% better rate
+            setCompetitorRates([
+              { name: 'trustBank', rate: trustBankRate },
+              { name: 'Exchange A', rate: marketRate },
+              { name: 'Exchange B', rate: marketRate * 0.995 },
+              { name: 'Exchange C', rate: marketRate * 0.99 }
+            ]);
+          }
+        }
       }
     } catch (error) {
       console.error('Error fetching market tickers:', error);
     }
   };
 
-  const calculateRate = () => {
+  const getQuote = async (fromCurrency: string, toCurrency: string, amount: string) => {
+    try {
+      const response = await fetch(
+        `/api/market/quotes?from_currency=${fromCurrency}&to_currency=${toCurrency}&volume=${amount}`
+      );
+      
+      const data = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to fetch quote');
+      }
+      
+      if (data.status === 'success' && data.data && data.data.price && data.data.price.amount) {
+        const rate = parseFloat(data.data.price.amount);
+        if (isNaN(rate) || rate <= 0) {
+          throw new Error('Invalid rate received from server');
+        }
+
+        // Update competitor rates when we get a new quote
+        if ((fromCurrency === 'NGN' && toCurrency === 'USDT') || (fromCurrency === 'USDT' && toCurrency === 'NGN')) {
+          const baseRate = fromCurrency === 'NGN' ? 1 / rate : rate;
+          const trustBankRate = baseRate * 1.005; // trustBank offers 0.5% better rate
+          setCompetitorRates([
+            { name: 'trustBank', rate: trustBankRate },
+            { name: 'Exchange A', rate: baseRate },
+            { name: 'Exchange B', rate: baseRate * 0.995 },
+            { name: 'Exchange C', rate: baseRate * 0.99 }
+          ]);
+        }
+
+        return rate;
+      }
+      
+      console.error('Invalid quote data structure:', data);
+      throw new Error('Invalid quote data received from server');
+    } catch (error) {
+      console.error('Error getting quote:', error);
+      throw error;
+    }
+  };
+
+  const calculateRate = async () => {
     if (!amount || isNaN(parseFloat(amount))) {
       setError('Please enter a valid amount');
       return;
@@ -87,34 +143,23 @@ export default function CalculatorPage() {
       setLoading(true);
       setError(null);
 
-      let rate = 1;
       const numericAmount = parseFloat(amount);
+      let calculatedResult: number;
 
-      if (fromCurrency === 'USD' && toCurrency === 'NGN') {
-        rate = 1200;
-      } else if (fromCurrency === 'NGN' && toCurrency === 'USD') {
-        rate = 1/1200;
+      if (fromCurrency === toCurrency) {
+        calculatedResult = numericAmount;
       } else {
-        const marketPair = `${fromCurrency.toLowerCase()}${toCurrency.toLowerCase()}`;
-        const ticker = marketTickers[marketPair];
+        const rate = await getQuote(fromCurrency, toCurrency, amount);
+        calculatedResult = numericAmount * rate;
         
-        if (ticker) {
-          rate = parseFloat(ticker.last);
-        } else {
-          const reversePair = `${toCurrency.toLowerCase()}${fromCurrency.toLowerCase()}`;
-          const reverseTicker = marketTickers[reversePair];
-          
-          if (reverseTicker) {
-            rate = 1 / parseFloat(reverseTicker.last);
-          } else {
-            throw new Error('Market rate not available for this pair');
-          }
+        if (isNaN(calculatedResult) || calculatedResult <= 0) {
+          throw new Error('Invalid calculation result');
         }
       }
 
-      const calculatedResult = numericAmount * rate;
       setResult(calculatedResult);
     } catch (error) {
+      console.error('Calculation error:', error);
       setError(error instanceof Error ? error.message : 'Failed to calculate rate');
     } finally {
       setLoading(false);

@@ -1,44 +1,29 @@
 //app/lib/services/quidax-wallet.ts
 import { QuidaxClient } from './quidax-client';
 
+interface WalletData {
+  id: string;
+  currency: string;
+  balance: string;
+  locked: string;
+  deposit_address?: string;
+}
+
 interface WalletResponse {
-  data?: {
-    wallets?: any[];
-    transactions?: any[];
-    balance?: string;
-    available_balance?: string;
-    pending_balance?: string;
-    currency?: string;
-    [key: string]: any;
-  };
-  error?: string;
-}
-
-interface TransferResponse {
-  success: boolean;
-  reference: string;
   status: string;
-}
-
-interface TransactionStatusResponse {
-  status: string;
-  reference: string;
-  details?: any;
+  message: string;
+  data: WalletData[];
 }
 
 export class QuidaxWalletService {
+  private static readonly BASE_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
   private static instance: QuidaxWalletService;
-  private client: QuidaxClient;
-  private isConfigured: boolean;
+  private token: string | null = null;
 
-  constructor() {
-    const apiUrl = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
-    const apiKey = process.env.QUIDAX_SECRET_KEY;
-    
-    this.client = new QuidaxClient(apiUrl, apiKey);
-    this.isConfigured = Boolean(apiUrl && apiKey);
-    
-    if (!this.isConfigured) {
+  private constructor() {
+    // Private constructor to enforce singleton
+    this.token = process.env.NEXT_PUBLIC_QUIDAX_API_KEY || null;
+    if (!this.token) {
       console.warn('Wallet service not properly configured. Some features may be unavailable.');
     }
   }
@@ -50,197 +35,70 @@ export class QuidaxWalletService {
     return QuidaxWalletService.instance;
   }
 
-  private handleError(error: any, message: string): WalletResponse {
-    console.error(message, error);
-    if (process.env.NODE_ENV === 'development') {
-      return {
-        data: {
-          currency: 'USDT',
-          balance: '1000.00',
-          available_balance: '1000.00',
-          pending_balance: '0.00'
-        }
-      };
-    }
-    return { error: error.message || message };
-  }
-
-  async getAllWallets(userId: string): Promise<WalletResponse> {
+  async getAllWallets(userId: string = 'me'): Promise<WalletResponse> {
     try {
-      if (!this.isConfigured) {
-        if (process.env.NODE_ENV === 'development') {
-          return {
-            data: {
-              wallets: [{
-                currency: 'USDT',
-                balance: '1000.00',
-                available_balance: '1000.00',
-                pending_balance: '0.00'
-              }]
-            }
-          };
-        }
+      if (!this.token) {
         throw new Error('Wallet service not configured');
       }
 
-      if (!userId) {
-        throw new Error('User ID is required');
-      }
-
-      const response = await this.client.get(`/users/${userId}/wallets`);
-      
-      if (!response?.data) {
-        throw new Error('Invalid response from wallet service');
-      }
-
-      return {
-        data: {
-          wallets: response.data
-        }
-      };
-    } catch (error) {
-      return this.handleError(error, 'Error fetching wallets');
-    }
-  }
-
-  async getWallet(userId: string, currency: string): Promise<WalletResponse> {
-    try {
-      if (!this.isConfigured) {
-        if (process.env.NODE_ENV === 'development') {
-          return {
-            data: {
-              currency: currency.toUpperCase(),
-              balance: '1000.00',
-              available_balance: '1000.00',
-              pending_balance: '0.00'
-            }
-          };
-        }
-        throw new Error('Wallet service not configured');
-      }
-
-      if (!userId || !currency) {
-        throw new Error('User ID and currency are required');
-      }
-
-      const response = await this.client.get(
-        `/users/${userId}/wallets/${currency.toLowerCase()}`
-      );
-      
-      if (!response?.data) {
-        throw new Error('Invalid response from wallet service');
-      }
-
-      return {
-        data: response.data
-      };
-    } catch (error) {
-      return this.handleError(error, 'Error fetching wallet');
-    }
-  }
-
-  async getTransactionHistory(userId: string): Promise<WalletResponse> {
-    try {
-      if (!this.isConfigured) {
-        if (process.env.NODE_ENV === 'development') {
-          return {
-            data: {
-              transactions: [{
-                id: '1',
-                type: 'credit',
-                amount: '1000.00',
-                currency: 'USDT',
-                status: 'completed',
-                created_at: new Date().toISOString()
-              }]
-            }
-          };
-        }
-        throw new Error('Wallet service not configured');
-      }
-
-      if (!userId) {
-        throw new Error('User ID is required');
-      }
-
-      const response = await this.client.get(`/users/${userId}/transactions`);
-      
-      if (!response?.data) {
-        throw new Error('Invalid response from wallet service');
-      }
-
-      return {
-        data: {
-          transactions: response.data
-        }
-      };
-    } catch (error) {
-      return this.handleError(error, 'Error fetching transaction history');
-    }
-  }
-
-  async transfer(fromUserId: string, toUserId: string, amount: string, currency: string): Promise<TransferResponse> {
-    try {
-      if (!this.isConfigured) {
-        throw new Error('Wallet service not configured');
-      }
-
-      const response = await this.client.post('/transfers', {
-        from_user_id: fromUserId,
-        to_user_id: toUserId,
-        amount,
-        currency: currency.toLowerCase()
+      const response = await fetch(`${QuidaxWalletService.BASE_URL}/users/${userId}/wallets`, {
+        headers: {
+          'Accept': 'application/json',
+          'Authorization': `Bearer ${this.token}`,
+        },
+        cache: 'no-store'
       });
 
-      if (!response?.data) {
-        throw new Error('Invalid response from wallet service');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch wallets');
       }
 
-      return {
-        success: true,
-        reference: response.data.reference,
-        status: response.data.status
-      };
+      const data = await response.json();
+      if (data.status !== 'success' || !Array.isArray(data.data)) {
+        throw new Error('Invalid wallet data received');
+      }
+
+      return data;
     } catch (error) {
-      const errorResponse = this.handleError(error, 'Error transferring funds');
-      return {
-        success: false,
-        reference: '',
-        status: 'failed',
-        ...errorResponse
-      };
+      console.error('Error fetching wallets:', error);
+      throw error;
     }
   }
 
-  async getTransactionStatus(reference: string): Promise<TransactionStatusResponse> {
+  async getWallet(userId: string = 'me', currency: string): Promise<WalletResponse> {
     try {
-      if (!this.isConfigured) {
+      if (!this.token) {
         throw new Error('Wallet service not configured');
       }
 
-      const response = await this.client.get(`/transactions/${reference}`);
+      const response = await fetch(
+        `${QuidaxWalletService.BASE_URL}/users/${userId}/wallets/${currency}`,
+        {
+          headers: {
+            'Accept': 'application/json',
+            'Authorization': `Bearer ${this.token}`,
+          },
+          cache: 'no-store'
+        }
+      );
 
-      if (!response?.data) {
-        throw new Error('Invalid response from wallet service');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch wallet');
       }
 
-      return {
-        status: response.data.status,
-        reference: response.data.reference,
-        details: response.data
-      };
+      const data = await response.json();
+      if (data.status !== 'success' || !data.data) {
+        throw new Error('Invalid wallet data received');
+      }
+
+      return data;
     } catch (error) {
-      const errorResponse = this.handleError(error, 'Error checking transaction status');
-      return {
-        status: 'failed',
-        reference,
-        details: errorResponse.error
-      };
+      console.error(`Error fetching ${currency} wallet:`, error);
+      throw error;
     }
   }
 }
 
-// Helper function to get wallet service instance
-export function getWalletService(): QuidaxWalletService {
-  return QuidaxWalletService.getInstance();
-} 
+export const getWalletService = () => QuidaxWalletService.getInstance(); 

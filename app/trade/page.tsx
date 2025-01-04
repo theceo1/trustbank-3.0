@@ -1,63 +1,59 @@
 //app/trade/page.tsx
 "use client";
 
-import { useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
-import MarketStats from '@/app/components/trade/MarketStats';
-import { TradeHistory } from '@/app/components/trade/TradeHistory';
-import TradeForm from '@/app/components/trade/TradeForm';
-import { useAuth } from '@/app/context/AuthContext';
+import { useEffect, useState } from 'react';
+import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
+import MarketStats from '@/app/components/trade/MarketStats';
+import TradeForm from '@/app/components/trade/TradeForm';
+import WalletOverview from '@/app/components/trade/WalletOverview';
 
 export default function TradePage() {
-  const { user } = useAuth();
+  const { data: session, status } = useSession();
   const router = useRouter();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      router.push('/auth/login?redirect=/trade');
-    }
-  }, [user, router]);
+    if (status === 'loading') return;
 
-  if (!user) {
+    if (!session) {
+      toast.error('Please sign in to access the trading page');
+      router.push('/auth/login?redirect=/trade');
+      return;
+    }
+
+    // Check if user has trading access
+    const hasTradeAccess = session.user?.role === 'admin' || session.user?.role === 'trader';
+    if (!hasTradeAccess) {
+      toast.error('You do not have access to the trading feature');
+      router.push('/dashboard');
+      return;
+    }
+
+    setIsLoading(false);
+  }, [session, status, router]);
+
+  if (isLoading) {
     return (
-      <div className="container mx-auto py-8 px-4 space-y-6 mt-12">
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-center text-muted-foreground">
-              Please sign in to access the trading page
-            </p>
-          </CardContent>
-        </Card>
+      <div className="flex h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-green-600" />
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto py-8 px-4 space-y-6 mt-12">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Trade Crypto</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <TradeForm />
-          </CardContent>
-        </Card>
-
-        <div className="md:col-span-2">
+    <div className="container mx-auto px-4 py-8">
+      <div className="grid gap-6 md:grid-cols-[1fr,300px]">
+        <div className="space-y-6">
           <MarketStats />
+          <TradeForm />
+        </div>
+        <div>
+          <WalletOverview />
         </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Trade History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <TradeHistory />
-        </CardContent>
-      </Card>
     </div>
   );
 }

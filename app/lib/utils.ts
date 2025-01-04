@@ -6,16 +6,25 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(amount: number, currency: string = 'NGN'): string {
-  // Handle crypto currencies
-  if (['BTC', 'ETH', 'USDT'].includes(currency.toUpperCase())) {
-    return `${amount.toLocaleString()} ${currency.toUpperCase()}`;
+  if (isNaN(amount)) return '0.00';
+
+  const currencyConfig: Record<string, Intl.NumberFormatOptions> = {
+    NGN: { style: 'currency', currency: 'NGN', minimumFractionDigits: 2, maximumFractionDigits: 2 },
+    USD: { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 },
+    USDT: { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 6 },
+    BTC: { style: 'decimal', minimumFractionDigits: 8, maximumFractionDigits: 8 },
+    ETH: { style: 'decimal', minimumFractionDigits: 6, maximumFractionDigits: 8 },
+  };
+
+  const config = currencyConfig[currency] || { style: 'decimal', minimumFractionDigits: 2, maximumFractionDigits: 6 };
+  const formatter = new Intl.NumberFormat('en-US', config);
+  const formatted = formatter.format(amount);
+
+  if (config.style === 'currency') {
+    return formatted.replace('NGN', '₦');
   }
 
-  // Handle fiat currencies
-  return new Intl.NumberFormat('en-NG', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-  }).format(amount);
+  return `${formatted} ${currency}`;
 }
 
 export function formatDate(date: string | Date): string {
