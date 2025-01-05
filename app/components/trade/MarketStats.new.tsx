@@ -57,8 +57,6 @@ export default function MarketStats() {
       setError(null);
       
       const response = await QuidaxMarketService.getAllMarketTickers();
-      console.log('Market data response:', response); // Debug log
-      
       const marketData: Record<string, MarketData> = {};
       
       // Filter for USDT and NGN pairs
@@ -75,11 +73,9 @@ export default function MarketStats() {
         }
       });
 
-      console.log('Processed market data:', marketData); // Debug log
       setData(marketData);
     } catch (err: any) {
       const errorMessage = err.message || 'Failed to fetch market data';
-      console.error('Market data fetch error:', err); // Debug log
       setError(errorMessage);
       toast({
         title: 'Error',
@@ -150,7 +146,7 @@ export default function MarketStats() {
   }
 
   return (
-    <Card>
+    <Card className="relative">
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-lg font-semibold">
           Market Overview
@@ -165,7 +161,7 @@ export default function MarketStats() {
           <RefreshCw className="h-4 w-4" />
         </Button>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-6 relative">
         {loading ? (
           <>
             <Skeleton className="h-20" />
@@ -173,9 +169,9 @@ export default function MarketStats() {
           </>
         ) : data ? (
           <>
-            <div>
+            <div className="relative">
               <h3 className="text-sm font-medium text-muted-foreground mb-3">Top Gainers</h3>
-              <div className="space-y-2">
+              <div className="space-y-2 relative">
                 {getTopGainers().map(({ market, name, change, price, quote_unit }) => (
                   <div key={market} className="flex items-center justify-between">
                     <div>

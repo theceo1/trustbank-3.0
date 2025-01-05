@@ -5,16 +5,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
-import { getWalletService } from '@/lib/services/quidax-wallet';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/app/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface WalletBalance {
   currency: string;
-  balance: string;
-  available_balance: string;
-  pending_balance: string;
+  balance: number;
+  locked: number;
+  total: number;
 }
 
 export function WalletOverview() {
@@ -34,21 +33,28 @@ export function WalletOverview() {
 
       try {
         setLoading(true);
-        const walletService = getWalletService();
-        const response = await walletService.getAllWallets(user.id);
+        const response = await fetch(`/api/wallet/${user.id}`);
         
-        if (response.error) {
-          throw new Error(response.error);
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Failed to fetch wallets');
         }
 
-        if (!response.data?.wallets) {
-          throw new Error('No wallet data available');
+        const data = await response.json();
+        if (data.status !== 'success' || !Array.isArray(data.data)) {
+          throw new Error('Invalid wallet data received');
         }
 
-        setWallets(response.data.wallets);
+        setWallets(data.data);
+        setError(null);
       } catch (error) {
         console.error('Error fetching wallets:', error);
         setError(error instanceof Error ? error.message : 'Failed to fetch wallets');
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : 'Failed to fetch wallets',
+          variant: "destructive"
+        });
       } finally {
         setLoading(false);
       }
@@ -58,7 +64,7 @@ export function WalletOverview() {
     // Refresh every 30 seconds
     const interval = setInterval(fetchWallets, 30000);
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [user?.id, toast]);
 
   if (error) {
     return (
@@ -88,25 +94,32 @@ export function WalletOverview() {
             </CardContent>
           </Card>
         ))
+      ) : wallets.length === 0 ? (
+        <Alert>
+          <AlertTitle>No Wallets Found</AlertTitle>
+          <AlertDescription>
+            No wallet information is available at this time.
+          </AlertDescription>
+        </Alert>
       ) : (
         // Actual wallet cards
         wallets.map((wallet) => (
           <Card key={wallet.currency} className="relative overflow-hidden">
             <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {wallet.currency.toUpperCase()}
+                {wallet.currency}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(parseFloat(wallet.available_balance), wallet.currency)}
+                {formatCurrency(wallet.balance, wallet.currency)}
               </div>
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                <div>Available: {formatCurrency(parseFloat(wallet.available_balance), wallet.currency)}</div>
-                {parseFloat(wallet.pending_balance) > 0 && (
-                  <div>Pending: {formatCurrency(parseFloat(wallet.pending_balance), wallet.currency)}</div>
+                <div>Available: {formatCurrency(wallet.balance, wallet.currency)}</div>
+                {wallet.locked > 0 && (
+                  <div>Locked: {formatCurrency(wallet.locked, wallet.currency)}</div>
                 )}
-                <div>Total: {formatCurrency(parseFloat(wallet.available_balance) + parseFloat(wallet.pending_balance), wallet.currency)}</div>
+                <div>Total: {formatCurrency(wallet.total, wallet.currency)}</div>
               </div>
             </CardContent>
             {/* Gradient overlay for visual appeal */}

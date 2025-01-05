@@ -1,5 +1,5 @@
 //app/lib/services/quidax-wallet.ts
-import { QuidaxClient } from './quidax-client';
+import { QUIDAX_CONFIG } from '../config/quidax';
 
 interface WalletData {
   id: string;
@@ -16,16 +16,12 @@ interface WalletResponse {
 }
 
 export class QuidaxWalletService {
-  private static readonly BASE_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static readonly BASE_URL = '/api/wallet';
   private static instance: QuidaxWalletService;
-  private token: string | null = null;
+  private token: string;
 
   private constructor() {
-    // Private constructor to enforce singleton
-    this.token = process.env.NEXT_PUBLIC_QUIDAX_API_KEY || null;
-    if (!this.token) {
-      console.warn('Wallet service not properly configured. Some features may be unavailable.');
-    }
+    this.token = QUIDAX_CONFIG.apiKey;
   }
 
   static getInstance(): QuidaxWalletService {
@@ -35,49 +31,66 @@ export class QuidaxWalletService {
     return QuidaxWalletService.instance;
   }
 
-  async getAllWallets(userId: string = 'me'): Promise<WalletResponse> {
+  setToken(token: string) {
+    if (!token) {
+      console.warn('No token provided, using default API key');
+      this.token = QUIDAX_CONFIG.apiKey;
+      return;
+    }
+    this.token = token;
+  }
+
+  async getAllWallets(userId: string): Promise<WalletResponse> {
     try {
-      if (!this.token) {
-        throw new Error('Wallet service not configured');
+      if (!userId) {
+        throw new Error('User ID is required to fetch wallet details.');
       }
 
-      const response = await fetch(`${QuidaxWalletService.BASE_URL}/users/${userId}/wallets`, {
+      console.log('Fetching wallets for user:', userId);
+      
+      // Make request to our API route instead of Quidax directly
+      const response = await fetch(`${QuidaxWalletService.BASE_URL}/${userId}`, {
         headers: {
           'Accept': 'application/json',
-          'Authorization': `Bearer ${this.token}`,
         },
         cache: 'no-store'
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Wallet API error:', errorData);
         throw new Error(errorData.message || 'Failed to fetch wallets');
       }
 
       const data = await response.json();
-      if (data.status !== 'success' || !Array.isArray(data.data)) {
+      if (!data || !Array.isArray(data.data)) {
+        console.error('Invalid wallet data:', data);
         throw new Error('Invalid wallet data received');
       }
 
-      return data;
+      return {
+        status: 'success',
+        message: 'Wallets retrieved successfully',
+        data: data.data
+      };
     } catch (error) {
       console.error('Error fetching wallets:', error);
       throw error;
     }
   }
 
-  async getWallet(userId: string = 'me', currency: string): Promise<WalletResponse> {
+  async getWallet(userId: string, currency: string): Promise<WalletResponse> {
     try {
-      if (!this.token) {
-        throw new Error('Wallet service not configured');
+      if (!userId) {
+        throw new Error('User ID is required to fetch wallet details.');
       }
 
+      console.log('Fetching wallet for user:', userId, 'currency:', currency);
       const response = await fetch(
-        `${QuidaxWalletService.BASE_URL}/users/${userId}/wallets/${currency}`,
+        `${QuidaxWalletService.BASE_URL}/${userId}/${currency}`,
         {
           headers: {
             'Accept': 'application/json',
-            'Authorization': `Bearer ${this.token}`,
           },
           cache: 'no-store'
         }
@@ -85,17 +98,47 @@ export class QuidaxWalletService {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('Wallet API error:', errorData);
         throw new Error(errorData.message || 'Failed to fetch wallet');
       }
 
       const data = await response.json();
       if (data.status !== 'success' || !data.data) {
+        console.error('Invalid wallet data:', data);
         throw new Error('Invalid wallet data received');
       }
 
       return data;
     } catch (error) {
       console.error(`Error fetching ${currency} wallet:`, error);
+      throw error;
+    }
+  }
+
+  async createSubAccount(email: string, name: string): Promise<any> {
+    try {
+      const [firstName, lastName] = name.split(' ');
+      const response = await fetch(`${QuidaxWalletService.BASE_URL}/create-subaccount`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          email,
+          first_name: firstName || name,
+          last_name: lastName || 'User'
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to create Quidax sub-account');
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Create sub-account error:', error);
       throw error;
     }
   }

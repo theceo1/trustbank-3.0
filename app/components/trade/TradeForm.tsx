@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { useToast } from '../../hooks/use-toast';
 import { QuidaxSwapService } from '../../lib/services/quidax-swap';
 import { useAuth } from '@/app/context/AuthContext';
+import { useKYC } from '@/app/hooks/use-kyc';
 import { Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { QuidaxQuotation } from '@/app/types/quidax';
@@ -43,6 +44,7 @@ export default function TradeForm() {
   const [selectedToCurrency, setSelectedToCurrency] = useState('btc');
   const { toast } = useToast();
   const { user } = useAuth();
+  const { checkTradeLimits, redirectToVerification } = useKYC();
   
   const form = useForm<SwapFormValues>({
     resolver: zodResolver(swapFormSchema),
@@ -64,6 +66,20 @@ export default function TradeForm() {
     console.log('[Trade] Getting quotation with values:', values);
     try {
       setLoading(true);
+
+      // Check trade limits
+      const amount = parseFloat(values.amount);
+      const { allowed, reason, currentLimits } = await checkTradeLimits(amount);
+      
+      if (!allowed) {
+        toast({
+          title: 'Trade limit exceeded',
+          description: reason,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const { data } = await QuidaxSwapService.createSwapQuotation({
         user_id: user?.id || 'me',
         from_currency: values.fromCurrency,
@@ -108,6 +124,20 @@ export default function TradeForm() {
     console.log('[Trade] Executing swap with quotation:', quotation);
     try {
       setLoading(true);
+
+      // Check trade limits again before executing
+      const amount = parseFloat(quotation.from_amount);
+      const { allowed, reason } = await checkTradeLimits(amount);
+      
+      if (!allowed) {
+        toast({
+          title: 'Trade limit exceeded',
+          description: reason,
+          variant: 'destructive',
+        });
+        return;
+      }
+
       const { data } = await QuidaxSwapService.confirmSwap(user.id, quotation.id);
       console.log('[Trade] Swap confirmed:', data);
       

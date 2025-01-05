@@ -30,58 +30,183 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const supabase = getSupabaseClient();
 
+  const updateAuthState = async (newSession: Session | null) => {
+    console.log('Updating auth state:', {
+      hasSession: !!newSession,
+      userId: newSession?.user?.id,
+      email: newSession?.user?.email
+    });
+    
+    if (newSession) {
+      // Verify session is still valid
+      const { data: { session: verifiedSession }, error } = await supabase.auth.getSession();
+      if (error || !verifiedSession) {
+        console.error('Session verification failed:', error);
+        setSession(null);
+        setUser(null);
+        return;
+      }
+      setSession(verifiedSession);
+      setUser(verifiedSession.user);
+    } else {
+      setSession(null);
+      setUser(null);
+    }
+  };
+
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+    let mounted = true;
+
+    // Initialize session on mount
+    const initSession = async () => {
+      try {
+        console.log('Initializing session...');
+        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+          return;
+        }
+
+        if (initialSession && mounted) {
+          console.log('Found existing session:', {
+            userId: initialSession.user.id,
+            email: initialSession.user.email
+          });
+          await updateAuthState(initialSession);
+        } else {
+          console.log('No existing session found');
+        }
+      } catch (error) {
+        console.error('Error initializing session:', error);
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Subscribe to auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, currentSession: Session | null) => {
+      console.log('Auth state changed:', {
+        event,
+        userId: currentSession?.user?.id,
+        email: currentSession?.user?.email
+      });
+
+      if (!mounted) return;
+
+      if (currentSession) {
+        await updateAuthState(currentSession);
+        
+        if (event === 'SIGNED_IN') {
+          console.log('User signed in, refreshing...');
+          router.refresh();
+        }
+      } else {
+        await updateAuthState(null);
+        
+        if (event === 'SIGNED_OUT') {
+          console.log('User signed out, redirecting...');
+          router.refresh();
+          router.push('/auth/login');
+        }
+      }
     });
 
+    initSession();
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      console.log('Attempting sign in for:', email);
+      const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
-      if (!error) {
-        router.push('/dashboard');
+      if (error) {
+        console.error('Sign in error:', error);
+        return { error };
       }
 
-      return { error };
+      if (data.session) {
+        console.log('Sign in successful:', {
+          userId: data.session.user.id,
+          email: data.session.user.email
+        });
+        await updateAuthState(data.session);
+        router.refresh();
+      }
+
+      return { error: null };
     } catch (error) {
+      console.error('Unexpected sign in error:', error);
       return { error };
     }
   };
 
   const signInWithGoogle = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
+    try {
+      console.log('Initiating Google sign in...');
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) {
+        console.error('Google sign in error:', error);
+      }
+    } catch (error) {
+      console.error('Unexpected Google sign in error:', error);
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    router.push('/auth/login');
+    try {
+      console.log('Attempting sign out...');
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Sign out error:', error);
+        return;
+      }
+
+      console.log('Sign out successful');
+      await updateAuthState(null);
+      router.refresh();
+      router.push('/auth/login');
+    } catch (error) {
+      console.error('Unexpected sign out error:', error);
+    }
   };
 
+  const contextValue = {
+    user,
+    session,
+    loading,
+    signIn,
+    signInWithGoogle,
+    signOut,
+  };
+
+  console.log('Auth context state:', {
+    hasUser: !!user,
+    hasSession: !!session,
+    loading,
+    userId: user?.id,
+    email: user?.email
+  });
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      session,
-      loading,
-      signIn,
-      signInWithGoogle,
-      signOut,
-    }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

@@ -27,27 +27,39 @@ export function useUser(): UseUserReturn {
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select(`
-          *,
+          id,
+          user_id,
+          email,
           kyc_status,
           kyc_level,
-          kyc_data
+          is_verified,
+          daily_limit,
+          monthly_limit,
+          verification_status
         `)
-        .eq('id', authUser.id)
+        .eq('user_id', authUser.id)
         .single();
 
       if (profileError) {
         // Create profile if it doesn't exist
+        const defaultProfile = {
+          user_id: authUser.id,
+          email: authUser.email,
+          kyc_status: 'pending',
+          kyc_level: 0,
+          is_verified: false,
+          daily_limit: 50000,
+          monthly_limit: 1000000,
+          verification_status: {
+            tier1_verified: false,
+            tier2_verified: false,
+            tier3_verified: false
+          }
+        };
+
         const { data: newProfile, error: createError } = await supabase
           .from('user_profiles')
-          .insert([
-            { 
-              id: authUser.id,
-              email: authUser.email,
-              kyc_status: 'unverified',
-              kyc_level: 0,
-              kyc_data: {}
-            }
-          ])
+          .insert([defaultProfile])
           .select()
           .single();
 
@@ -59,10 +71,16 @@ export function useUser(): UseUserReturn {
       setUser({
         ...authUser,
         ...profile,
-        kyc_status: profile?.kyc_status || 'unverified',
-        kyc_level: profile?.kyc_level || 0
+        kyc_status: profile?.kyc_status || 'pending',
+        kyc_level: profile?.kyc_level || 0,
+        verification_status: profile?.verification_status || {
+          tier1_verified: false,
+          tier2_verified: false,
+          tier3_verified: false
+        }
       });
     } catch (err) {
+      console.error('Error fetching user:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch user'));
     } finally {
       setLoading(false);

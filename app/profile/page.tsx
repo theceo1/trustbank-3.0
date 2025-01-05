@@ -191,37 +191,41 @@ export default function ProfilePage() {
         <TabsContent value="limits" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Account Limits</CardTitle>
+              <CardTitle>Verification Status & Limits</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium">Verification Level {profile.kyc_level}</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Status: {profile.kyc_status}
-                  </p>
+              <div className="flex items-center space-x-2 mb-4">
+                <Shield className={`h-5 w-5 ${profile.is_verified ? 'text-green-500' : 'text-yellow-500'}`} />
+                <span className="font-medium">
+                  KYC Level {profile.kyc_level} - {profile.kyc_status.charAt(0).toUpperCase() + profile.kyc_status.slice(1)}
+                </span>
+              </div>
+
+              {!profile.is_verified && (
+                <Alert className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Complete your KYC verification to increase your trading limits.
+                    <Button asChild variant="link" className="pl-2">
+                      <Link href="/profile/verification">Verify Now</Link>
+                    </Button>
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Daily Trading Limit</Label>
+                  <div className="text-lg font-medium">
+                    ${profile.daily_limit?.toLocaleString() || '0'}
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <div className="flex justify-between">
-                    <span>Daily Limit</span>
-                    <span>₦{profile.daily_limit?.toLocaleString() || '0'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Monthly Limit</span>
-                    <span>₦{profile.monthly_limit?.toLocaleString() || '0'}</span>
+                  <Label>Monthly Trading Limit</Label>
+                  <div className="text-lg font-medium">
+                    ${profile.monthly_limit?.toLocaleString() || '0'}
                   </div>
                 </div>
-                {!profile.is_verified && (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      Verify your identity to increase your limits.{' '}
-                      <Link href="/profile/verification" className="font-medium hover:underline">
-                        Verify Now
-                      </Link>
-                    </AlertDescription>
-                  </Alert>
-                )}
               </div>
             </CardContent>
           </Card>

@@ -12,11 +12,20 @@ import { useToast } from "@/hooks/use-toast";
 import { Menu, X } from "lucide-react";
 
 export function Header() {
-  const { user, signOut } = useAuth();
+  const { user, session, loading, signOut } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    console.log('Header auth state:', {
+      hasUser: !!user,
+      userId: user?.id,
+      hasSession: !!session,
+      loading
+    });
+  }, [user, session, loading]);
 
   const handleSignOut = async () => {
     try {
@@ -27,6 +36,7 @@ export function Header() {
       });
       router.push('/auth/login');
     } catch (error) {
+      console.error('Error signing out:', error);
       toast({
         title: "Error signing out",
         description: "There was a problem signing out. Please try again.",
@@ -34,6 +44,13 @@ export function Header() {
       });
     }
   };
+
+  // Don't render anything while loading
+  if (loading) {
+    return null;
+  }
+
+  const isAuthenticated = !!user && !!session;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -49,7 +66,7 @@ export function Header() {
         <div className="hidden md:flex items-center space-x-6 ml-auto">
           <NavigationMenu>
             <NavigationMenuList>
-              {user ? (
+              {isAuthenticated ? (
                 <>
                   <NavigationMenuItem>
                     <Link href="/dashboard" className="group inline-flex h-9 w-max items-center justify-center rounded-md bg-background px-4 py-2 text-sm font-medium transition-colors hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none disabled:pointer-events-none disabled:opacity-50 data-[active]:bg-accent/50 data-[state=open]:bg-accent/50">
@@ -86,7 +103,7 @@ export function Header() {
 
           <ThemeToggle />
 
-          {user ? (
+          {isAuthenticated ? (
             <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
           ) : (
             <>
@@ -115,7 +132,7 @@ export function Header() {
           <div ref={menuRef} className="absolute top-full left-0 right-0 bg-background border-b md:hidden">
             <div className="container py-4">
               <nav className="flex flex-col space-y-4">
-                {user ? (
+                {isAuthenticated ? (
                   <>
                     <Link href="/dashboard" className="text-sm font-medium">Overview</Link>
                     <Link href="/trade" className="text-sm font-medium">Buy/Sell</Link>
@@ -127,7 +144,7 @@ export function Header() {
                     <Link href="/about" className="text-sm font-medium">About</Link>
                   </>
                 )}
-                {user ? (
+                {isAuthenticated ? (
                   <Button variant="outline" onClick={handleSignOut}>Sign Out</Button>
                 ) : (
                   <>

@@ -2,45 +2,87 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
-import MarketStats from '@/app/components/trade/MarketStats';
+import MarketStats from '@/app/components/trade/MarketStats.new';
 import TradeForm from '@/app/components/trade/TradeForm';
 import WalletOverview from '@/app/components/trade/WalletOverview';
+import { useAuth } from '@/app/context/AuthContext';
+
+interface KYCStatus {
+  verified: boolean;
+  kyc_level: string;
+  daily_limit: number;
+  monthly_limit: number;
+  verification_status: {
+    tier1: boolean;
+    tier2: boolean;
+    tier3: boolean;
+  };
+}
 
 export default function TradePage() {
-  const { data: session, status } = useSession();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
+  const [kycStatus, setKycStatus] = useState<KYCStatus | null>(null);
 
   useEffect(() => {
-    if (status === 'loading') return;
+    if (authLoading) return;
 
-    if (!session) {
+    if (!user) {
       toast.error('Please sign in to access the trading page');
       router.push('/auth/login?redirect=/trade');
       return;
     }
 
-    // Check if user has trading access
-    const hasTradeAccess = session.user?.role === 'admin' || session.user?.role === 'trader';
-    if (!hasTradeAccess) {
-      toast.error('You do not have access to the trading feature');
-      router.push('/dashboard');
-      return;
-    }
+    // Check KYC status
+    const checkKYCStatus = async () => {
+      try {
+        setIsLoading(true);
+        const response = await fetch('/api/kyc/status', {
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        });
 
-    setIsLoading(false);
-  }, [session, status, router]);
+        const data = await response.json();
 
-  if (isLoading) {
+        if (!response.ok) {
+          throw new Error(data.error || 'Failed to fetch KYC status');
+        }
+
+        setKycStatus(data);
+        
+        if (!data.verified) {
+          toast.error('Please complete your identity verification to access trading');
+          router.push('/profile/verification');
+          return;
+        }
+      } catch (error: any) {
+        console.error('Error checking KYC status:', error);
+        toast.error(error.message || 'Failed to verify your trading eligibility');
+        router.push('/dashboard');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    checkKYCStatus();
+  }, [user, authLoading, router]);
+
+  if (authLoading || isLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-green-600" />
       </div>
     );
+  }
+
+  if (!user || !kycStatus?.verified) {
+    return null;
   }
 
   return (
