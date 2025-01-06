@@ -19,10 +19,23 @@ interface Transaction {
 }
 
 interface WalletData {
+  id: string;
+  name: string;
   currency: string;
   balance: string;
-  available_balance: string;
-  pending_balance: string;
+  locked: string;
+  staked: string;
+  converted_balance: string;
+  reference_currency: string;
+  is_crypto: boolean;
+  blockchain_enabled: boolean;
+  default_network: string | null;
+  networks: {
+    id: string;
+    name: string;
+    deposits_enabled: boolean;
+    withdraws_enabled: boolean;
+  }[];
 }
 
 export default function WalletPage() {
@@ -46,13 +59,13 @@ export default function WalletPage() {
         setError(null);
         setErrorType(null);
         
-        const response = await fetch('/api/wallet');
+        const response = await fetch('/api/wallet/balances');
         if (!response.ok) {
           const data = await response.json();
           
-          if (data.kyc_required) {
+          if (data.redirectTo === '/profile/verification') {
             setErrorType('kyc');
-            throw new Error(data.error || 'Please complete your identity verification to access your wallet.');
+            throw new Error(data.message || 'Please complete your identity verification to access your wallet.');
           }
           
           if (data.setup_required) {
@@ -65,12 +78,24 @@ export default function WalletPage() {
         }
         
         const data = await response.json();
-        if (!data.wallets || !Array.isArray(data.wallets)) {
+        if (data.status !== 'success' || !Array.isArray(data.data)) {
           throw new Error('Unable to load wallet information. Please try again later.');
         }
         
-        setWallets(data.wallets);
-        setTransactions(data.transactions || []);
+        // Filter out wallets with zero balance for cleaner UI
+        const nonZeroWallets = data.data.filter((wallet: WalletData) => 
+          parseFloat(wallet.balance) > 0 || parseFloat(wallet.locked) > 0
+        );
+        setWallets(nonZeroWallets);
+
+        // Fetch transactions
+        const txResponse = await fetch('/api/transactions');
+        if (txResponse.ok) {
+          const txData = await txResponse.json();
+          if (txData.status === 'success' && Array.isArray(txData.data)) {
+            setTransactions(txData.data);
+          }
+        }
       } catch (err) {
         console.error('Error fetching wallet data:', err);
         setError(err instanceof Error ? err.message : 'Unable to fetch wallet information. Please try again later.');
@@ -154,17 +179,27 @@ export default function WalletPage() {
             <Card key={wallet.currency} className="bg-card">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-lg font-medium">
-                  {wallet.currency.toUpperCase()}
+                  {wallet.name}
                 </CardTitle>
                 <span className="text-sm text-muted-foreground">Available</span>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">
-                  {formatCurrency(parseFloat(wallet.available_balance || '0'), wallet.currency)}
+                  {formatCurrency(parseFloat(wallet.balance), wallet.currency)}
                 </div>
-                {parseFloat(wallet.pending_balance || '0') > 0 && (
+                {parseFloat(wallet.locked) > 0 && (
                   <div className="mt-2 text-sm text-muted-foreground">
-                    Pending: {formatCurrency(parseFloat(wallet.pending_balance), wallet.currency)}
+                    Locked: {formatCurrency(parseFloat(wallet.locked), wallet.currency)}
+                  </div>
+                )}
+                {parseFloat(wallet.staked) > 0 && (
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    Staked: {formatCurrency(parseFloat(wallet.staked), wallet.currency)}
+                  </div>
+                )}
+                {wallet.converted_balance && wallet.reference_currency && (
+                  <div className="mt-2 text-sm text-muted-foreground">
+                    ≈ {formatCurrency(parseFloat(wallet.converted_balance), wallet.reference_currency)}
                   </div>
                 )}
               </CardContent>

@@ -23,3 +23,9 @@ export const TRADING_PAIRS = [
 export const DEFAULT_TRADING_PAIR = 'btc_ngn';
 
 export type SupportedCryptoCurrency = typeof SUPPORTED_CRYPTOCURRENCIES[number];
+
+// Export a simple array of supported currency symbols for easy filtering
+export const SUPPORTED_CURRENCY_SYMBOLS = [
+  ...SUPPORTED_CRYPTOCURRENCIES.map(c => c.symbol.toUpperCase()),
+  ...FIAT_CURRENCIES
+] as const;

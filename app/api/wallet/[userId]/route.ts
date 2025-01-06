@@ -1,31 +1,40 @@
 // /app/api/wallet/[userId]/route.ts
+import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
 import { QuidaxClient } from '@/app/lib/services/quidax-client';
+import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
 
-export async function GET(
-  request: Request,
-  { params }: { params: { userId: string } }
-) {
+interface WalletParams {
+  userId: string;
+}
+
+export async function GET(request: Request, { params }: { params: WalletParams }) {
   try {
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-    const quidaxClient = new QuidaxClient();
-    
-    // Get the current user's session
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+
+    // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
     if (sessionError || !session) {
       return NextResponse.json(
-        { error: 'Unauthorized. Please sign in to continue.' },
+        { 
+          status: 'error',
+          message: 'Unauthorized. Please sign in to continue.'
+        },
         { status: 401 }
       );
     }
 
-    // Verify user is accessing their own wallet
+    // Verify user is requesting their own wallet
     if (session.user.id !== params.userId) {
       return NextResponse.json(
-        { error: 'Unauthorized access' },
+        { 
+          status: 'error',
+          message: 'Unauthorized to access this wallet.'
+        },
         { status: 403 }
       );
     }
@@ -33,30 +42,36 @@ export async function GET(
     // Get user's Quidax ID from user_profiles
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('quidax_id, is_verified, kyc_status')
+      .select('quidax_id, kyc_status')
       .eq('user_id', session.user.id)
       .single();
 
     if (profileError) {
-      console.error('Profile fetch error:', profileError);
       return NextResponse.json(
-        { error: 'Failed to fetch user profile.' },
+        { 
+          status: 'error',
+          message: 'Failed to fetch user profile.'
+        },
         { status: 400 }
       );
     }
 
     if (!profile) {
       return NextResponse.json(
-        { error: 'User profile not found.' },
+        { 
+          status: 'error',
+          message: 'User profile not found.'
+        },
         { status: 404 }
       );
     }
 
-    if (!profile.is_verified || profile.kyc_status !== 'verified') {
+    // If KYC is not verified, return error
+    if (profile.kyc_status !== 'verified') {
       return NextResponse.json(
         { 
-          error: 'KYC verification required',
-          message: 'Complete KYC to view wallet',
+          status: 'error',
+          message: 'KYC verification required',
           redirectTo: '/profile/verification'
         },
         { status: 403 }
@@ -76,7 +91,7 @@ export async function GET(
           throw new Error('User data not found');
         }
 
-        const quidaxUser = await quidaxClient.createSubAccount({
+        const quidaxResponse = await quidaxClient.createSubAccount({
           email: userData.email,
           first_name: userData.first_name || 'User',
           last_name: userData.last_name || userData.email.split('@')[0]
@@ -85,33 +100,38 @@ export async function GET(
         // Update user profile with Quidax ID
         await supabase
           .from('user_profiles')
-          .update({ quidax_id: quidaxUser.data.id })
+          .update({ quidax_id: quidaxResponse.id })
           .eq('user_id', session.user.id);
 
-        profile.quidax_id = quidaxUser.data.id;
+        profile.quidax_id = quidaxResponse.id;
       } catch (error: any) {
-        console.error('Error creating Quidax account:', error);
         return NextResponse.json(
-          { error: 'Failed to create Quidax account' },
+          { 
+            status: 'error',
+            message: 'Failed to create Quidax account'
+          },
           { status: 500 }
         );
       }
     }
 
-    // Fetch wallet details from Quidax
-    const walletData = await quidaxClient.fetchUserWallets(profile.quidax_id);
-    
+    // Fetch wallets for the user
+    const wallets = await quidaxClient.fetchUserWallets(profile.quidax_id);
+
     return NextResponse.json({
       status: 'success',
       message: 'Wallets retrieved successfully',
-      data: walletData.data
+      data: wallets
     });
-    
+
   } catch (error: any) {
-    console.error('Error fetching wallets:', error);
+    console.error('[UserWallet] Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch wallet details' },
-      { status: 500 }
+      { 
+        status: 'error',
+        message: error.message || 'Failed to fetch wallets'
+      },
+      { status: error.status || 500 }
     );
   }
 } 

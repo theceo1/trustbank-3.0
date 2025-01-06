@@ -1,19 +1,38 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ExclamationTriangleIcon } from "@radix-ui/react-icons";
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/app/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 interface WalletBalance {
+  id: string;
+  name: string;
   currency: string;
-  balance: number;
-  locked: number;
-  total: number;
+  balance: string;
+  locked: string;
+  staked: string;
+  converted_balance: string;
+  reference_currency: string;
+  is_crypto: boolean;
+  blockchain_enabled: boolean;
+  default_network: string | null;
+  networks: {
+    id: string;
+    name: string;
+    deposits_enabled: boolean;
+    withdraws_enabled: boolean;
+  }[];
+}
+
+interface ApiResponse {
+  status: string;
+  message: string;
+  data: WalletBalance[];
 }
 
 export function WalletOverview() {
@@ -33,19 +52,23 @@ export function WalletOverview() {
 
       try {
         setLoading(true);
-        const response = await fetch(`/api/wallet/${user.id}`);
+        const response = await fetch('/api/wallet/balances');
         
         if (!response.ok) {
           const errorData = await response.json();
           throw new Error(errorData.error || 'Failed to fetch wallets');
         }
 
-        const data = await response.json();
+        const data: ApiResponse = await response.json();
         if (data.status !== 'success' || !Array.isArray(data.data)) {
           throw new Error('Invalid wallet data received');
         }
 
-        setWallets(data.data);
+        // Filter out wallets with zero balance for cleaner UI
+        const nonZeroWallets = data.data.filter(wallet => 
+          parseFloat(wallet.balance) > 0 || parseFloat(wallet.locked) > 0
+        );
+        setWallets(nonZeroWallets);
         setError(null);
       } catch (error) {
         console.error('Error fetching wallets:', error);
@@ -107,22 +130,26 @@ export function WalletOverview() {
           <Card key={wallet.currency} className="relative overflow-hidden">
             <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
-                {wallet.currency}
+                {wallet.name}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">
-                {formatCurrency(wallet.balance, wallet.currency)}
+                {formatCurrency(parseFloat(wallet.balance), wallet.currency)}
               </div>
               <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-                <div>Available: {formatCurrency(wallet.balance, wallet.currency)}</div>
-                {wallet.locked > 0 && (
-                  <div>Locked: {formatCurrency(wallet.locked, wallet.currency)}</div>
+                <div>Available: {formatCurrency(parseFloat(wallet.balance), wallet.currency)}</div>
+                {parseFloat(wallet.locked) > 0 && (
+                  <div>Locked: {formatCurrency(parseFloat(wallet.locked), wallet.currency)}</div>
                 )}
-                <div>Total: {formatCurrency(wallet.total, wallet.currency)}</div>
+                {parseFloat(wallet.staked) > 0 && (
+                  <div>Staked: {formatCurrency(parseFloat(wallet.staked), wallet.currency)}</div>
+                )}
+                {wallet.converted_balance && wallet.reference_currency && (
+                  <div>≈ {formatCurrency(parseFloat(wallet.converted_balance), wallet.reference_currency)}</div>
+                )}
               </div>
             </CardContent>
-            {/* Gradient overlay for visual appeal */}
             <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-muted/5" />
           </Card>
         ))

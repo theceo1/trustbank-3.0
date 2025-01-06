@@ -6,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { Plus, Wallet } from 'lucide-react';
+import { Plus, Wallet, Eye, EyeOff } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useAuth } from '@/app/context/AuthContext';
 import { useToast } from '@/hooks/use-toast';
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -22,16 +22,18 @@ import {
 
 interface WalletBalance {
   currency: string;
-  balance: number;
-  locked: number;
-  total: number;
+  balance: string;
+  locked: string;
+  staked: string;
+  converted_balance: string;
+  reference_currency: string;
+  is_crypto: boolean;
 }
 
 interface ApiResponse {
   status: string;
   message: string;
-  data: WalletBalance[];
-  base_currency: string;
+  data: WalletBalance;
   error?: string;
   redirectTo?: string;
 }
@@ -44,6 +46,7 @@ export function AccountBalance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
+  const [showBalance, setShowBalance] = useState(false);
 
   const fetchBalance = async () => {
     try {
@@ -62,9 +65,10 @@ export function AccountBalance() {
         throw new Error(data.error || 'Failed to fetch balance');
       }
 
-      if (data.status === 'success' && Array.isArray(data.data)) {
-        setBalances(data.data);
-        setBaseCurrency(data.base_currency);
+      if (data.status === 'success' && data.data) {
+        const ngnWallet = data.data;
+        setBalances([ngnWallet]);
+        setBaseCurrency(ngnWallet.reference_currency || 'NGN');
         setError(null);
       } else {
         throw new Error('Invalid response format');
@@ -87,7 +91,17 @@ export function AccountBalance() {
       fetchBalance();
       // Refresh every 30 seconds
       const interval = setInterval(fetchBalance, 30000);
-      return () => clearInterval(interval);
+
+      // Listen for balance update events
+      const handleBalanceUpdate = () => {
+        fetchBalance();
+      };
+      window.addEventListener('balanceUpdate', handleBalanceUpdate);
+
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('balanceUpdate', handleBalanceUpdate);
+      };
     }
   }, [user?.id]);
 
@@ -104,6 +118,14 @@ export function AccountBalance() {
   // Get NGN balance
   const ngnWallet = balances.find(w => w.currency === baseCurrency);
 
+  const toggleBalance = () => {
+    setShowBalance(!showBalance);
+  };
+
+  const maskBalance = (amount: string) => {
+    return '•'.repeat(amount.length);
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -113,19 +135,35 @@ export function AccountBalance() {
     >
       <Card className="overflow-hidden bg-gradient-to-br from-emerald-400 via-green-500 to-teal-600 text-white hover:shadow-xl transition-all duration-300">
         <CardHeader className="relative">
-          <CardTitle className="flex items-center space-x-2 text-white/90">
-            <Wallet className="h-5 w-5" />
-            <span>Account Balance</span>
+          <CardTitle className="flex items-center justify-between text-white/90">
+            <div className="flex items-center space-x-2">
+              <Wallet className="h-5 w-5" />
+              <span>Account Balance</span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-white hover:text-white/80"
+                onClick={toggleBalance}
+              >
+                {showBalance ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-black text-white hover:bg-black/80 border-0"
+                onClick={() => setShowDepositModal(true)}
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Deposit
+              </Button>
+            </div>
           </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            className="absolute right-6 top-6 bg-black text-white hover:bg-black/80 border-0"
-            onClick={() => setShowDepositModal(true)}
-          >
-            <Plus className="h-4 w-4 mr-1" />
-            Deposit
-          </Button>
         </CardHeader>
         <CardContent>
           {loading ? (
@@ -140,17 +178,36 @@ export function AccountBalance() {
               animate={{ scale: 1 }}
               transition={{ duration: 0.2 }}
             >
-              <div className="text-3xl font-bold tracking-tight">
-                {ngnWallet ? formatCurrency(ngnWallet.total, baseCurrency) : '₦0.00'}
-              </div>
-              <div className="text-sm text-white/80">
-                Available: {ngnWallet ? formatCurrency(ngnWallet.balance, baseCurrency) : '₦0.00'}
-                {ngnWallet && ngnWallet.locked > 0 && (
-                  <span className="ml-2 text-yellow-200">
-                    (Locked: {formatCurrency(ngnWallet.locked, baseCurrency)})
-                  </span>
-                )}
-              </div>
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={showBalance ? 'visible' : 'hidden'}
+                  initial={{ opacity: 0, y: -20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 20 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <div className="text-3xl font-bold tracking-tight">
+                    {showBalance 
+                      ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
+                      : (ngnWallet ? maskBalance(formatCurrency(parseFloat(ngnWallet.balance), baseCurrency)) : '₦0.00')
+                    }
+                  </div>
+                  <div className="text-sm text-white/80">
+                    Available: {showBalance 
+                      ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
+                      : (ngnWallet ? maskBalance(formatCurrency(parseFloat(ngnWallet.balance), baseCurrency)) : '₦0.00')
+                    }
+                    {ngnWallet && parseFloat(ngnWallet.locked) > 0 && (
+                      <span className="ml-2 text-yellow-200">
+                        (Locked: {showBalance 
+                          ? formatCurrency(parseFloat(ngnWallet.locked), baseCurrency)
+                          : maskBalance(formatCurrency(parseFloat(ngnWallet.locked), baseCurrency))
+                        })
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
             </motion.div>
           )}
         </CardContent>

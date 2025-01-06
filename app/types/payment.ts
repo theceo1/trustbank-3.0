@@ -7,14 +7,22 @@ export const PLATFORM_FEES = {
   total: 0.03 // 3% Total fee
 };
 
-export type PaymentMethodType = 'wallet' | 'card' | 'bank_transfer';
+export type PaymentMethodType = 
+  | 'wallet' 
+  | 'card' 
+  | 'bank_transfer' 
+  | 'crypto' 
+  | 'qr_code' 
+  | 'mobile_money';
 
 export interface PaymentMethod {
   id: string;
-  type: 'wallet' | 'card' | 'bank_transfer';
+  type: PaymentMethodType;
   title: string;
   description: string;
   enabled: boolean;
+  comingSoon?: boolean;
+  supportedCountries?: string[];
 }
 
 export interface PaymentDetails {
@@ -23,6 +31,10 @@ export interface PaymentDetails {
   accountName?: string;
   bankName?: string;
   reference?: string;
+  qrCode?: string;
+  cryptoAddress?: string;
+  mobileNumber?: string;
+  provider?: string;
 }
 
 export interface PaymentMethodSelectionProps {

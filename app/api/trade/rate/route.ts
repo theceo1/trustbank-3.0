@@ -1,39 +1,42 @@
 // app/api/trade/rate/route.ts
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
 import { QuidaxClient } from '@/app/lib/services/quidax-client';
+import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
 
 export async function GET(request: Request) {
   try {
-    console.log('[TradeRate] Starting to fetch trade rate');
     const { searchParams } = new URL(request.url);
     const market = searchParams.get('market');
-    
+
     if (!market) {
-      console.error('[TradeRate] No market parameter provided');
       return NextResponse.json(
         { error: 'Market parameter is required' },
         { status: 400 }
       );
     }
 
-    console.log('[TradeRate] Fetching rate for market:', market);
-    const quidaxClient = new QuidaxClient();
-    const rateData = await quidaxClient.getRate(market);
+    // Split market into base and quote (e.g., 'btcngn' -> ['btc', 'ngn'])
+    const base = market.slice(0, -3);
+    const quote = market.slice(-3);
 
-    console.log('[TradeRate] Rate data received:', rateData);
+    console.log(`[TradeRate] Getting rate for market: ${market} (${base}/${quote})`);
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+    const response = await quidaxClient.getRate(base, quote);
+
     return NextResponse.json({
       status: 'success',
       message: 'Rate retrieved successfully',
-      data: rateData.data
+      data: { rate: response }
     });
 
   } catch (error: any) {
-    console.error('[TradeRate] Error fetching rate:', error);
+    console.error('[TradeRate] Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch rate' },
-      { status: 500 }
+      { 
+        status: 'error',
+        message: error.message || 'Failed to get rate',
+      },
+      { status: error.status || 500 }
     );
   }
 } 

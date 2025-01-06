@@ -92,6 +92,8 @@ export function InstantSwap() {
       }
 
       const data = await response.json();
+      
+      // Show success message
       toast({
         title: "Swap Successful",
         description: `Successfully swapped ${amount} ${fromCurrency.toUpperCase()} to ${data.data.received_amount} ${toCurrency.toUpperCase()}`,
@@ -100,6 +102,17 @@ export function InstantSwap() {
       // Reset form
       setAmount('');
       setQuote(null);
+
+      // Trigger balance updates in parent components
+      const event = new CustomEvent('balanceUpdate');
+      window.dispatchEvent(event);
+
+      // Add a delayed balance refresh
+      setTimeout(() => {
+        const refreshEvent = new CustomEvent('balanceUpdate');
+        window.dispatchEvent(refreshEvent);
+      }, 5000); // Refresh again after 5 seconds
+
     } catch (error) {
       toast({
         variant: "destructive",

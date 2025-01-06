@@ -2,13 +2,14 @@ import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { QuidaxClient } from '@/app/lib/services/quidax-client';
+import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
 
 export async function POST(request: Request) {
   try {
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-    const quidaxClient = new QuidaxClient();
-    
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
@@ -19,12 +20,13 @@ export async function POST(request: Request) {
       );
     }
 
-    // Get trade details from request body
-    const { from_currency, to_currency, from_amount } = await request.json();
+    // Get request body
+    const body = await request.json();
+    const { quotation_id } = body;
 
-    if (!from_currency || !to_currency || !from_amount) {
+    if (!quotation_id) {
       return NextResponse.json(
-        { error: 'Missing required trade parameters' },
+        { error: 'Quotation ID is required' },
         { status: 400 }
       );
     }
@@ -36,11 +38,17 @@ export async function POST(request: Request) {
       .eq('user_id', session.user.id)
       .single();
 
-    if (profileError || !profile) {
-      console.error('Profile fetch error:', profileError);
+    if (profileError) {
       return NextResponse.json(
         { error: 'Failed to fetch user profile.' },
         { status: 400 }
+      );
+    }
+
+    if (!profile) {
+      return NextResponse.json(
+        { error: 'User profile not found.' },
+        { status: 404 }
       );
     }
 
@@ -48,43 +56,29 @@ export async function POST(request: Request) {
       return NextResponse.json(
         { 
           error: 'KYC verification required',
-          message: 'Complete KYC to trade',
+          message: 'Complete KYC to perform trades',
           redirectTo: '/profile/verification'
         },
         { status: 403 }
       );
     }
 
-    if (!profile.quidax_id) {
-      return NextResponse.json(
-        { error: 'Quidax account not linked' },
-        { status: 400 }
-      );
-    }
-
-    // Create swap quotation
-    const quotation = await quidaxClient.createSwapQuotation(profile.quidax_id, {
-      from_currency: from_currency.toUpperCase(),
-      to_currency: to_currency.toUpperCase(),
-      from_amount: from_amount.toString()
+    // Confirm swap quotation
+    const response = await quidaxClient.confirmSwapQuotation({
+      user_id: profile.quidax_id,
+      quotation_id
     });
-
-    // Confirm the swap quotation
-    const swap = await quidaxClient.confirmSwapQuotation(
-      profile.quidax_id,
-      quotation.data.id
-    );
 
     return NextResponse.json({
       status: 'success',
-      message: 'Swap initiated successfully',
-      data: swap.data
+      message: 'Swap completed successfully',
+      data: response
     });
 
   } catch (error: any) {
-    console.error('Error processing swap:', error);
+    console.error('[TradeSwap] Error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to process swap' },
+      { error: error.message || 'Failed to complete swap' },
       { status: 500 }
     );
   }

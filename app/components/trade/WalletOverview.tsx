@@ -10,6 +10,7 @@ import { RefreshCw } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { QuidaxWalletService } from '../../lib/services/quidax-wallet';
 import { useToast } from '../../hooks/use-toast';
+import { SUPPORTED_CURRENCY_SYMBOLS } from '@/app/lib/constants/crypto';
 
 interface Balance {
   currency: string;
@@ -17,14 +18,12 @@ interface Balance {
   locked: string;
 }
 
-const SUPPORTED_CURRENCIES = ['BTC', 'ETH', 'USDT', 'LTC'];
-
 export default function WalletOverview() {
   const { data: session } = useSession();
+  const { toast } = useToast();
   const [balances, setBalances] = useState<Balance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
   const supabase = createClientComponentClient();
 
   const fetchWallets = async () => {
@@ -57,21 +56,12 @@ export default function WalletOverview() {
         throw new Error('Please complete KYC verification to access your wallet');
       }
 
-      console.log('Fetching wallets for Quidax ID:', profile.quidax_id);
       const walletService = QuidaxWalletService.getInstance();
-      if (session.user.token) {
-        console.log('Setting token for wallet service');
-        walletService.setToken(session.user.token);
-      } else {
-        console.warn('No token available in session');
-      }
-      
       const response = await walletService.getAllWallets(profile.quidax_id);
       
       if (response.status === 'success' && Array.isArray(response.data)) {
-        console.log('Wallet data:', response.data);
         setBalances(response.data
-          .filter(wallet => SUPPORTED_CURRENCIES.includes(wallet.currency.toUpperCase()))
+          .filter(wallet => SUPPORTED_CURRENCY_SYMBOLS.includes(wallet.currency.toUpperCase()))
           .map(wallet => ({
             currency: wallet.currency,
             balance: wallet.balance,
@@ -96,18 +86,37 @@ export default function WalletOverview() {
   };
 
   useEffect(() => {
-    if (session?.user?.id) {
+    fetchWallets();
+
+    // Listen for balance update events
+    const handleBalanceUpdate = () => {
       fetchWallets();
-    }
+    };
+    window.addEventListener('balanceUpdate', handleBalanceUpdate);
+
+    return () => {
+      window.removeEventListener('balanceUpdate', handleBalanceUpdate);
+    };
   }, [session?.user?.id]);
 
-  if (!session?.user) {
+  if (error) {
     return (
       <Card>
-        <CardContent className="p-6">
-          <p className="text-sm text-muted-foreground text-center">
-            Please sign in to view your wallet
-          </p>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            Wallet Overview
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={fetchWallets}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-sm text-red-500">{error}</div>
         </CardContent>
       </Card>
     );
@@ -115,63 +124,39 @@ export default function WalletOverview() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-lg font-semibold">
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
           Wallet Overview
+          <Button
+            variant="outline"
+            size="icon"
+            onClick={fetchWallets}
+            disabled={isLoading}
+          >
+            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </Button>
         </CardTitle>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={fetchWallets}
-          className="h-8 w-8 p-0"
-          title="Refresh"
-          disabled={isLoading}
-        >
-          <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </Button>
       </CardHeader>
       <CardContent>
         {isLoading ? (
-          <div className="space-y-4">
-            <Skeleton className="h-12" />
-            <Skeleton className="h-12" />
-            <Skeleton className="h-12" />
-          </div>
-        ) : error ? (
-          <div className="text-center py-4">
-            <p className="text-sm text-destructive">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchWallets}
-              className="mt-4"
-            >
-              Retry
-            </Button>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
+            <Skeleton className="h-4 w-full" />
           </div>
         ) : balances.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">
-            No wallet data available
-          </p>
+          <p className="text-sm text-muted-foreground">No wallet balances found.</p>
         ) : (
           <div className="space-y-4">
             {balances.map((balance) => (
-              <div
-                key={balance.currency}
-                className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
-              >
-                <div>
-                  <p className="font-medium">{balance.currency.toUpperCase()}</p>
-                  <p className="text-sm text-muted-foreground">Available</p>
-                </div>
+              <div key={balance.currency} className="flex justify-between items-center">
+                <span className="font-medium">{balance.currency.toUpperCase()}</span>
                 <div className="text-right">
-                  <p className="font-medium">
-                    {formatCurrency(parseFloat(balance.balance), balance.currency)}
-                  </p>
+                  <div>{formatCurrency(parseFloat(balance.balance), balance.currency)}</div>
                   {parseFloat(balance.locked) > 0 && (
-                    <p className="text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground">
                       {formatCurrency(parseFloat(balance.locked), balance.currency)} locked
-                    </p>
+                    </div>
                   )}
                 </div>
               </div>

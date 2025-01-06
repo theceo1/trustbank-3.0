@@ -5,7 +5,8 @@ import { cookies } from 'next/headers';
 
 export async function GET() {
   try {
-    const supabase = createRouteHandlerClient({ cookies });
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
 
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
@@ -13,21 +14,28 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user profile
+    // Get user profile with all details
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select(`
+        id,
+        user_id,
+        full_name,
+        email,
+        phone,
+        country,
+        referral_code,
+        kyc_level,
+        kyc_status,
+        is_verified,
+        created_at,
+        daily_limit,
+        monthly_limit,
+        quidax_id,
         tier1_verified,
         tier2_verified,
         tier3_verified,
-        tier1_submitted_at,
-        tier2_submitted_at,
-        tier3_submitted_at,
-        verification_limits,
-        kyc_status,
-        kyc_level,
-        is_verified,
-        quidax_id
+        verification_limits
       `)
       .eq('user_id', user.id)
       .single();
@@ -38,6 +46,16 @@ export async function GET() {
         { error: 'Failed to fetch profile data' },
         { status: 500 }
       );
+    }
+
+    // If no referral code, generate one
+    if (!profile.referral_code) {
+      const referralCode = `TB${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      await supabase
+        .from('user_profiles')
+        .update({ referral_code: referralCode })
+        .eq('user_id', user.id);
+      profile.referral_code = referralCode;
     }
 
     // If verification_limits is not set, use default limits
@@ -64,7 +82,30 @@ export async function GET() {
         .eq('user_id', user.id);
     }
 
-    return NextResponse.json(profile);
+    // Get user's auth data directly from auth.users
+    const { data: authData, error: authDataError } = await supabase
+      .from('auth.users')
+      .select('email, phone, created_at, last_sign_in_at')
+      .eq('id', user.id)
+      .single();
+
+    // Merge profile with auth data
+    const fullProfile = {
+      ...profile,
+      email: profile.email || user.email,
+      phone: profile.phone || user.phone,
+      auth_created_at: user.created_at || profile.created_at,
+      last_sign_in_at: user.last_sign_in_at,
+      // Ensure boolean fields are properly set
+      is_verified: profile.is_verified || profile.tier1_verified || false,
+      tier1_verified: profile.tier1_verified || false,
+      tier2_verified: profile.tier2_verified || false,
+      tier3_verified: profile.tier3_verified || false,
+      kyc_status: profile.kyc_status || 'pending',
+      kyc_level: profile.kyc_level || 0
+    };
+
+    return NextResponse.json(fullProfile);
   } catch (error) {
     console.error('Error in profile route:', error);
     return NextResponse.json(

@@ -10,16 +10,31 @@ import TradeForm from '@/app/components/trade/TradeForm';
 import WalletOverview from '@/app/components/trade/WalletOverview';
 import { useAuth } from '@/app/context/AuthContext';
 
+interface VerificationStatus {
+  tier1: {
+    verified: boolean;
+    submitted: boolean;
+    required: boolean;
+  };
+  tier2: {
+    verified: boolean;
+    submitted: boolean;
+    available: boolean;
+  };
+  tier3: {
+    verified: boolean;
+    submitted: boolean;
+    available: boolean;
+  };
+}
+
 interface KYCStatus {
   verified: boolean;
-  kyc_level: string;
+  kyc_level: number;
+  kyc_status: string;
   daily_limit: number;
   monthly_limit: number;
-  verification_status: {
-    tier1: boolean;
-    tier2: boolean;
-    tier3: boolean;
-  };
+  verification_status: VerificationStatus;
 }
 
 export default function TradePage() {
@@ -41,13 +56,7 @@ export default function TradePage() {
     const checkKYCStatus = async () => {
       try {
         setIsLoading(true);
-        const response = await fetch('/api/kyc/status', {
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-
+        const response = await fetch('/api/kyc/status');
         const data = await response.json();
 
         if (!response.ok) {
@@ -56,11 +65,20 @@ export default function TradePage() {
 
         setKycStatus(data);
         
-        if (!data.verified) {
+        // Check if user needs to complete verification
+        if (!data.verified || !data.verification_status.tier1.verified) {
           toast.error('Please complete your identity verification to access trading');
           router.push('/profile/verification');
           return;
         }
+
+        // If verification is submitted but pending
+        if (data.verification_status.tier1.submitted && !data.verification_status.tier1.verified) {
+          toast.error('Your verification is pending approval. Please wait for verification to be completed.');
+          router.push('/profile/verification');
+          return;
+        }
+
       } catch (error: any) {
         console.error('Error checking KYC status:', error);
         toast.error(error.message || 'Failed to verify your trading eligibility');
@@ -81,7 +99,7 @@ export default function TradePage() {
     );
   }
 
-  if (!user || !kycStatus?.verified) {
+  if (!user || !kycStatus?.verified || !kycStatus.verification_status.tier1.verified) {
     return null;
   }
 
