@@ -1,37 +1,40 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Skeleton } from '../ui/skeleton';
-import { Button } from '../ui/button';
-import { RefreshCw } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
-import { QuidaxWalletService } from '../../lib/services/quidax-wallet';
-import { useToast } from '../../hooks/use-toast';
-import { SUPPORTED_CURRENCY_SYMBOLS } from '@/app/lib/constants/crypto';
+import { useAuth } from '@/app/context/AuthContext';
+import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
+import { Card, CardContent } from '@/app/components/ui/card';
+import { Skeleton } from '@/app/components/ui/skeleton';
+import { toast } from 'sonner';
 
-interface Balance {
+interface WalletBalance {
   currency: string;
   balance: string;
   locked: string;
 }
 
+interface QuidaxWallet {
+  currency: string;
+  balance: number | string;
+  locked: number | string;
+}
+
+const SUPPORTED_CURRENCY_SYMBOLS = ['USDT', 'NGN'];
+
 export default function WalletOverview() {
-  const { data: session } = useSession();
-  const { toast } = useToast();
-  const [balances, setBalances] = useState<Balance[]>([]);
+  const { user } = useAuth();
+  const supabase = createClientComponentClient();
+  const [balances, setBalances] = useState<WalletBalance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const supabase = createClientComponentClient();
 
   const fetchWallets = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      if (!session?.user?.id) {
+      if (!user?.id) {
         throw new Error('Please sign in to view your wallet.');
       }
 
@@ -39,83 +42,71 @@ export default function WalletOverview() {
       const { data: profile, error: profileError } = await supabase
         .from('user_profiles')
         .select('quidax_id, kyc_status')
-        .eq('user_id', session.user.id)
+        .eq('user_id', user.id)
         .single();
 
       if (profileError) {
         console.error('Profile fetch error:', profileError);
-        throw new Error('Failed to fetch user profile');
+        throw new Error('Unable to load wallet information. Please try again.');
       }
 
       if (!profile?.quidax_id) {
-        console.error('No Quidax ID found for user:', session.user.id);
-        throw new Error('Quidax account not found');
+        console.error('No Quidax ID found for user:', user.id);
+        throw new Error('Your wallet is not yet set up. Please complete your profile setup.');
       }
 
-      if (profile.kyc_status !== 'verified') {
-        throw new Error('Please complete KYC verification to access your wallet');
+      // Fetch balances from the balances endpoint
+      const response = await fetch('/api/wallet/balances');
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error('Unable to load wallet information. Please try again.');
       }
 
-      const walletService = QuidaxWalletService.getInstance();
-      const response = await walletService.getAllWallets(profile.quidax_id);
-      
-      if (response.status === 'success' && Array.isArray(response.data)) {
-        setBalances(response.data
-          .filter(wallet => SUPPORTED_CURRENCY_SYMBOLS.includes(wallet.currency.toUpperCase()))
-          .map(wallet => ({
+      if (data.status === 'success' && Array.isArray(data.data)) {
+        setBalances(data.data
+          .filter((wallet: QuidaxWallet) => SUPPORTED_CURRENCY_SYMBOLS.includes(wallet.currency.toUpperCase()))
+          .map((wallet: QuidaxWallet) => ({
             currency: wallet.currency,
-            balance: wallet.balance,
-            locked: wallet.locked
+            balance: wallet.balance.toString(),
+            locked: wallet.locked.toString()
           })));
       } else {
-        console.error('Invalid wallet data:', response);
-        throw new Error('Invalid wallet data received');
+        console.error('Invalid wallet data:', data);
+        throw new Error('Unable to load wallet information. Please try again.');
       }
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to fetch wallet data';
-      console.error('Wallet fetch error:', err);
-      setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
+    } catch (error: any) {
+      console.error('Wallet fetch error:', error);
+      setError(error.message);
+      toast.error(error.message);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchWallets();
-
-    // Listen for balance update events
-    const handleBalanceUpdate = () => {
+    if (user) {
       fetchWallets();
-    };
-    window.addEventListener('balanceUpdate', handleBalanceUpdate);
+    }
+  }, [user]);
 
-    return () => {
-      window.removeEventListener('balanceUpdate', handleBalanceUpdate);
-    };
-  }, [session?.user?.id]);
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="space-y-4">
+            <Skeleton className="h-4 w-[250px]" />
+            <Skeleton className="h-4 w-[200px]" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (error) {
     return (
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            Wallet Overview
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={fetchWallets}
-              disabled={isLoading}
-            >
-              <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="p-6">
           <div className="text-sm text-red-500">{error}</div>
         </CardContent>
       </Card>
@@ -124,45 +115,25 @@ export default function WalletOverview() {
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          Wallet Overview
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={fetchWallets}
-            disabled={isLoading}
-          >
-            <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
-          </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-          </div>
-        ) : balances.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No wallet balances found.</p>
-        ) : (
-          <div className="space-y-4">
-            {balances.map((balance) => (
-              <div key={balance.currency} className="flex justify-between items-center">
-                <span className="font-medium">{balance.currency.toUpperCase()}</span>
-                <div className="text-right">
-                  <div>{formatCurrency(parseFloat(balance.balance), balance.currency)}</div>
-                  {parseFloat(balance.locked) > 0 && (
-                    <div className="text-sm text-muted-foreground">
-                      {formatCurrency(parseFloat(balance.locked), balance.currency)} locked
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      <CardContent className="p-6">
+        <div className="space-y-4">
+          {balances.map((balance) => (
+            <div key={balance.currency} className="flex justify-between">
+              <span className="text-sm font-medium">{balance.currency}</span>
+              <span className="text-sm">
+                {parseFloat(balance.balance).toFixed(2)}
+                {parseFloat(balance.locked) > 0 && (
+                  <span className="text-gray-500 ml-1">
+                    ({parseFloat(balance.locked).toFixed(2)} locked)
+                  </span>
+                )}
+              </span>
+            </div>
+          ))}
+          {balances.length === 0 && (
+            <div className="text-sm text-gray-500">No balances to display</div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );

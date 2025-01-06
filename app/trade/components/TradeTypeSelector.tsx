@@ -1,7 +1,9 @@
-import { TradeType } from "@/app/types/trade";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import { ShoppingCart, Banknote, ArrowLeftRight, Send } from "lucide-react";
+
+export type TradeType = 'buy' | 'sell' | 'swap' | 'send';
+
 interface TradeSelectorProps {
   value: TradeType;
   onChange: (type: TradeType) => void;
@@ -13,14 +15,14 @@ export function TradeTypeSelector({ value, onChange }: TradeSelectorProps) {
     { type: 'sell', label: 'Sell', icon: Banknote },
     { type: 'swap', label: 'Swap', icon: ArrowLeftRight },
     { type: 'send', label: 'Send', icon: Send }
-  ];
+  ] as const;
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-1 bg-gray-100 dark:bg-gray-800 rounded-lg">
       {tradeTypes.map(({ type, label, icon: Icon }) => (
         <motion.button
           key={type}
-          onClick={() => onChange(type as TradeType)}
+          onClick={() => onChange(type)}
           className={cn(
             "relative flex items-center justify-center gap-2 px-4 py-2.5 rounded-md text-sm font-medium transition-all",
             "hover:bg-white dark:hover:bg-gray-700",
