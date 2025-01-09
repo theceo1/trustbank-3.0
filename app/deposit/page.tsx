@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import VirtualAccountDetails from '@/components/payment/VirtualAccountDetails';
@@ -13,7 +13,6 @@ import { Download } from 'lucide-react';
 import { PaymentService } from '@/app/lib/services/payment/PaymentService';
 import { useToast } from '@/app/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import dynamic from 'next/dynamic';
 
 const SUPPORTED_CRYPTO = [
   { value: 'btc', label: 'Bitcoin (BTC)' },
@@ -22,12 +21,7 @@ const SUPPORTED_CRYPTO = [
   { value: 'usdc', label: 'USD Coin (USDC)' }
 ];
 
-// Dynamically import components that use browser APIs
-const DynamicDepositPage = dynamic(() => Promise.resolve(DepositPage), {
-  ssr: false
-});
-
-function DepositPage() {
+export default function DepositPage() {
   const [activeTab, setActiveTab] = useState('bank');
   const [selectedCrypto, setSelectedCrypto] = useState(SUPPORTED_CRYPTO[0].value);
   const { toast } = useToast();
@@ -41,14 +35,15 @@ function DepositPage() {
       const data = await PaymentService.exportTransactions(startDate, endDate, format);
       if (!data) throw new Error('No data to export');
 
+      // Create blob and download using URL.createObjectURL
       const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
       toast({
@@ -139,6 +134,4 @@ function DepositPage() {
       </div>
     </div>
   );
-}
-
-export default DynamicDepositPage; 
+} 
