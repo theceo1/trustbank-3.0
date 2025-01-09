@@ -1,30 +1,30 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/app/context/AuthContext';
 
 export default function TransactionsPage() {
-  const { data: session, status } = useSession();
+  const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (status === 'loading') return;
+    if (authLoading) return;
 
-    if (!session) {
+    if (!user) {
       toast.error('Please sign in to view your transactions');
       router.push('/auth/login?redirect=/transactions');
       return;
     }
 
     setIsLoading(false);
-  }, [session, status, router]);
+  }, [user, authLoading, router]);
 
-  if (isLoading) {
+  if (isLoading || authLoading) {
     return (
       <div className="flex h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-green-600" />
