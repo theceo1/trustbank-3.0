@@ -35,20 +35,23 @@ export default function DepositPage() {
       const data = await PaymentService.exportTransactions(startDate, endDate, format);
       if (!data) throw new Error('No data to export');
 
-      const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      // Create blob and download only on client side
+      if (typeof window !== 'undefined') {
+        const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-      toast({
-        title: "Export Successful",
-        description: `Your transactions have been exported to ${format.toUpperCase()}`
-      });
+        toast({
+          title: "Export Successful",
+          description: `Your transactions have been exported to ${format.toUpperCase()}`
+        });
+      }
     } catch (error) {
       console.error('Export error:', error);
       toast({
