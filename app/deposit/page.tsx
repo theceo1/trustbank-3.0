@@ -13,6 +13,7 @@ import { Download } from 'lucide-react';
 import { PaymentService } from '@/app/lib/services/payment/PaymentService';
 import { useToast } from '@/app/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ExportTransactions } from '@/app/components/payment/ExportTransactions';
 
 const SUPPORTED_CRYPTO = [
   { value: 'btc', label: 'Bitcoin (BTC)' },
@@ -64,16 +65,7 @@ export default function DepositPage() {
     <div className="container mx-auto p-4 space-y-8">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Deposit Funds</h1>
-        <div className="flex space-x-2">
-          <Button variant="outline" onClick={() => handleExport('csv')}>
-            <Download className="mr-2 h-4 w-4" />
-            Export CSV
-          </Button>
-          <Button variant="outline" onClick={() => handleExport('pdf')}>
-            <Download className="mr-2 h-4 w-4" />
-            Export PDF
-          </Button>
-        </div>
+        <ExportTransactions />
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
