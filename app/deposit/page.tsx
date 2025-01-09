@@ -13,6 +13,7 @@ import { Download } from 'lucide-react';
 import { PaymentService } from '@/app/lib/services/payment/PaymentService';
 import { useToast } from '@/app/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import dynamic from 'next/dynamic';
 
 const SUPPORTED_CRYPTO = [
   { value: 'btc', label: 'Bitcoin (BTC)' },
@@ -21,7 +22,12 @@ const SUPPORTED_CRYPTO = [
   { value: 'usdc', label: 'USD Coin (USDC)' }
 ];
 
-export default function DepositPage() {
+// Dynamically import components that use browser APIs
+const DynamicDepositPage = dynamic(() => Promise.resolve(DepositPage), {
+  ssr: false
+});
+
+function DepositPage() {
   const [activeTab, setActiveTab] = useState('bank');
   const [selectedCrypto, setSelectedCrypto] = useState(SUPPORTED_CRYPTO[0].value);
   const { toast } = useToast();
@@ -35,23 +41,20 @@ export default function DepositPage() {
       const data = await PaymentService.exportTransactions(startDate, endDate, format);
       if (!data) throw new Error('No data to export');
 
-      // Create blob and download only on client side
-      if (typeof window !== 'undefined') {
-        const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-        toast({
-          title: "Export Successful",
-          description: `Your transactions have been exported to ${format.toUpperCase()}`
-        });
-      }
+      toast({
+        title: "Export Successful",
+        description: `Your transactions have been exported to ${format.toUpperCase()}`
+      });
     } catch (error) {
       console.error('Export error:', error);
       toast({
@@ -81,56 +84,61 @@ export default function DepositPage() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="md:col-span-2">
           <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="grid w-full grid-cols-4">
+            <TabsList className="grid w-full grid-cols-3">
               <TabsTrigger value="bank">Bank Transfer</TabsTrigger>
               <TabsTrigger value="card">Card Payment</TabsTrigger>
               <TabsTrigger value="crypto">Crypto</TabsTrigger>
-              <TabsTrigger value="qr">trustMe</TabsTrigger>
             </TabsList>
-            
-            <TabsContent value="bank" className="mt-4">
-              <VirtualAccountDetails />
+            <TabsContent value="bank">
+              <Card className="p-6">
+                <VirtualAccountDetails />
+              </Card>
             </TabsContent>
-            
-            <TabsContent value="card" className="mt-4">
-              <CardPaymentForm />
+            <TabsContent value="card">
+              <Card className="p-6">
+                <CardPaymentForm />
+              </Card>
             </TabsContent>
-
-            <TabsContent value="crypto" className="mt-4">
-              <div className="space-y-4">
-                <div className="w-full max-w-xs">
-                  <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select cryptocurrency" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SUPPORTED_CRYPTO.map((crypto) => (
-                        <SelectItem key={crypto.value} value={crypto.value}>
-                          {crypto.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            <TabsContent value="crypto">
+              <Card className="p-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Select Cryptocurrency</label>
+                    <Select value={selectedCrypto} onValueChange={setSelectedCrypto}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SUPPORTED_CRYPTO.map((crypto) => (
+                          <SelectItem key={crypto.value} value={crypto.value}>
+                            {crypto.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <CryptoDeposit currency={selectedCrypto} />
+                  <QRCodePayment onSuccess={() => {
+                    toast({
+                      title: "Payment Successful",
+                      description: "Your crypto deposit has been confirmed"
+                    });
+                  }} />
                 </div>
-                <CryptoDeposit currency={selectedCrypto} />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="qr" className="mt-4">
-              <QRCodePayment />
+              </Card>
             </TabsContent>
           </Tabs>
         </div>
-
-        <div className="md:col-span-1">
-          <Card className="p-4">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-semibold">Recent Transactions</h2>
-            </div>
-            <TransactionHistory limit={5} type="deposit" />
+        
+        <div>
+          <Card className="p-6">
+            <h2 className="text-xl font-semibold mb-4">Recent Transactions</h2>
+            <TransactionHistory />
           </Card>
         </div>
       </div>
     </div>
   );
-} 
+}
+
+export default DynamicDepositPage; 

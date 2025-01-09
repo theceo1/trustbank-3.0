@@ -1,56 +1,52 @@
 // app/api/historical-data/route.ts
 
 import { NextResponse } from 'next/server';
-import { TimeFrame } from '@/app/types/chart';
 
-const TIME_FRAME_TO_DAYS: Record<TimeFrame, number | string> = {
-  '1H': 1,
-  '24H': 1,
-  '7D': 7,
-  '30D': 30,
-  'ALL': 'max'
-} as const;
+export const dynamic = 'force-dynamic';
+
+interface HistoricalDataPoint {
+  timestamp: number;
+  price: number;
+  volume: number;
+}
+
+function generateMockData(days: number = 30): HistoricalDataPoint[] {
+  const data: HistoricalDataPoint[] = [];
+  const now = Date.now();
+  const basePrice = 45000;
+  const baseVolume = 1000;
+
+  for (let i = 0; i < days; i++) {
+    const timestamp = now - (i * 24 * 60 * 60 * 1000);
+    const randomPriceChange = (Math.random() - 0.5) * 1000;
+    const randomVolumeChange = (Math.random() - 0.5) * 200;
+
+    data.push({
+      timestamp,
+      price: basePrice + randomPriceChange,
+      volume: baseVolume + randomVolumeChange
+    });
+  }
+
+  return data.reverse();
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const symbol = searchParams.get('symbol')?.toLowerCase();
-    const timeFrame = searchParams.get('timeFrame') as TimeFrame;
+    const days = parseInt(searchParams.get('days') || '30', 10);
+    const currency = searchParams.get('currency')?.toLowerCase() || 'btc';
 
-    if (!symbol || !timeFrame) {
-      return NextResponse.json(
-        { error: 'Symbol and timeFrame are required' },
-        { status: 400 }
-      );
-    }
+    const historicalData = generateMockData(days);
 
-    const days = TIME_FRAME_TO_DAYS[timeFrame];
-    const interval = timeFrame === '1H' ? 'minutely' : timeFrame === '24H' ? 'hourly' : 'daily';
-
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/${symbol}/market_chart?vs_currency=usd&days=${days}&interval=${interval}`,
-      {
-        headers: {
-          'Accept': 'application/json',
-        },
-        next: { revalidate: timeFrame === '1H' ? 60 : 300 } // Cache for 1 minute or 5 minutes
+    return NextResponse.json({
+      status: 'success',
+      data: {
+        currency,
+        days,
+        history: historicalData
       }
-    );
-
-    if (!response.ok) {
-      throw new Error(`API responded with status: ${response.status}`);
-    }
-
-    const data = await response.json();
-    
-    // Format the data for the chart
-    const formattedData = data.prices.map(([timestamp, price]: [number, number]) => ({
-      timestamp,
-      price,
-      date: new Date(timestamp).toISOString(),
-    }));
-
-    return NextResponse.json(formattedData);
+    });
   } catch (error) {
     console.error('Error fetching historical data:', error);
     return NextResponse.json(

@@ -2,31 +2,52 @@
 
 import { NextResponse } from 'next/server';
 
-const COINGECKO_API = 'https://api.coingecko.com/api/v3';
+export const dynamic = 'force-dynamic';
+
+type Currency = 'btc' | 'eth' | 'usdt' | 'usdc';
+type Quote = 'usd' | 'ngn';
+
+interface PriceData {
+  [key: string]: {
+    [key: string]: number;
+  };
+}
+
+const MOCK_PRICES: PriceData = {
+  btc: { usd: 45000, ngn: 33750000 },
+  eth: { usd: 2500, ngn: 1875000 },
+  usdt: { usd: 1, ngn: 750 },
+  usdc: { usd: 1, ngn: 750 }
+};
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const ids = searchParams.get('ids') || 'bitcoin,ethereum,tether,usd-coin';
-    const vs_currencies = searchParams.get('vs_currencies') || 'usd';
+    const currency = (searchParams.get('currency')?.toLowerCase() || 'btc') as Currency;
+    const quote = (searchParams.get('quote')?.toLowerCase() || 'usd') as Quote;
 
-    const response = await fetch(
-      `${COINGECKO_API}/simple/price?ids=${ids}&vs_currencies=${vs_currencies}`,
-      {
-        headers: {
-          'Accept': 'application/json',
-          'x-cg-api-key': process.env.COINGECKO_API_KEY as string
-        },
-        next: { revalidate: 10 }
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch from CoinGecko');
+    if (!MOCK_PRICES[currency]) {
+      return NextResponse.json(
+        { error: 'Invalid currency' },
+        { status: 400 }
+      );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    if (!MOCK_PRICES[currency][quote]) {
+      return NextResponse.json(
+        { error: 'Invalid quote currency' },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      status: 'success',
+      data: {
+        currency,
+        quote,
+        price: MOCK_PRICES[currency][quote]
+      }
+    });
   } catch (error) {
     console.error('Error fetching crypto prices:', error);
     return NextResponse.json(
