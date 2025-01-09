@@ -1,41 +1,20 @@
 import { NextResponse } from 'next/server';
 
-const QUIDAX_API_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const response = await fetch(
-      `${QUIDAX_API_URL}/markets/tickers`,
-      {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        cache: 'no-store'
-      }
-    );
-
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const response = await fetch(`${baseUrl}/api/market/tickers`);
+    
     if (!response.ok) {
-      console.error('Failed to fetch market data:', await response.text());
-      throw new Error('Failed to fetch market data');
+      throw new Error('Failed to fetch market tickers');
     }
 
     const data = await response.json();
-    console.log('Market data received:', data);
-
-    if (data.status !== 'success' || !data.data) {
-      throw new Error('Invalid market data received');
-    }
-
     return NextResponse.json(data);
   } catch (error) {
-    console.error('Error in tickers API:', error);
-    return NextResponse.json(
-      { 
-        status: 'error',
-        error: error instanceof Error ? error.message : 'Failed to fetch market data'
-      },
-      { status: 500 }
-    );
+    console.error('Error fetching market tickers:', error);
+    return NextResponse.json({ error: 'Failed to fetch market tickers' }, { status: 500 });
   }
 } 

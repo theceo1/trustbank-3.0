@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card } from "@/components/ui/card";
 import VirtualAccountDetails from '@/components/payment/VirtualAccountDetails';
@@ -34,19 +34,16 @@ export default function DepositPage() {
 
       const data = await PaymentService.exportTransactions(startDate, endDate, format);
       if (!data) throw new Error('No data to export');
-      
-      // Only run client-side code in useEffect or event handlers
-      if (typeof window !== 'undefined') {
-        const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-      }
+
+      const blob = new Blob([data], { type: format === 'csv' ? 'text/csv' : 'application/pdf' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `trustbank-transactions-${new Date().toISOString().split('T')[0]}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
       toast({
         title: "Export Successful",
