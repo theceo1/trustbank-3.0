@@ -91,7 +91,7 @@ export default function ProfileHeader() {
     
     try {
       await navigator.share({
-        title: 'Join TrustBank',
+        title: 'Join trustBank',
         text: `Use my referral code: ${profile.referral_code}`,
         url: `${window.location.origin}/signup?ref=${profile.referral_code}`,
       });

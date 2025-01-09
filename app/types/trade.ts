@@ -25,16 +25,17 @@ export interface TradeRateResponse {
 
 export interface TradeParams {
   user_id: string;
-  type: TradeType;
+  type: 'buy' | 'sell';
   currency: string;
   amount: number;
   rate: number;
   total: number;
   fees: {
-    service: number;    // Combined platform + quidax fees
-    network: number;    // Processing/network fees
+    platform: number;    // trustBank fee
+    processing: number;  // Network/processing fee
+    total: number;      // Combined fees
   };
-  paymentMethod: PaymentMethodType;
+  payment_method: PaymentMethodType;
   reference: string;
 }
 

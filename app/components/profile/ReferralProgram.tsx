@@ -36,7 +36,7 @@ export function ReferralProgram({ referralCode, referralStats, className = '' }:
     try {
       const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
       await navigator.share({
-        title: 'Join TrustBank',
+        title: 'Join trustBank',
         text: `Use my referral code: ${referralCode}`,
         url: referralLink
       });

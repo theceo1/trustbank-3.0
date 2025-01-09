@@ -107,19 +107,25 @@ export function useTrade() {
         router.push('/profile/kyc');
         return null;
       }
+
+      // Ensure trade type is 'buy' or 'sell'
+      if (tradeState.tradeType !== 'buy' && tradeState.tradeType !== 'sell') {
+        throw new Error('Invalid trade type. Only buy and sell trades are supported.');
+      }
  
       const tradeDetails: TradeParams = {
         user_id: user.id,
-        type: tradeState.tradeType,
+        type: tradeState.tradeType as 'buy' | 'sell',
         currency: tradeState.cryptoCurrency,
         amount: Number(tradeState.amount),
         rate: tradeState.rate.rate,
         total: tradeState.rate.total,
         fees: {
-          service: tradeState.rate.fees.platform + tradeState.rate.fees.quidax,
-          network: tradeState.rate.fees.processing
+          platform: tradeState.rate.fees.platform,
+          processing: tradeState.rate.fees.processing,
+          total: tradeState.rate.fees.total
         },
-        paymentMethod: tradeState.paymentMethod,
+        payment_method: tradeState.paymentMethod,
         reference: `TRX-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
       };
 

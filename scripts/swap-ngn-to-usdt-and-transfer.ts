@@ -1,5 +1,5 @@
 import { QuidaxSwapService } from '../app/lib/services/quidax-swap';
-import { getWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxService } from '../app/lib/services/quidax';
 import debug from 'debug';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -72,23 +72,28 @@ async function swapNGNToUSDTAndTransfer(config: SwapAndTransferConfig) {
 
     // 1. Check sender's NGN balance
     log('💰 Checking sender NGN balance...');
-    const initialBalanceResponse = await getWalletService().getWallet(
+    const initialBalanceResponse = await QuidaxService.getWalletBalance(
       config.senderId,
       'ngn'
     );
 
-    if (!initialBalanceResponse?.data) {
-      throw new Error('Failed to fetch initial NGN balance');
+    if (!initialBalanceResponse?.data?.length) {
+      throw new Error('No NGN wallet found');
     }
-    const initialBalance = initialBalanceResponse.data;
+
+    const ngnWallet = initialBalanceResponse.data[0];
+    if (!ngnWallet || typeof ngnWallet.balance === 'undefined') {
+      throw new Error('Invalid NGN wallet data');
+    }
 
     log('💰 Initial NGN Balance:', {
-      balance: initialBalance.balance,
-      available: initialBalance.available_balance
+      balance: ngnWallet.balance || '0',
+      pending: ngnWallet.pending_balance || '0',
+      total: ngnWallet.total_balance || '0'
     });
 
-    if (Number(initialBalance.balance) < Number(config.ngnAmount)) {
-      throw new Error(`Insufficient NGN balance. Required: ${config.ngnAmount}, Available: ${initialBalance.balance}`);
+    if (Number(ngnWallet.balance) < Number(config.ngnAmount)) {
+      throw new Error(`Insufficient NGN balance. Required: ${config.ngnAmount}, Available: ${ngnWallet.balance}`);
     }
 
     // 2. Get temporary quote for price estimation
@@ -147,28 +152,28 @@ async function swapNGNToUSDTAndTransfer(config: SwapAndTransferConfig) {
     );
 
     // 6. Check balances after swap
-    const finalNGNBalanceResponse = await getWalletService().getWallet(
+    const finalNGNBalanceResponse = await QuidaxService.getWalletBalance(
       config.senderId,
       'ngn'
     );
-    const finalUSDTBalanceResponse = await getWalletService().getWallet(
+    const finalUSDTBalanceResponse = await QuidaxService.getWalletBalance(
       config.senderId,
       'usdt'
     );
 
-    if (!finalNGNBalanceResponse?.data || !finalUSDTBalanceResponse?.data) {
+    if (!finalNGNBalanceResponse?.data?.length || !finalUSDTBalanceResponse?.data?.length) {
       throw new Error('Failed to fetch final balances');
     }
-    const finalNGNBalance = finalNGNBalanceResponse.data;
-    const finalUSDTBalance = finalUSDTBalanceResponse.data;
+    const finalNGNWallet = finalNGNBalanceResponse.data[0];
+    const finalUSDTWallet = finalUSDTBalanceResponse.data[0];
 
     log('💰 Final Balances:', {
       ngn: {
-        balance: finalNGNBalance.balance,
-        change: Number(finalNGNBalance.balance) - Number(initialBalance.balance)
+        balance: finalNGNWallet.balance,
+        change: Number(finalNGNWallet.balance) - Number(ngnWallet.balance)
       },
       usdt: {
-        balance: finalUSDTBalance.balance
+        balance: finalUSDTWallet.balance
       }
     });
 
@@ -176,7 +181,7 @@ async function swapNGNToUSDTAndTransfer(config: SwapAndTransferConfig) {
     log('🔄 Transferring USDT to receiver...');
     const transferAmount = completedTransaction.received_amount;
     
-    const transferResult = await getWalletService().transfer(
+    const transferResult = await QuidaxService.transfer(
       config.senderId,
       config.receiverId,
       transferAmount,
@@ -193,28 +198,28 @@ async function swapNGNToUSDTAndTransfer(config: SwapAndTransferConfig) {
     });
 
     // 8. Check final balances
-    const senderFinalUSDTBalanceResponse = await getWalletService().getWallet(
+    const senderFinalUSDTBalanceResponse = await QuidaxService.getWalletBalance(
       config.senderId,
       'usdt'
     );
-    const receiverFinalUSDTBalanceResponse = await getWalletService().getWallet(
+    const receiverFinalUSDTBalanceResponse = await QuidaxService.getWalletBalance(
       config.receiverId,
       'usdt'
     );
 
-    if (!senderFinalUSDTBalanceResponse?.data || !receiverFinalUSDTBalanceResponse?.data) {
+    if (!senderFinalUSDTBalanceResponse?.data?.length || !receiverFinalUSDTBalanceResponse?.data?.length) {
       throw new Error('Failed to fetch final USDT balances');
     }
-    const senderFinalUSDTBalance = senderFinalUSDTBalanceResponse.data;
-    const receiverFinalUSDTBalance = receiverFinalUSDTBalanceResponse.data;
+    const senderFinalUSDTWallet = senderFinalUSDTBalanceResponse.data[0];
+    const receiverFinalUSDTWallet = receiverFinalUSDTBalanceResponse.data[0];
 
     log('💰 Final USDT Balances:', {
       sender: {
-        balance: senderFinalUSDTBalance.balance,
-        change: Number(senderFinalUSDTBalance.balance) - Number(finalUSDTBalance.balance)
+        balance: senderFinalUSDTWallet.balance,
+        change: Number(senderFinalUSDTWallet.balance) - Number(finalUSDTWallet.balance)
       },
       receiver: {
-        balance: receiverFinalUSDTBalance.balance
+        balance: receiverFinalUSDTWallet.balance
       }
     });
 
@@ -235,14 +240,14 @@ async function swapNGNToUSDTAndTransfer(config: SwapAndTransferConfig) {
           amount: transferAmount
         },
         balances: {
-          initial: initialBalance,
+          initial: ngnWallet,
           final: {
             sender: {
-              ngn: finalNGNBalance,
-              usdt: senderFinalUSDTBalance
+              ngn: finalNGNWallet,
+              usdt: senderFinalUSDTWallet
             },
             receiver: {
-              usdt: receiverFinalUSDTBalance
+              usdt: receiverFinalUSDTWallet
             }
           }
         }

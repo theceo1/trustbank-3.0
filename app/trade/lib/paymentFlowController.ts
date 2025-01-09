@@ -16,6 +16,10 @@ export class PaymentFlowController {
     };
 
     // Validate trade status and details
+    if (tradeDetails.type !== 'buy' && tradeDetails.type !== 'sell') {
+      throw new Error('Only buy and sell trades are supported');
+    }
+
     await UnifiedTradeService.validateTradeParams({
       amount: tradeDetails.amount,
       type: tradeDetails.type,
@@ -23,9 +27,12 @@ export class PaymentFlowController {
       user_id: tradeDetails.user_id,
       rate: tradeDetails.rate,
       total: tradeDetails.total,
-      fees: mappedFees,
-      paymentMethod: tradeDetails.payment_method as PaymentMethodType,
-      reference: tradeDetails.reference
+      fees: {
+        platform: tradeDetails.fees.platform,
+        processing: tradeDetails.fees.processing,
+        total: tradeDetails.fees.total
+      },
+      payment_method: tradeDetails.payment_method as PaymentMethodType
     });
 
     // Initialize payment based on method

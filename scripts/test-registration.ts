@@ -1,7 +1,8 @@
 import { createClient } from '@supabase/supabase-js';
+import { QuidaxService } from '../app/lib/services/quidax';
+import { getWalletService } from '../app/lib/services/quidax-wallet';
 import debug from 'debug';
 import dotenv from 'dotenv';
-import { QuidaxWalletService } from '../app/lib/services/quidax-wallet';
 import { DojahService } from '@/app/lib/services/dojah';
 
 // Load environment variables
@@ -138,7 +139,7 @@ async function testRegistrationFlow() {
 
     // 6. Create Quidax wallet
     log('💰 Creating Quidax wallet...');
-    const walletService = new QuidaxWalletService();
+    const walletService = getWalletService();
     const wallet = await walletService.getWallet(authData.user.id, 'usdt');
 
     log('✅ Wallet created:', wallet);

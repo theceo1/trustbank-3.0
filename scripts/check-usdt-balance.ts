@@ -1,56 +1,37 @@
-import { getWalletService } from '@/app/lib/services/quidax-wallet';
 import debug from 'debug';
-import dotenv from 'dotenv';
-import { resolve } from 'path';
-
-// Load environment variables from the root directory
-const envPath = resolve(process.cwd(), '.env.local');
-console.log('Loading environment from:', envPath);
-dotenv.config({ path: envPath });
+import { QuidaxService } from '../app/lib/services/quidax';
 
 const log = debug('balance:usdt');
 
-async function checkUSDTBalance(userId: string) {
+async function main() {
   try {
+    const userId = process.env.QUIDAX_USER_ID;
+    if (!userId) {
+      throw new Error('QUIDAX_USER_ID is required');
+    }
+
     log('🔍 Checking USDT balance for user:', userId);
-    const walletService = getWalletService();
-    const walletData = await walletService.getWallet(userId, 'usdt');
-    
-    if (!walletData?.data) {
-      throw new Error('Failed to fetch wallet data');
+
+    const walletData = await QuidaxService.getWalletBalance(userId, 'usdt');
+    if (!walletData?.data?.length) {
+      throw new Error('No wallet data found');
+    }
+
+    const wallet = walletData.data[0];
+    if (!wallet) {
+      throw new Error('No USDT wallet found');
     }
 
     log('💰 USDT Balance:', {
-      balance: walletData.data.balance || '0',
-      locked: walletData.data.locked || '0',
-      total: (Number(walletData.data.balance || 0) + Number(walletData.data.locked || 0)).toString()
+      balance: wallet.balance || '0',
+      pending: wallet.pending_balance || '0',
+      total: wallet.total_balance || '0'
     });
 
-    return walletData.data;
   } catch (error) {
-    log('❌ Error checking balance:', error);
-    throw error;
+    log('❌ Error:', error);
+    process.exit(1);
   }
 }
 
-// Execute if running directly
-if (require.main === module) {
-  // User 1 (sender)
-  const senderId = '157fa815-214e-4ecd-8a25-448fe4815ff1';
-  // User 2 (receiver)
-  const receiverId = '6b642f27-db18-4282-8752-363f590d4fc0';
-
-  Promise.all([
-    checkUSDTBalance(senderId),
-    checkUSDTBalance(receiverId)
-  ])
-    .then(([senderWallet, receiverWallet]) => {
-      log('✨ Balance check completed');
-      log('👤 Sender wallet:', senderWallet);
-      log('👥 Receiver wallet:', receiverWallet);
-    })
-    .catch(error => {
-      log('❌ Error:', error);
-      process.exit(1);
-    });
-} 
+main(); 

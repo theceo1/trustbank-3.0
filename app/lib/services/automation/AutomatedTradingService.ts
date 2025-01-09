@@ -49,9 +49,12 @@ export class AutomatedTradingService {
       currency: rule.currency,
       rate: rule.target_rate,
       total: rule.amount,
-      fees: { service: 0, network: 0 },
-      paymentMethod: 'wallet',
-      reference: `AUTO_${ruleId}_${Date.now()}`
+      fees: {
+        platform: 0,
+        processing: 0,
+        total: 0
+      },
+      payment_method: 'wallet'
     });
   }
 }

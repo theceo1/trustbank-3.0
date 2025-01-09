@@ -1,4 +1,4 @@
-import { getWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxService } from '@/app/lib/services/quidax';
 import debug from 'debug';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -25,6 +25,28 @@ interface TransferConfig {
   amount: string;
 }
 
+interface WalletData {
+  id: string;
+  currency: string;
+  balance: string;
+  pending_balance: string;
+  total_balance: string;
+  total_deposits: string;
+  total_withdrawals: string;
+}
+
+interface WalletResponse {
+  status: string;
+  message: string;
+  data: WalletData[];
+}
+
+interface TransferResponse {
+  success: boolean;
+  reference: string;
+  status: string;
+}
+
 const MAX_WAIT_TIME = 60000; // 60 seconds
 const CHECK_INTERVAL = 2000; // 2 seconds
 
@@ -42,20 +64,19 @@ async function transferUSDT(config: TransferConfig) {
 
     // 1. Check sender's USDT balance
     log('💰 Checking sender USDT balance...');
-    const walletService = getWalletService();
-    const senderBalanceResponse = await walletService.getWallet(
+    const senderBalanceResponse = await QuidaxService.getWalletBalance(
       config.senderId,
       'usdt'
-    );
+    ) as WalletResponse;
 
-    if (!senderBalanceResponse?.data) {
+    if (!senderBalanceResponse?.data?.[0]) {
       throw new Error('Failed to fetch sender USDT balance');
     }
-    const senderBalance = senderBalanceResponse.data;
+    const senderBalance = senderBalanceResponse.data[0];
 
     log('💰 Sender USDT Balance:', {
       balance: senderBalance.balance,
-      available: senderBalance.available_balance
+      pending: senderBalance.pending_balance
     });
 
     if (Number(senderBalance.balance) < Number(config.amount)) {
@@ -64,12 +85,12 @@ async function transferUSDT(config: TransferConfig) {
 
     // 2. Transfer USDT to receiver
     log('🔄 Transferring USDT to receiver...');
-    const transferResult = await walletService.transfer(
+    const transferResult = await QuidaxService.transfer(
       config.senderId,
       config.receiverId,
       config.amount,
       'usdt'
-    );
+    ) as TransferResponse;
 
     if (!transferResult.success) {
       throw new Error('Transfer failed');
@@ -82,12 +103,13 @@ async function transferUSDT(config: TransferConfig) {
 
     // 3. Wait for transaction completion
     log('⏳ Waiting for transaction to complete...');
-    let transactionStatus = await walletService.getTransactionStatus(transferResult.reference);
+    let transactionStatus = { status: transferResult.status, reference: transferResult.reference };
     let startTime = Date.now();
 
     while (transactionStatus.status === 'pending' && Date.now() - startTime < MAX_WAIT_TIME) {
       await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
-      transactionStatus = await walletService.getTransactionStatus(transferResult.reference);
+      const response = await QuidaxService.getWalletBalance(config.senderId, 'usdt') as WalletResponse;
+      transactionStatus.status = response.status === 'success' ? 'completed' : 'pending';
       log('🔄 Transaction status:', transactionStatus.status);
     }
 
@@ -96,20 +118,20 @@ async function transferUSDT(config: TransferConfig) {
     }
 
     // 4. Check final balances
-    const senderFinalBalanceResponse = await walletService.getWallet(
+    const senderFinalBalanceResponse = await QuidaxService.getWalletBalance(
       config.senderId,
       'usdt'
-    );
-    const receiverFinalBalanceResponse = await walletService.getWallet(
+    ) as WalletResponse;
+    const receiverFinalBalanceResponse = await QuidaxService.getWalletBalance(
       config.receiverId,
       'usdt'
-    );
+    ) as WalletResponse;
 
-    if (!senderFinalBalanceResponse?.data || !receiverFinalBalanceResponse?.data) {
+    if (!senderFinalBalanceResponse?.data?.[0] || !receiverFinalBalanceResponse?.data?.[0]) {
       throw new Error('Failed to fetch final balances');
     }
-    const senderFinalBalance = senderFinalBalanceResponse.data;
-    const receiverFinalBalance = receiverFinalBalanceResponse.data;
+    const senderFinalBalance = senderFinalBalanceResponse.data[0];
+    const receiverFinalBalance = receiverFinalBalanceResponse.data[0];
 
     log('💰 Final Balances:', {
       sender: {

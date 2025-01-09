@@ -11,6 +11,7 @@ import { Camera, ArrowLeft, Shield, RefreshCw, Check, X, Calendar } from 'lucide
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { format } from 'date-fns';
+import Image from 'next/image';
 
 const WEBCAM_CONFIG = {
   width: 720,
@@ -165,10 +166,12 @@ export default function BVNVerificationPage() {
                     </div>
                   ) : selfieImage ? (
                     <div className="relative">
-                      <img 
+                      <Image 
                         src={selfieImage} 
                         alt="Selfie" 
                         className="w-full rounded-lg"
+                        width={200}
+                        height={200}
                       />
                       <div className="absolute bottom-4 right-4">
                         <Button

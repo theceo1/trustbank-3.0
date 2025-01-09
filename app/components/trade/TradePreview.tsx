@@ -78,7 +78,7 @@ export function TradePreview({
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">You'll receive</span>
+              <span className="text-sm text-muted-foreground">You&apos;ll receive</span>
               <span className="text-lg font-semibold">
                 {formatCurrency(quotation.estimatedAmount)}
               </span>

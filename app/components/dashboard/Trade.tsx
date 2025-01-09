@@ -307,11 +307,11 @@ export function Trade() {
                 <h3 className="font-medium mb-2">Trade Summary</h3>
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span>You're selling:</span>
+                    <span>You&apos;re selling:</span>
                     <span>{formatCryptoBalance(Number(amount), selectedCurrency)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span>You'll receive:</span>
+                    <span>You&apos;ll receive:</span>
                     <span>₦{formatNumber(Number(quotation.estimatedAmount))}</span>
                   </div>
                   <div className="flex justify-between text-muted-foreground">

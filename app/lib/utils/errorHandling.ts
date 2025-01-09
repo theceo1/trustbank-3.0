@@ -1,13 +1,16 @@
-import { type ToastProps } from '@/app/components/ui/toast';
-import { QuidaxError } from '@/app/lib/services/quidax';
+"use client";
 
-export const handleError = (error: unknown, defaultMessage: string, showToast: (props: ToastProps) => void) => {
+import { QuidaxError } from '@/app/lib/services/quidax';
+import { type ToastProps } from '@/hooks/use-toast';
+
+type ToastFn = (props: Partial<ToastProps> & Pick<ToastProps, 'title'>) => void;
+
+export const handleError = (error: unknown, defaultMessage: string, toast: ToastFn) => {
   if (error instanceof QuidaxError) {
-    showToast({
-      id: "transaction-error",
+    toast({
       variant: "destructive",
       title: "Transaction Error",
-      description: error.message,
+      description: error.message
     });
     
     // Log specific error types
@@ -25,11 +28,10 @@ export const handleError = (error: unknown, defaultMessage: string, showToast: (
         logError('Unknown transaction error', error);
     }
   } else {
-    showToast({
-      id: "default-error",
+    toast({
       variant: "destructive",
       title: "Error",
-      description: defaultMessage,
+      description: defaultMessage
     });
     logError(defaultMessage, error);
   }

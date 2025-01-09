@@ -1,25 +1,34 @@
 // hooks/use-toast.ts
 'use client';
 
-import { toast } from '@/components/ui/toast';
+import { toast } from 'sonner';
 
 type ToastProps = {
   id?: string;
-  title: string;
+  title?: string;
   description?: string;
-  variant?: 'default' | 'destructive' | 'warning';
+  action?: React.ReactNode;
+  variant?: 'default' | 'destructive' | 'success' | 'warning';
 };
 
-export const useToast = () => {
-  const showToast = (props: ToastProps) => {
-    if (props.variant === 'destructive') {
-      return toast.error(props.title, props.description);
-    } else if (props.variant === 'warning') {
-      return toast.warning(props.title, props.description);
-    } else {
-      return toast.success(props.title, props.description);
+export function useToast() {
+  function showToast({ title, description, variant = 'default' }: ToastProps) {
+    switch (variant) {
+      case 'destructive':
+        toast.error(title, { description });
+        break;
+      case 'success':
+        toast.success(title, { description });
+        break;
+      case 'warning':
+        toast.warning(title, { description });
+        break;
+      default:
+        toast(title, { description });
     }
-  };
+  }
 
-  return { toast: showToast };
-};
+  return {
+    toast: showToast,
+  };
+}

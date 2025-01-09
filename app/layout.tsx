@@ -7,7 +7,7 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'TrustBank - Crypto | Simplified',
+  title: 'trustBank - Crypto | Simplified',
   description: 'A modern cryptocurrency exchange platform for emerging markets',
 };
 

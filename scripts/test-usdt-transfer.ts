@@ -4,7 +4,7 @@ import debug from 'debug';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
 import { createClient, User } from '@supabase/supabase-js';
-import { setupTestUsers } from './setup-test-users';
+import { setupTestUsers } from '../scripts/setup-test-users';
 
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 const log = debug('test:transfer');
@@ -29,7 +29,7 @@ async function testUSDTTransfer() {
         data: { users: AuthUser[] }, 
         error: Error | null 
       };
-
+ 
     if (authError) {
       log('❌ Auth check failed:', authError);
       throw authError;

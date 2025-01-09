@@ -91,7 +91,7 @@ export function UserFeedback() {
                     <p className="text-sm text-muted-foreground">{testimonial.role}</p>
                   </div>
                 </div>
-                <Quote className="w-6 h-6 text-green-600/20 mb-2" />
+                <Quote className="w-4 h-4 text-green-600/20 mb-2" />
                 <p className="text-muted-foreground mb-2 text-md">{testimonial.content}</p>
                 <div className="flex gap-1">
                   {Array.from({ length: 5 }).map((_, i) => (

@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { Camera, ArrowLeft, Shield, RefreshCw, Check, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import Image from 'next/image';
 
 const WEBCAM_CONFIG = {
   width: 720,
@@ -149,10 +150,12 @@ export default function NINVerificationPage() {
                     </div>
                   ) : selfieImage ? (
                     <div className="relative">
-                      <img 
+                      <Image 
                         src={selfieImage} 
                         alt="Selfie" 
                         className="w-full rounded-lg"
+                        width={720}
+                        height={720}
                       />
                       <div className="absolute bottom-4 right-4">
                         <Button

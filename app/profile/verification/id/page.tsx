@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import Image from 'next/image';
 
 const WEBCAM_CONFIG = {
   width: 720,
@@ -158,10 +159,12 @@ export default function PhotoIDVerificationPage() {
                 <div className="relative rounded-lg overflow-hidden bg-gray-100">
                   {idImage ? (
                     <div className="relative">
-                      <img 
-                        src={idImage} 
-                        alt="ID Document" 
-                        className="w-full rounded-lg"
+                      <Image
+                        src={idImage}
+                        alt="ID Document"
+                        width={300}
+                        height={200}
+                        className="rounded-lg object-cover"
                       />
                       <div className="absolute bottom-4 right-4">
                         <Button
@@ -228,10 +231,12 @@ export default function PhotoIDVerificationPage() {
                     </div>
                   ) : selfieImage ? (
                     <div className="relative">
-                      <img 
-                        src={selfieImage} 
-                        alt="Selfie" 
-                        className="w-full rounded-lg"
+                      <Image
+                        src={selfieImage}
+                        alt="Selfie"
+                        width={200}
+                        height={200}
+                        className="rounded-lg object-cover"
                       />
                       <div className="absolute bottom-4 right-4">
                         <Button

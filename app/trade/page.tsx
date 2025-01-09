@@ -168,7 +168,7 @@ export default function TradePage() {
       <Card>
         <CardContent className="p-6">
           <div className="text-sm text-gray-600">
-            Please <Link href="/auth/login" className="text-green-600 hover:text-green-700 underline">sign in</Link> to access TrustBank trading features
+            Please <Link href="/auth/login" className="text-green-600 hover:text-green-700 underline">sign in</Link> to access trustBank trading features
           </div>
         </CardContent>
       </Card>
@@ -243,7 +243,7 @@ export default function TradePage() {
                       <span className="text-lg font-semibold text-green-600">{formatCurrency(quotation.rate)}</span>
                     </div>
                     <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600 dark:text-gray-400">You'll {tradeType}</span>
+                      <span className="text-sm text-gray-600 dark:text-gray-400">You&apos;ll {tradeType}</span>
                       <span className="text-lg font-semibold">{formatNumber(quotation.amount)} {selectedCurrency}</span>
                     </div>
                     <div className="flex justify-between items-center">

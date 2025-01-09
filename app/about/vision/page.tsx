@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/app/components/ui/modal";
-import { Eye, Target, Lightbulb, Globe, ChartLine, Shield, Mail, Check } from "lucide-react";
+import { LineChart, Check, Eye, Globe, Mail, Target } from 'lucide-react';
 import Image from 'next/image';
 import supabase from '@/lib/supabase/client';
 
@@ -33,7 +33,7 @@ const visionPoints = [
     ]
   },
   {
-    icon: <ChartLine className="h-6 w-6 text-green-600" />,
+    icon: <LineChart className="h-6 w-6 text-green-600" />,
     title: "Sustainable Growth",
     description: "Building a resilient platform for long-term success.",
     details: [

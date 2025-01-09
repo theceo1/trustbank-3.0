@@ -233,7 +233,7 @@ export function AccountBalance() {
             <DialogTitle>Deposit Coming Soon!</DialogTitle>
             <DialogDescription className="pt-4 space-y-4">
               <p>
-                We're working hard to bring you a seamless deposit experience. Soon you'll be able to:
+                We&apos;re working hard to bring you a seamless deposit experience. Soon you&apos;ll be able to:
               </p>
               <ul className="list-disc pl-4 space-y-2">
                 <li>Make instant NGN deposits</li>
@@ -242,7 +242,7 @@ export function AccountBalance() {
                 <li>Get notifications for successful transactions</li>
               </ul>
               <p className="text-sm text-muted-foreground pt-2">
-                Stay tuned for updates! We'll notify you as soon as this feature is available.
+                Stay tuned for updates! We&apos;ll notify you as soon as this feature is available.
               </p>
             </DialogDescription>
           </DialogHeader>

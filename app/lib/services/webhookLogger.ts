@@ -5,11 +5,11 @@ export class WebhookLogger {
   private static readonly MAX_RETRIES = 3;
   private static readonly RETRY_DELAY = 1000; // 1 second
 
-  static async logWebhook(type: 'quidax' | 'payment' | 'dojah', payload: any, attempt = 1) {
+  static async logWebhook(type: 'quidax' | 'payment' | 'dojah', payload: any, attempt = 1): Promise<string> {
     const supabase = createClientComponentClient();
     
     try {
-      await supabase
+      const { data, error } = await supabase
         .from('webhook_logs')
         .insert({
           type,
@@ -17,13 +17,19 @@ export class WebhookLogger {
           status: 'received',
           attempt_count: attempt,
           timestamp: new Date().toISOString()
-        });
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data.id;
     } catch (error) {
       if (attempt < this.MAX_RETRIES) {
         await new Promise(resolve => setTimeout(resolve, this.RETRY_DELAY * attempt));
         return this.logWebhook(type, payload, attempt + 1);
       }
       console.error('Failed to log webhook after retries:', error);
+      throw error;
     }
   }
 

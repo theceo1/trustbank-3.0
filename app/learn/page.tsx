@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { BookOpen, Target, ChartBar, Shield, Users, Lightbulb, Clock, Award, Lock, Rocket } from 'lucide-react';
+import { BarChart, BookOpen, Clock, Lock, Rocket, Target, Users } from 'lucide-react';
 import Link from 'next/link';
 
 interface CourseModule {
@@ -72,7 +72,7 @@ const courses = [
   {
     level: "Intermediate",
     description: "For traders ready to advance their skills",
-    icon: <ChartBar className="w-6 h-6" />,
+    icon: <BarChart className="w-6 h-6" />,
     modules: [
       {
         title: "Advanced Technical Analysis",

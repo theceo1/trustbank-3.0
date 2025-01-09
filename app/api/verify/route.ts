@@ -3,13 +3,9 @@ import { NextResponse } from 'next/server';
 
 const DOJAH_API_URL = `${process.env.NEXT_PUBLIC_DOJAH_API_URL}/api/v1/kyc/nin/verify`;
 
-export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb'
-    }
-  }
-};
+export const runtime = 'nodejs';
+export const maxDuration = 10; // 10 seconds
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {

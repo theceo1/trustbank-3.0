@@ -14,6 +14,7 @@ import { useKYC } from '@/app/hooks/use-kyc';
 import { Loader2 } from 'lucide-react';
 import { formatCurrency } from '../../lib/utils';
 import { QuidaxQuotation } from '@/app/types/quidax';
+import { AlertDescription } from '../ui/alert';
 
 const SUPPORTED_CURRENCIES = [
   { value: 'btc', label: 'Bitcoin (BTC)' },
@@ -246,7 +247,7 @@ export default function TradeForm() {
             <span className="font-bold">1 {selectedFromCurrency.toUpperCase()} = {parseFloat(quotation.quoted_price).toFixed(8)} {selectedToCurrency.toUpperCase()}</span>
           </div>
           <div className="flex justify-between">
-            <span>You'll receive:</span>
+            <span>You&apos;ll receive:</span>
             <span className="font-bold">{parseFloat(quotation.to_amount).toFixed(8)} {selectedToCurrency.toUpperCase()}</span>
           </div>
         </div>

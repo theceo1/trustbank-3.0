@@ -85,7 +85,7 @@ export function OptimisticPaymentFlow({ trade, onComplete }: OptimisticPaymentFl
       />
 
       <div className="text-center text-sm text-gray-500">
-        <p>Protected by TrustBank&apos;s Secure Payment System</p>
+        <p>Protected by trustBank&apos;s Secure Payment System</p>
       </div>
     </motion.div>
   );

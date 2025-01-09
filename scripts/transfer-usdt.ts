@@ -1,4 +1,4 @@
-import { QuidaxService } from './services/quidax';
+import { QuidaxService } from '../scripts/services/quidax';
 import debug from 'debug';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
@@ -6,53 +6,80 @@ import { resolve } from 'path';
 // Load environment variables
 dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
-const log = debug('trade:transfer');
+const log = debug('transfer:usdt');
 
-async function transferUSDTToAdmin() {
+async function transferUSDT(
+  fromUserId: string,
+  toUserId: string,
+  amount: string
+) {
   try {
-    // First get admin wallet info to verify it exists
-    const adminId = process.env.ADMIN_USER_ID;
-    if (!adminId) {
-      throw new Error('Admin user ID not configured');
+    log('🚀 Starting USDT transfer...');
+
+    // Check sender's balance
+    log('💰 Checking sender balance...');
+    const senderBalance = await QuidaxService.getWalletBalance(fromUserId, 'usdt');
+
+    if (!senderBalance?.data?.[0]) {
+      throw new Error('Failed to fetch sender balance');
     }
 
-    const adminWallet = await QuidaxService.checkWalletBalance(adminId, 'usdt');
-    log('Admin USDT wallet:', adminWallet);
-
-    // Create instant swap to transfer USDT
-    const swapResult = await QuidaxService.createInstantSwap(adminId, {
+    // Create swap quotation
+    log('📝 Creating swap quotation...');
+    const quotation = await QuidaxService.createSwapQuotation({
+      user_id: fromUserId,
       from_currency: 'usdt',
       to_currency: 'usdt',
-      from_amount: '10.0' // Amount to transfer
+      from_amount: amount
     });
 
-    log('Swap transaction completed:', swapResult);
-    
-    // Verify final balance
-    const finalBalance = await QuidaxService.checkWalletBalance(adminId, 'usdt');
-    log('Final admin USDT balance:', finalBalance);
+    // Check receiver's balance
+    log('💰 Checking receiver balance...');
+    const receiverBalance = await QuidaxService.getWalletBalance(toUserId, 'usdt');
 
-    return {
-      initialBalance: adminWallet.balance,
-      transaction: swapResult,
-      finalBalance: finalBalance.balance
-    };
+    if (!receiverBalance?.data?.[0]) {
+      throw new Error('Failed to fetch receiver balance');
+    }
 
+    // Perform transfer
+    log('💸 Transferring USDT...');
+    const transfer = await QuidaxService.transfer(
+      fromUserId,
+      toUserId,
+      amount,
+      'usdt'
+    );
+
+    if (!transfer.success) {
+      throw new Error('Transfer failed');
+    }
+
+    log('✅ Transfer successful:', {
+      reference: transfer.reference,
+      status: transfer.status
+    });
+
+    return transfer;
   } catch (error) {
-    log('Transfer failed:', error);
+    log('❌ Error:', error);
     throw error;
   }
 }
 
 // Execute if running directly
 if (require.main === module) {
-  transferUSDTToAdmin()
-    .then(result => {
-      log('Transfer completed successfully:', result);
-      process.exit(0);
-    })
-    .catch(error => {
-      log('Transfer failed:', error);
-      process.exit(1);
-    });
-} 
+  const fromUserId = process.env.TEST_USER_ID || '';
+  const toUserId = process.env.ADMIN_USER_ID || '';
+  const amount = '0.1';
+
+  if (!fromUserId || !toUserId) {
+    console.error('Missing user IDs in environment variables');
+    process.exit(1);
+  }
+
+  transferUSDT(fromUserId, toUserId, amount)
+    .then(() => process.exit(0))
+    .catch(() => process.exit(1));
+}
+
+export { transferUSDT }; 

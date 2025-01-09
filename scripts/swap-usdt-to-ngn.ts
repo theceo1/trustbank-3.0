@@ -67,14 +67,19 @@ async function swapUSDTToNGN(config: SwapConfig) {
       'usdt'
     );
 
-    if (!initialBalanceResponse?.data) {
-      throw new Error('Failed to fetch initial USDT balance');
+    if (!initialBalanceResponse?.data?.length) {
+      throw new Error('No USDT wallet found');
     }
-    const initialBalance = initialBalanceResponse.data;
+
+    const initialBalance = initialBalanceResponse.data[0];
+    if (!initialBalance || typeof initialBalance.balance === 'undefined') {
+      throw new Error('Invalid USDT wallet data');
+    }
 
     log('💰 Initial USDT Balance:', {
-      balance: initialBalance.balance,
-      available: initialBalance.available_balance
+      balance: initialBalance.balance || '0',
+      pending: initialBalance.pending_balance || '0',
+      total: initialBalance.total_balance || '0'
     });
 
     if (Number(initialBalance.balance) < Number(config.amount)) {
@@ -146,11 +151,11 @@ async function swapUSDTToNGN(config: SwapConfig) {
       'ngn'
     );
 
-    if (!finalUSDTBalanceResponse?.data || !finalNGNBalanceResponse?.data) {
+    if (!finalUSDTBalanceResponse?.data?.length || !finalNGNBalanceResponse?.data?.length) {
       throw new Error('Failed to fetch final balances');
     }
-    const finalUSDTBalance = finalUSDTBalanceResponse.data;
-    const finalNGNBalance = finalNGNBalanceResponse.data;
+    const finalUSDTBalance = finalUSDTBalanceResponse.data[0];
+    const finalNGNBalance = finalNGNBalanceResponse.data[0];
 
     log('💰 Final Balances:', {
       usdt: {
