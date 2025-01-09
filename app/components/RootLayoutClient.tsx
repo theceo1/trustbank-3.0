@@ -2,42 +2,35 @@
 
 "use client";
 
-import { Header } from '@/components/Header';
-import Footer from '@/app/components/Footer';
-import { AuthProvider } from '@/app/context/AuthContext';
-import { Providers } from '../providers';
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/next';
-import { Toast } from "@/components/ui/toast";
-import { AdminProvider } from '../admin/context/AdminAuthContext';
-import AnalyticsProvider from '@/app/components/PlausibleProvider';
-import { usePathname } from 'next/navigation';
-import { Suspense } from 'react';
+import { ThemeProvider } from 'next-themes';
+import { Toaster } from '@/components/ui/toaster';
+import { AuthProvider } from '../context/AuthContext';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { Toaster as SonnerToaster } from 'sonner';
+
+const queryClient = new QueryClient();
 
 export default function RootLayoutClient({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith('/admin');
-
   return (
-    <Suspense fallback={null}>
-      <Providers>
+    <QueryClientProvider client={queryClient}>
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="system"
+        enableSystem
+        disableTransitionOnChange
+      >
         <AuthProvider>
-          <AdminProvider>
-            <AnalyticsProvider>
-              {!isAdminRoute && <Header />}
-              {children}
-              {!isAdminRoute && <Footer />}
-              <Toast />
-              <Analytics />
-              <SpeedInsights />
-            </AnalyticsProvider>
-          </AdminProvider>
+          {children}
+          <Toaster />
+          <SonnerToaster position="top-right" />
         </AuthProvider>
-      </Providers>
-    </Suspense>
+      </ThemeProvider>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 } 

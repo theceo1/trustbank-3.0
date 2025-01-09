@@ -74,14 +74,14 @@ export function useWallet() {
         .on(
           'postgres_changes',
           {
-            event: 'UPDATE',
+            event: '*',
             schema: 'public',
             table: 'wallets',
             filter: `user_id=eq.${user.id}`
           },
-          (payload) => {
+          (payload: { new: Wallet; old: Wallet; eventType: 'INSERT' | 'UPDATE' | 'DELETE' }) => {
             console.log('Wallet update:', payload);
-            setWallet(payload.new as Wallet);
+            setWallet(payload.new);
           }
         )
         .subscribe();

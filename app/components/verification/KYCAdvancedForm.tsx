@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload } from "lucide-react";
-import { useAuth } from "@/context/AuthContext";
+import { useAuth } from "@/app/context/AuthContext";
 import { KYCService } from "@/app/lib/services/kyc";
 import {
   Form,

@@ -70,7 +70,14 @@ async function createUserProfile(supabase: any, data: {
           kyc_status: 'pending',
           is_test: false,
           daily_limit: 0,
-          monthly_limit: 0
+          monthly_limit: 0,
+          referral_code: generateReferralCode(),
+          referral_stats: {
+            totalReferrals: 0,
+            activeReferrals: 0,
+            totalEarnings: 0,
+            pendingEarnings: 0
+          }
         })
         .select()
         .single();

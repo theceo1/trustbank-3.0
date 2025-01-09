@@ -1,6 +1,7 @@
 //app/lib/services/profile.ts
 
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { generateReferralCode } from '@/utils/referral';
 
 const supabase = createClientComponentClient();
 
@@ -17,7 +18,7 @@ export class ProfileService {
           is_verified: false,
           daily_limit: 50000,
           monthly_limit: 1000000,
-          referral_code: Math.random().toString(36).substring(2, 8).toUpperCase(),
+          referral_code: generateReferralCode(),
           notification_settings: {
             email: { marketing: false, security: true, trading: true, news: false },
             push: { trading: true, security: true, price_alerts: true },

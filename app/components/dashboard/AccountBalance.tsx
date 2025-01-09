@@ -65,11 +65,25 @@ export function AccountBalance() {
         throw new Error(data.error || 'Failed to fetch balance');
       }
 
-      if (data.status === 'success' && data.data) {
-        const ngnWallet = data.data;
-        setBalances([ngnWallet]);
-        setBaseCurrency(ngnWallet.reference_currency || 'NGN');
-        setError(null);
+      if (data.status === 'success' && Array.isArray(data.data)) {
+        const ngnWallet = data.data.find(w => w.currency === 'NGN');
+        if (ngnWallet) {
+          setBalances([ngnWallet]);
+          setBaseCurrency(ngnWallet.reference_currency || 'NGN');
+          setError(null);
+        } else {
+          setBalances([{
+            currency: 'NGN',
+            balance: '0',
+            locked: '0',
+            staked: '0',
+            converted_balance: '0',
+            reference_currency: 'NGN',
+            is_crypto: false
+          }]);
+          setBaseCurrency('NGN');
+          setError(null);
+        }
       } else {
         throw new Error('Invalid response format');
       }

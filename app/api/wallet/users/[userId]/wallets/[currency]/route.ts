@@ -1,171 +1,91 @@
 //app/api/wallet/users/[userId]/wallets/[currency]/route.
+import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxClient } from '@/app/lib/services/quidax-client';
+import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
 
-export async function GET(request: Request, { params }: { params: { userId: string; currency: string } }) {
+export async function GET(request: Request) {
   try {
-    // Get cookie store and await it
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ 
-      cookies: () => cookieStore 
-    });
-
-    // Get session for authentication and await it
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
-    if (sessionError || !session) {
-      console.error('Session error:', sessionError);
-      return NextResponse.json({ 
-        error: 'Authentication required' 
-      }, { status: 401 });
+    // Get the user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    // Get user profile and await it
-    const { data: userProfile, error: profileError } = await supabase
+    // Extract userId and currency from URL
+    const url = new URL(request.url);
+    const pathParts = url.pathname.split('/');
+    const userId = pathParts[4];
+    const currency = pathParts[6];
+
+    // Verify user is requesting their own wallet
+    if (session.user.id !== userId) {
+      return new Response(JSON.stringify({ error: 'Unauthorized to access this wallet' }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Get the user's profile to check if they have access
+    const { data: profile } = await supabase
       .from('user_profiles')
-      .select(`
-        quidax_id, 
-        kyc_level,
-        is_verified,
-        kyc_status,
-        tier1_verified,
-        tier2_verified,
-        tier3_verified,
-        tier1_submitted_at,
-        tier2_submitted_at,
-        tier3_submitted_at,
-        tier1_verified_at,
-        tier2_verified_at,
-        tier3_verified_at,
-        verification_limits
-      `)
+      .select('is_verified, quidax_id')
       .eq('user_id', session.user.id)
-      .maybeSingle();
+      .single();
 
-    if (profileError) {
-      console.error('Profile fetch error:', {
-        error: profileError,
-        userId: session.user.id
-      });
-      return NextResponse.json({ 
-        error: 'Failed to fetch user profile' 
-      }, { status: 500 });
-    }
-
-    if (!userProfile?.quidax_id) {
-      console.error('Missing Quidax ID:', {
-        userId: session.user.id,
-        profile: userProfile
-      });
-      return NextResponse.json({ 
-        error: 'User profile not properly set up' 
-      }, { status: 400 });
-    }
-
-    // Determine verification status and requirements
-    const verificationStatus = {
-      tier1: {
-        name: 'NIN & Selfie Verification',
-        description: 'Basic verification using NIN and selfie photo',
-        verified: userProfile.tier1_verified || false,
-        submitted: !!userProfile.tier1_submitted_at,
-        verifiedAt: userProfile.tier1_verified_at,
-        required: true,
-        limits: userProfile.verification_limits?.tier1 || { daily: 1000, monthly: 20000 }
-      },
-      tier2: {
-        name: 'BVN Verification',
-        description: 'Intermediate verification using BVN',
-        verified: userProfile.tier2_verified || false,
-        submitted: !!userProfile.tier2_submitted_at,
-        verifiedAt: userProfile.tier2_verified_at,
-        available: userProfile.tier1_verified, // Only available after Tier 1
-        required: false,
-        limits: userProfile.verification_limits?.tier2 || { daily: 5000, monthly: 100000 }
-      },
-      tier3: {
-        name: 'Government ID Verification',
-        description: 'Advanced verification using government-issued ID',
-        verified: userProfile.tier3_verified || false,
-        submitted: !!userProfile.tier3_submitted_at,
-        verifiedAt: userProfile.tier3_verified_at,
-        available: userProfile.tier2_verified, // Only available after Tier 2
-        required: false,
-        limits: userProfile.verification_limits?.tier3 || { daily: 10000, monthly: 500000 }
-      }
-    };
-
-    // Check KYC verification status
-    if (!userProfile.tier1_verified || userProfile.kyc_status !== 'approved') {
-      return NextResponse.json({ 
+    if (!profile?.is_verified) {
+      return new Response(JSON.stringify({
         error: 'KYC verification required',
-        kyc_status: userProfile.kyc_status,
-        kyc_level: userProfile.kyc_level,
-        verification_needed: true,
-        verification_status: verificationStatus,
-        message: userProfile.tier1_verified 
-          ? 'Your KYC verification is pending approval. Please wait for verification to be completed.'
-          : 'Please complete Tier 1 (NIN & Selfie) verification to access basic features'
-      }, { status: 403 });
+        message: 'Please complete KYC verification to access this feature',
+        redirectTo: '/kyc'
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
-    // Log the request details for debugging
-    console.log('Fetching wallet with:', {
-      quidaxId: userProfile.quidax_id,
-      currency: params.currency,
-      kyc_status: userProfile.kyc_status,
-      kyc_level: userProfile.kyc_level,
-      verification_status: verificationStatus
+    if (!profile?.quidax_id) {
+      return new Response(JSON.stringify({ error: 'Quidax account not linked' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    // Get the user's wallets from Quidax
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+    const wallets = await quidaxClient.fetchUserWallets(profile.quidax_id);
+
+    // Find the requested currency wallet
+    const wallet = wallets.data.find((w: any) => w.currency.toLowerCase() === currency.toLowerCase());
+
+    if (!wallet) {
+      return new Response(JSON.stringify({ error: 'Wallet not found' }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    return new Response(JSON.stringify({
+      status: 'success',
+      data: wallet
+    }), {
+      headers: { 'Content-Type': 'application/json' }
     });
-
-    // Fetch wallet data from Quidax using the correct endpoint structure
-    try {
-      const walletService = new QuidaxWalletService();
-      const walletData = await walletService.getWallet(
-        userProfile.quidax_id,
-        params.currency.toLowerCase()
-      );
-
-      if (!walletData?.data) {
-        console.error('Invalid wallet data:', {
-          response: walletData,
-          quidaxId: userProfile.quidax_id,
-          currency: params.currency
-        });
-        return NextResponse.json({ 
-          error: 'Failed to fetch wallet data' 
-        }, { status: 500 });
-      }
-
-      return NextResponse.json({
-        status: 'success',
-        data: walletData.data,
-        verification_status: verificationStatus
-      });
-
-    } catch (error: any) {
-      console.error('Error fetching wallet from Quidax:', {
-        error: error.message,
-        stack: error.stack,
-        quidaxId: userProfile.quidax_id,
-        currency: params.currency
-      });
-      return NextResponse.json(
-        { 
-          error: 'Failed to fetch wallet',
-          details: error.message
-        }, 
-        { status: 500 }
-      );
-    }
-
-  } catch (error) {
-    console.error('Error fetching wallet:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch wallet' }, 
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error('[Wallet API] Error:', error);
+    return new Response(JSON.stringify({
+      status: 'error',
+      message: error.message || 'Failed to fetch wallet data'
+    }), {
+      status: error.status || 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 

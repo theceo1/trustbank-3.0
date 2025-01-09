@@ -1,12 +1,14 @@
 import { TradeDetails, TradeStatus } from '@/app/types/trade';
 import { PaymentService } from './payment';
-import { QuidaxService } from './quidax';
-import { WalletService } from './wallet';
-import { PaymentMethodType } from '@/app/types/payment';
+import { WalletService } from '@/app/lib/services/wallet';
+import { PaymentMethodType, PaymentResult, PaymentStatus } from '@/app/types/payment';
 import { PaymentProcessorFactory } from './payment/PaymentProcessorFactory';
 
 export class PaymentProcessor {
-  static async initializePayment(trade: TradeDetails) {
+  private static baseUrl = process.env.QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static apiKey = process.env.QUIDAX_SECRET_KEY;
+
+  static async initializePayment(trade: TradeDetails): Promise<PaymentResult> {
     if (trade.status !== TradeStatus.PENDING) {
       throw new Error('Invalid trade status');
     }
@@ -25,7 +27,7 @@ export class PaymentProcessor {
     }
   }
 
-  private static async processWalletPayment(trade: TradeDetails) {
+  private static async processWalletPayment(trade: TradeDetails): Promise<PaymentResult> {
     const balance = await WalletService.getUserBalance(trade.user_id);
     if (balance < trade.total) {
       throw new Error('Insufficient wallet balance');
@@ -36,20 +38,46 @@ export class PaymentProcessor {
     }
 
     await WalletService.updateBalance(trade.user_id, -trade.total);
-    return QuidaxService.processWalletPayment(trade.reference);
+    
+    // Process the wallet payment directly
+    const response = await fetch(`${this.baseUrl}/wallet/transfer`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        reference: trade.reference,
+        amount: trade.total.toString(),
+        currency: trade.currency
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to process wallet payment');
+    }
+
+    const data = await response.json();
+    return {
+      status: data.status as PaymentStatus,
+      reference: trade.reference,
+      trade_id: trade.id!
+    };
   }
 
-  private static async processExternalPayment(trade: TradeDetails) {
+  private static async processExternalPayment(trade: TradeDetails): Promise<PaymentResult> {
     if (!trade.reference) {
       throw new Error('Missing Quidax reference');
     }
 
-    const paymentDetails = await QuidaxService.getPaymentDetails(trade.reference);
-    return {
-      payment_url: paymentDetails.payment_url,
-      reference: paymentDetails.reference
-    };
     const processor = PaymentProcessorFactory.getProcessor(trade.payment_method as PaymentMethodType);
-    return processor.process(trade);
+    const result = await processor.process(trade);
+    
+    return {
+      ...result,
+      status: result.status as PaymentStatus,
+      trade_id: trade.id!
+    };
   }
 }

@@ -35,10 +35,15 @@ export async function middleware(req: NextRequest) {
     // Handle session refresh errors
     if (sessionError) {
       console.error('Session error:', sessionError);
-      const response = NextResponse.redirect(new URL('/auth/login', req.url));
-      response.cookies.delete('sb-access-token');
-      response.cookies.delete('sb-refresh-token');
-      return response;
+      // Only redirect to login if it's a fatal session error
+      if (sessionError.message.includes('invalid token') || sessionError.message.includes('expired')) {
+        const response = NextResponse.redirect(new URL('/auth/login', req.url));
+        response.cookies.delete('sb-access-token');
+        response.cookies.delete('sb-refresh-token');
+        return response;
+      }
+      // For other errors, allow the request to continue
+      return res;
     }
 
     // Check if trying to access admin routes
@@ -68,10 +73,14 @@ export async function middleware(req: NextRequest) {
     return res;
   } catch (error) {
     console.error('Middleware error:', error);
-    const response = NextResponse.redirect(new URL('/auth/login', req.url));
-    response.cookies.delete('sb-access-token');
-    response.cookies.delete('sb-refresh-token');
-    return response;
+    // Only redirect on fatal errors
+    if (error instanceof Error && (error.message.includes('invalid token') || error.message.includes('expired'))) {
+      const response = NextResponse.redirect(new URL('/auth/login', req.url));
+      response.cookies.delete('sb-access-token');
+      response.cookies.delete('sb-refresh-token');
+      return response;
+    }
+    return res;
   }
 }
 

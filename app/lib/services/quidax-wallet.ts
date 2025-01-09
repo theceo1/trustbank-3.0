@@ -12,7 +12,15 @@ interface WalletData {
 interface WalletResponse {
   status: string;
   message: string;
-  data: WalletData[];
+  data: Array<{
+    id: string;
+    currency: string;
+    balance: string;
+    pending_balance: string;
+    total_balance: string;
+    total_deposits: string;
+    total_withdrawals: string;
+  }>;
 }
 
 export class QuidaxWalletService {

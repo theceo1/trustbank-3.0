@@ -5,19 +5,13 @@ import { QuidaxService } from '../quidax';
 export class CardPaymentProcessor extends BasePaymentProcessor {
   async process(trade: TradeDetails): Promise<PaymentProcessorResult> {
     try {
-      const quidaxResult = await QuidaxService.processPayment({
-        ...trade,
-        payment_method: 'card'
-      });
-
+      // TODO: Implement card payment processing
       return {
-        success: true,
-        reference: quidaxResult.reference,
+        success: false,
+        reference: trade.reference!,
         status: 'pending',
-        redirect_url: quidaxResult.payment_url,
         metadata: {
-          provider: quidaxResult.provider,
-          session_id: quidaxResult.session_id
+          message: 'Card payment processing not implemented yet'
         }
       };
     } catch (error) {
@@ -26,14 +20,13 @@ export class CardPaymentProcessor extends BasePaymentProcessor {
   }
 
   async verifyPayment(reference: string): Promise<PaymentProcessorResult> {
-    const paymentDetails = await QuidaxService.getPaymentDetails(reference);
+    // TODO: Implement card payment verification
     return {
-      success: paymentDetails.status === 'completed',
-      status: QuidaxService.mapQuidaxStatus(paymentDetails.status),
+      success: false,
+      status: 'pending',
       reference,
       metadata: {
-        card_reference: paymentDetails.card_reference,
-        authorization: paymentDetails.authorization
+        message: 'Card payment verification not implemented yet'
       }
     };
   }
@@ -43,30 +36,13 @@ export class CardPaymentProcessor extends BasePaymentProcessor {
   }
 
   async initializePayment(details: PaymentInitDetails): Promise<PaymentProcessorResult> {
-    const quidaxResult = await QuidaxService.processPayment({
-      user_id: details.user_id,
-      type: 'buy',
-      currency: details.currency,
-      amount: details.amount,
-      rate: 1,
-      total: details.amount,
-      fees: {
-        platform: 0,
-        processing: 0,
-        total: 0
-      },
-      payment_method: 'card',
-      status: TradeStatus.PENDING,
-    });
-
+    // TODO: Implement card payment initialization
     return {
-      success: true,
-      reference: quidaxResult.reference,
+      success: false,
+      reference: details.quidax_reference,
       status: 'pending',
-      redirect_url: quidaxResult.payment_url,
       metadata: {
-        provider: quidaxResult.provider,
-        session_id: quidaxResult.session_id
+        message: 'Card payment initialization not implemented yet'
       }
     };
   }

@@ -1,20 +1,35 @@
-import { NextResponse } from 'next/server'; 
+import { NextResponse } from 'next/server';
 import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
 
 export async function GET() {
   try {
-    const marketData = await QuidaxMarketService.getMarketTicker('btcngn');
-    
-    return NextResponse.json({
-      last_price: parseFloat(marketData.ticker.last),
-      price_change_24h: parseFloat(marketData.ticker.price_change_percent),
-      timestamp: Date.now()
+    const marketData = await QuidaxMarketService.getAllMarketTickers();
+    const ticker = marketData?.data?.btcngn?.ticker;
+
+    if (!ticker) {
+      throw new Error('Invalid market data received');
+    }
+
+    return new Response(JSON.stringify({
+      status: 'success',
+      data: {
+        last_price: parseFloat(ticker.last),
+        high_24h: parseFloat(ticker.high),
+        low_24h: parseFloat(ticker.low),
+        volume_24h: parseFloat(ticker.vol),
+        open_24h: parseFloat(ticker.open)
+      }
+    }), {
+      headers: { 'Content-Type': 'application/json' }
     });
-  } catch (error) {
-    console.error('Market stats fetch error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch market stats' }, 
-      { status: 500 }
-    );
+  } catch (error: any) {
+    console.error('[Market Stats API] Error:', error);
+    return new Response(JSON.stringify({
+      status: 'error',
+      message: error.message || 'Failed to fetch market stats'
+    }), {
+      status: error.status || 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 

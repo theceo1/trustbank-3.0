@@ -1,57 +1,53 @@
 // app/lib/services/trade-flow.ts
-import { UnifiedTradeService } from './unifiedTrade';
-import { QuidaxService } from './quidax';
-import { QuidaxMarketService } from './quidax-market';
-import { TradeDetails, TradeParams } from '@/app/types/trade';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
+import { QuidaxClient } from './quidax-client';
+import { PaymentMethodType } from '@/app/types/payment';
+
+interface TradeRequest {
+  amount: number;
+  currency: string;
+  type: 'buy' | 'sell';
+  payment_method: PaymentMethodType;
+  user_id: string;
+}
 
 export class TradeFlow {
-  static async createSellOrder(details: TradeDetails) {
+  private static quidaxClient = new QuidaxClient(process.env.QUIDAX_SECRET_KEY || '');
+
+  static async initializeTrade(details: TradeRequest): Promise<TradeDetails> {
     try {
-      // 1. Get market rate first
-      const quote = await QuidaxMarketService.getQuote({
-        market: `${details.currency.toLowerCase()}ngn`,
-        unit: details.currency.toLowerCase(),
-        kind: 'ask',
-        volume: details.amount.toString()
-      });
+      // Get quote from Quidax
+      const rate = await this.quidaxClient.getRate(
+        details.currency.toLowerCase(),
+        'ngn'
+      );
 
-      // 2. Get swap quotation
-      const quotation = await QuidaxService.createSwapQuotation({
-        user_id: details.user_id,
-        from_currency: details.currency,
-        to_currency: 'ngn',
-        from_amount: details.amount.toString()
-      });
+      if (!rate) throw new Error('Failed to get rate');
 
-      // 3. Create trade with quotation details
-      const tradeParams: TradeParams = {
+      const total = details.amount * Number(rate);
+      const fee = total * 0.01; // 1% fee
+
+      // Calculate fees and total
+      const trade: TradeDetails = {
         user_id: details.user_id,
         type: details.type,
         currency: details.currency,
         amount: details.amount,
-        rate: Number(quote.price.amount) / details.amount,
-        total: Number(quote.total.amount),
+        rate: Number(rate),
+        total: total + fee,
         fees: {
-          service: Number(quote.fee.amount) * 0.8, // 80% of fee is service fee
-          network: Number(quote.fee.amount) * 0.2  // 20% of fee is network fee
+          platform: fee * 0.8, // 80% of fee is platform fee
+          processing: fee * 0.2, // 20% of fee is processing fee
+          total: fee
         },
-        paymentMethod: details.payment_method,
-        reference: quotation.id
+        payment_method: details.payment_method,
+        status: TradeStatus.PENDING,
+        reference: `TRADE_${Date.now()}_${Math.random().toString(36).substring(7)}`
       };
 
-      const trade = await UnifiedTradeService.createTrade(tradeParams);
-
-      return {
-        trade,
-        payment: {
-          amount: trade.total,
-          currency: 'NGN',
-          payment_method: trade.payment_method,
-          reference: trade.id
-        }
-      };
+      return trade;
     } catch (error) {
-      console.error('Trade flow failed:', error);
+      console.error('Error initializing trade:', error);
       throw error;
     }
   }

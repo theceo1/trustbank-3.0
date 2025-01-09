@@ -1,146 +1,95 @@
 // app/api/wallet/setup/route.ts
+import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
 
-export async function POST(request: Request) {
+export async function POST() {
   try {
-    // Get cookie store
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ 
       cookies: () => cookieStore 
     });
-
-    // Get session for authentication
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (sessionError || !session) {
-      console.error('Session error:', sessionError);
-      return NextResponse.json({ 
-        error: 'Authentication required' 
-      }, { status: 401 });
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user profile
-    const { data: userProfile, error: profileError } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('user_id', session.user.id)
+    // Get user data
+    const { data: userData, error: userError } = await supabase
+      .from('users')
+      .select('email, raw_user_meta_data')
+      .eq('id', session.user.id)
       .single();
 
-    if (profileError) {
-      // If profile doesn't exist, create one
-      const { data: userData } = await supabase
-        .from('auth.users')
-        .select('email, raw_user_meta_data')
-        .eq('id', session.user.id)
-        .single();
-
-      if (!userData?.email) {
-        return NextResponse.json({ 
-          error: 'User email not found' 
-        }, { status: 404 });
-      }
-
-      // Create Quidax account
-      const quidaxResponse = await QuidaxWalletService.createSubAccount(
-        userData.email,
-        userData.raw_user_meta_data?.full_name || userData.email.split('@')[0]
-      ).catch(error => {
-        console.error('Failed to create Quidax account:', error);
-        return null;
-      });
-
-      if (!quidaxResponse?.data?.id) {
-        return NextResponse.json({ 
-          error: 'Failed to create Quidax account' 
-        }, { status: 500 });
-      }
-
-      // Create user profile
-      const { error: insertError } = await supabase
-        .from('user_profiles')
-        .insert({
-          user_id: session.user.id,
-          quidax_id: quidaxResponse.data.id,
-          full_name: userData.raw_user_meta_data?.full_name || userData.email.split('@')[0],
-          is_verified: false,
-          kyc_level: 0,
-          is_test: false
-        });
-
-      if (insertError) {
-        return NextResponse.json({ 
-          error: 'Failed to create user profile' 
-        }, { status: 500 });
-      }
-
-      return NextResponse.json({
-        status: 'success',
-        message: 'Wallet setup complete',
-        data: quidaxResponse.data
-      });
+    if (userError || !userData) {
+      console.error('Error fetching user data:', userError);
+      return NextResponse.json({ 
+        error: 'Unable to fetch user data' 
+      }, { status: 500 });
     }
 
-    // If profile exists but no Quidax ID
-    if (!userProfile.quidax_id) {
-      const { data: userData } = await supabase
-        .from('auth.users')
-        .select('email, raw_user_meta_data')
-        .eq('id', session.user.id)
-        .single();
+    // Check if user already has a Quidax ID
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('quidax_id')
+      .eq('id', session.user.id)
+      .single();
 
-      if (!userData?.email) {
-        return NextResponse.json({ 
-          error: 'User email not found' 
-        }, { status: 404 });
-      }
+    if (existingProfile?.quidax_id) {
+      return NextResponse.json({ 
+        error: 'Wallet already set up' 
+      }, { status: 400 });
+    }
 
-      // Create Quidax account
-      const quidaxResponse = await QuidaxWalletService.createSubAccount(
-        userData.email,
-        userProfile.full_name || userData.email.split('@')[0]
-      ).catch(error => {
-        console.error('Failed to create Quidax account:', error);
-        return null;
-      });
+    // Get wallet service instance
+    const walletService = getWalletService();
 
-      if (!quidaxResponse?.data?.id) {
-        return NextResponse.json({ 
-          error: 'Failed to create Quidax account' 
-        }, { status: 500 });
-      }
+    // Create Quidax account
+    const fullName = userData.raw_user_meta_data?.full_name || userData.email.split('@')[0];
+    const quidaxResponse = await walletService.createSubAccount(
+      userData.email,
+      fullName
+    ).catch(error => {
+      console.error('Error creating Quidax account:', error);
+      throw new Error('Failed to create Quidax account');
+    });
 
-      // Update user profile with Quidax ID
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({ quidax_id: quidaxResponse.data.id })
-        .eq('user_id', session.user.id);
+    if (!quidaxResponse?.data?.id) {
+      throw new Error('Invalid response from Quidax');
+    }
 
-      if (updateError) {
-        return NextResponse.json({ 
-          error: 'Failed to update user profile' 
-        }, { status: 500 });
-      }
+    // Update user profile with Quidax ID
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ 
+        quidax_id: quidaxResponse.data.id,
+        kyc_status: 'pending',
+        kyc_level: 0,
+        tier1_verified: false,
+        tier2_verified: false,
+        tier3_verified: false
+      })
+      .eq('id', session.user.id);
 
-      return NextResponse.json({
-        status: 'success',
-        message: 'Wallet setup complete',
-        data: quidaxResponse.data
-      });
+    if (updateError) {
+      console.error('Error updating user profile:', updateError);
+      throw new Error('Failed to update user profile');
     }
 
     return NextResponse.json({
       status: 'success',
-      message: 'Wallet already set up',
-      data: { quidax_id: userProfile.quidax_id }
+      message: 'Wallet setup completed',
+      data: {
+        quidax_id: quidaxResponse.data.id
+      }
     });
 
-  } catch (error) {
-    console.error('Error setting up wallet:', error);
+  } catch (error: any) {
+    console.error('Wallet setup error:', error);
     return NextResponse.json(
-      { error: 'Failed to set up wallet' }, 
+      { error: error.message || 'Failed to setup wallet' },
       { status: 500 }
     );
   }

@@ -1,6 +1,6 @@
 // app/api/auth/signup/route.ts
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { getSupabaseServerClient } from '@/app/lib/supabase/server';
 import { QuidaxClient } from '@/app/lib/services/quidax-client';
 import { APIError, handleApiError } from '@/app/lib/api-utils';
 
@@ -10,7 +10,7 @@ export async function POST(request: Request) {
     const { email, password, name } = body;
 
     // Create Supabase user
-    const supabase = createClient();
+    const supabase = getSupabaseServerClient();
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,

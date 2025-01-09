@@ -9,8 +9,8 @@ import { Shield, Key, Smartphone, Lock, AlertTriangle } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import BackButton from "@/components/ui/back-button";
-import { useAuth } from "@/context/AuthContext";
+import BackButton from "../../../components/ui/back-button";
+import { useAuth } from "../../context/AuthContext";
 
 export default function SecurityPage() {
   const { toast } = useToast();

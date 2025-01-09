@@ -172,6 +172,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = async () => {
     try {
       console.log('Attempting sign out...');
+      
+      // First clear local state
+      setUser(null);
+      setSession(null);
+      
+      // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -180,9 +186,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       console.log('Sign out successful');
+      
+      // Force clear any remaining auth state
       await updateAuthState(null);
+      
+      // Clear any cached data
       router.refresh();
-      router.push('/auth/login');
+      
+      // Redirect to login page
+      router.replace('/auth/login');
     } catch (error) {
       console.error('Unexpected sign out error:', error);
     }

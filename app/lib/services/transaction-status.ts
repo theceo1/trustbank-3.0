@@ -1,33 +1,38 @@
-import supabase from '@/lib/supabase/client';
-import { TransactionStatus } from '@/app/types/transactions';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/app/types/database';
+import { PaymentStatus } from '@/app/types/payment';
+
+interface TransactionPayload {
+  new: {
+    status: PaymentStatus;
+  };
+}
 
 export class TransactionStatusService {
-  static async updateStatus(
-    transactionId: string, 
-    status: TransactionStatus, 
-    paymentReference?: string
-  ) {
-    const { data, error } = await supabase
-      .from('transactions')
-      .update({
-        status,
-        payment_reference: paymentReference,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', transactionId)
-      .select()
-      .single();
+  private static supabase = createClientComponentClient<Database>();
 
-    if (error) throw error;
-    return data;
+  static async getStatus(transactionId: string): Promise<PaymentStatus> {
+    try {
+      const { data, error } = await this.supabase
+        .from('transactions')
+        .select('status')
+        .eq('id', transactionId)
+        .single();
+
+      if (error) throw error;
+      return data.status;
+    } catch (error) {
+      console.error('Error fetching transaction status:', error);
+      throw error;
+    }
   }
 
   static subscribeToStatus(
-    transactionId: string, 
-    callback: (status: TransactionStatus) => void
-  ) {
-    return supabase
-      .channel(`transaction-${transactionId}`)
+    transactionId: string,
+    callback: (status: PaymentStatus) => void
+  ): () => void {
+    const channel = this.supabase
+      .channel('transaction-status')
       .on(
         'postgres_changes',
         {
@@ -36,21 +41,14 @@ export class TransactionStatusService {
           table: 'transactions',
           filter: `id=eq.${transactionId}`
         },
-        (payload) => {
+        (payload: TransactionPayload) => {
           callback(payload.new.status);
         }
       )
       .subscribe();
-  }
 
-  static async getTransaction(transactionId: string) {
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('id', transactionId)
-      .single();
-
-    if (error) throw error;
-    return data;
+    return () => {
+      channel.unsubscribe();
+    };
   }
 }

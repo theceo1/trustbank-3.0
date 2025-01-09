@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { motion } from "framer-motion";
 import { Bell, Mail, Smartphone, DollarSign, Megaphone } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import BackButton from "@/components/ui/back-button";
+import BackButton from "../../../components/ui/back-button";
 
 export default function NotificationsPage() {
   const { toast } = useToast();

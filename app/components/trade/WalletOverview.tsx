@@ -7,6 +7,9 @@ import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
 import { Card, CardContent } from '@/app/components/ui/card';
 import { Skeleton } from '@/app/components/ui/skeleton';
 import { toast } from 'sonner';
+import { Alert, AlertDescription } from '@/app/components/ui/alert';
+import { AlertCircle, LinkIcon } from 'lucide-react';
+import Link from 'next/link';
 
 interface WalletBalance {
   currency: string;
@@ -20,6 +23,12 @@ interface QuidaxWallet {
   locked: number | string;
 }
 
+interface ErrorState {
+  message: string;
+  type: 'setup' | 'kyc' | 'general';
+  redirectTo?: string;
+}
+
 const SUPPORTED_CURRENCY_SYMBOLS = ['USDT', 'NGN'];
 
 export default function WalletOverview() {
@@ -27,57 +36,44 @@ export default function WalletOverview() {
   const supabase = createClientComponentClient();
   const [balances, setBalances] = useState<WalletBalance[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<ErrorState | null>(null);
 
   const fetchWallets = async () => {
     try {
       setIsLoading(true);
       setError(null);
 
-      if (!user?.id) {
-        throw new Error('Please sign in to view your wallet.');
-      }
-
-      // Get user's Quidax ID from profile
-      const { data: profile, error: profileError } = await supabase
-        .from('user_profiles')
-        .select('quidax_id, kyc_status')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profileError) {
-        console.error('Profile fetch error:', profileError);
-        throw new Error('Unable to load wallet information. Please try again.');
-      }
-
-      if (!profile?.quidax_id) {
-        console.error('No Quidax ID found for user:', user.id);
-        throw new Error('Your wallet is not yet set up. Please complete your profile setup.');
-      }
-
-      // Fetch balances from the balances endpoint
       const response = await fetch('/api/wallet/balances');
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error('Unable to load wallet information. Please try again.');
+        if (data.redirectTo === '/profile/verification') {
+          setError({
+            message: data.message || 'Please complete your identity verification to access your wallet.',
+            type: 'kyc'
+          });
+        } else {
+          throw new Error(data.message || 'Failed to fetch wallet balances');
+        }
+        return;
       }
 
       if (data.status === 'success' && Array.isArray(data.data)) {
-        setBalances(data.data
-          .filter((wallet: QuidaxWallet) => SUPPORTED_CURRENCY_SYMBOLS.includes(wallet.currency.toUpperCase()))
-          .map((wallet: QuidaxWallet) => ({
-            currency: wallet.currency,
-            balance: wallet.balance.toString(),
-            locked: wallet.locked.toString()
-          })));
+        setBalances(data.data.map((wallet: any) => ({
+          currency: wallet.currency,
+          balance: wallet.balance.toString(),
+          locked: wallet.locked.toString()
+        })));
       } else {
         console.error('Invalid wallet data:', data);
         throw new Error('Unable to load wallet information. Please try again.');
       }
     } catch (error: any) {
       console.error('Wallet fetch error:', error);
-      setError(error.message);
+      setError({
+        message: error.message,
+        type: 'general'
+      });
       toast.error(error.message);
     } finally {
       setIsLoading(false);
@@ -107,7 +103,21 @@ export default function WalletOverview() {
     return (
       <Card>
         <CardContent className="p-6">
-          <div className="text-sm text-red-500">{error}</div>
+          <Alert variant={error.type === 'general' ? 'destructive' : 'default'}>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="space-y-2">
+              <p>{error.message}</p>
+              {error.redirectTo && (
+                <Link 
+                  href={error.redirectTo} 
+                  className="flex items-center text-primary hover:underline mt-2"
+                >
+                  <LinkIcon className="h-4 w-4 mr-1" />
+                  {error.type === 'kyc' ? 'Complete Identity Verification' : 'Complete Wallet Setup'}
+                </Link>
+              )}
+            </AlertDescription>
+          </Alert>
         </CardContent>
       </Card>
     );

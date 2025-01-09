@@ -1,54 +1,65 @@
 // app/lib/services/unifiedTrade.ts
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { TradeParams, TradeDetails, TradeStatus } from '@/app/types/trade';
-import { QuidaxSwapService } from './quidax-swap';
 import { Database } from '@/app/types/database';
-import { handleError } from '@/app/lib/utils/errorHandler';
-import { MarketRateService } from './market-rate';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
+import { QuidaxClient } from './quidax-client';
+
+interface TradeParams {
+  user_id: string;
+  type: 'buy' | 'sell';
+  currency: string;
+  amount: number;
+  rate: number;
+  total: number;
+  fees: {
+    platform: number;
+    processing: number;
+    total: number;
+  };
+  payment_method: string;
+}
 
 export class UnifiedTradeService {
   private static supabase = createClientComponentClient<Database>();
+  private static quidaxClient = new QuidaxClient(process.env.QUIDAX_SECRET_KEY || '');
 
   static async createTrade(params: TradeParams): Promise<TradeDetails> {
     try {
-      // Create swap quotation in Quidax
-      const quotation = await QuidaxSwapService.createSwapQuotation({
-        user_id: params.user_id,
-        from_currency: params.currency.toLowerCase(),
-        to_currency: 'ngn',
-        from_amount: params.amount.toString()
-      });
+      // Get quote from Quidax
+      const rate = await this.quidaxClient.getRate(
+        params.currency.toLowerCase(),
+        'ngn'
+      );
 
-      const tradeDetails: TradeDetails = {
+      if (!rate) throw new Error('Failed to get rate');
+
+      // Create trade record
+      const tradeData = {
         user_id: params.user_id,
         type: params.type,
         currency: params.currency,
         amount: params.amount,
-        rate: params.rate,
-        total: params.amount * params.rate,
-        fees: {
-          platform: params.fees.service,
-          processing: params.fees.network,
-          total: params.fees.service + params.fees.network
-        },
-        payment_method: params.paymentMethod,
+        rate: Number(rate),
+        total: params.total,
+        fees: params.fees,
+        payment_method: params.payment_method,
         status: TradeStatus.PENDING,
-        reference: quotation.id,
+        reference: `TRADE_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
-      // Store in database
-      const { data: localTrade, error } = await this.supabase
+      const { data: trade, error } = await this.supabase
         .from('trades')
-        .insert(tradeDetails)
+        .insert(tradeData)
         .select()
         .single();
 
       if (error) throw error;
-      return localTrade;
+      return trade;
     } catch (error) {
-      throw handleError(error, 'Failed to create trade');
+      console.error('Error creating trade:', error);
+      throw error;
     }
   }
 
@@ -63,7 +74,8 @@ export class UnifiedTradeService {
       if (error) throw error;
       return trades || [];
     } catch (error) {
-      throw handleError(error, 'Failed to fetch trade history');
+      console.error('Failed to fetch trade history:', error);
+      throw error;
     }
   }
 
@@ -84,11 +96,18 @@ export class UnifiedTradeService {
     currency: string;
     type: 'buy' | 'sell';
   }) {
-    return await MarketRateService.getRate({
-      amount: params.amount,
-      currency_pair: `${params.currency.toLowerCase()}_ngn`,
-      type: params.type
-    });
+    try {
+      const rate = await this.quidaxClient.getRate(
+        params.currency.toLowerCase(),
+        'ngn'
+      );
+
+      if (!rate) throw new Error('Failed to get rate');
+      return rate;
+    } catch (error) {
+      console.error('Failed to get trade rate:', error);
+      throw error;
+    }
   }
 
   static async updateTradeStatus(
@@ -108,7 +127,8 @@ export class UnifiedTradeService {
 
       if (error) throw error;
     } catch (error) {
-      throw handleError(error, 'Failed to update trade status');
+      console.error('Failed to update trade status:', error);
+      throw error;
     }
   }
 
@@ -125,7 +145,8 @@ export class UnifiedTradeService {
 
       return { status: trade.status as TradeStatus };
     } catch (error) {
-      throw handleError(error, 'Failed to get trade status');
+      console.error('Failed to get trade status:', error);
+      throw error;
     }
   }
 
@@ -142,7 +163,8 @@ export class UnifiedTradeService {
 
       return trade as TradeDetails;
     } catch (error) {
-      throw handleError(error, 'Failed to fetch trade details');
+      console.error('Failed to fetch trade details:', error);
+      throw error;
     }
   }
 }

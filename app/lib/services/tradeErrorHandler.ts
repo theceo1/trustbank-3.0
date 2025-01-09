@@ -1,48 +1,34 @@
-import { type ToastProps } from '@/app/components/ui/toast';
+import { toast } from 'sonner';
 
 export class TradeErrorHandler {
-  static handleError(error: any, context: string, showToast: (props: ToastProps) => void) {
-    console.error(`${context}:`, error);
+  static handleError(error: Error) {
+    console.error('Trade error:', error);
 
-    if (error.name === 'RateExpiredError') {
-      showToast({
-        id: "rate-expired",
-        title: "Rate Expired",
-        description: "Please refresh the rate to continue",
-        variant: "warning"
+    // Handle specific error cases
+    if (error.message.includes('rate expired')) {
+      toast.error("Rate Expired", {
+        description: "Please refresh the rate to continue"
       });
       return;
     }
 
-    if (error.name === 'InsufficientFundsError') {
-      showToast({
-        id: "insufficient-funds",
-        title: "Insufficient Funds",
-        description: "Please top up your wallet to continue",
-        variant: "destructive"
+    if (error.message.includes('insufficient balance')) {
+      toast.error("Insufficient Balance", {
+        description: "Please fund your wallet to continue"
       });
       return;
     }
 
-    if (error.name === 'KYCRequiredError') {
-      showToast({
-        id: "kyc-required",
-        title: "KYC Required",
-        description: "Please complete KYC verification to continue",
-        variant: "destructive"
+    if (error.message.includes('limit exceeded')) {
+      toast.error("Limit Exceeded", {
+        description: "Please upgrade your KYC level to increase your limits"
       });
       return;
     }
 
-    showToast({
-      id: "default-error",
-      title: "Error",
-      description: error.message || "An unexpected error occurred",
-      variant: "destructive"
+    // Default error message
+    toast.error("Trade Failed", {
+      description: error.message || "An error occurred while processing your trade"
     });
-  }
-
-  static isRecoverableError(error: any): boolean {
-    return ['RateExpiredError', 'NetworkError'].includes(error.name);
   }
 }

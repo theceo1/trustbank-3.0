@@ -2,15 +2,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowUpIcon, ArrowDownIcon, TrendingUpIcon, DollarSignIcon, ChartIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 
+type IconType = typeof ChartIcon | typeof DollarSignIcon | typeof TrendingUpIcon;
+
 interface MetricCardProps {
   title: string;
   value?: string;
   trend?: number;
-  icon: string;
+  icon: 'chart-up' | 'dollar-sign' | 'trending-up';
   loading?: boolean;
 }
 
-const icons = {
+const icons: Record<MetricCardProps['icon'], IconType> = {
   'chart-up': ChartIcon,
   'dollar-sign': DollarSignIcon,
   'trending-up': TrendingUpIcon,

@@ -1,17 +1,20 @@
 //app/api/trades/create/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
 import { TradeFlow } from '@/app/lib/services/trade-flow';
-import { getCurrentUser } from '@/app/lib/session';
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const user = await getCurrentUser();
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { user } } = await supabase.auth.getUser();
+
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const tradeDetails = await request.json();
-    const result = await TradeFlow.createSellOrder({
+    const result = await TradeFlow.initializeTrade({
       ...tradeDetails,
       user_id: user.id
     });
@@ -20,7 +23,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Trade creation failed:', error);
     return NextResponse.json(
-      { error: 'Failed to create trade' },
+      { error: error instanceof Error ? error.message : 'Failed to create trade' },
       { status: 500 }
     );
   }

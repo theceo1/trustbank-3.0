@@ -18,6 +18,14 @@ import {
   ResponsiveContainer
 } from 'recharts';
 
+interface ReferralData {
+  referral_count: number;
+}
+
+interface EarningsData {
+  amount: number;
+}
+
 interface ReferralStats {
   totalReferrals: number;
   activeReferrers: number;
@@ -63,9 +71,9 @@ export default function ReferralOverview() {
           .not('referred_by', 'is', null);
 
         // Process the data
-        const totalReferrals = totalData?.reduce((sum, item) => sum + item.referral_count, 0) || 0;
+        const totalReferrals = totalData?.reduce((sum: number, item: ReferralData) => sum + item.referral_count, 0) || 0;
         const activeReferrers = activeData?.[0]?.count || 0;
-        const totalEarnings = earningsData?.reduce((sum, item) => sum + item.amount, 0) || 0;
+        const totalEarnings = earningsData?.reduce((sum: number, item: EarningsData) => sum + item.amount, 0) || 0;
 
         // Process daily referrals
         const dailyReferrals = processDailyReferrals(dailyData || []);

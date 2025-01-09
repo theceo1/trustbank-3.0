@@ -1,120 +1,85 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getSupabaseServerClient } from '@/app/lib/supabase/server';
+import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
 
 const QUIDAX_API_URL = 'https://www.quidax.com/api/v1';
 
-export async function GET(request: NextRequest, { params }: { params: { path: string[] } }) {
+async function handleRequest(request: Request, method: string) {
   try {
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    
     // Get the user session
-    const supabase = await getSupabaseServerClient();
-    const { data: { user }, error: sessionError } = await supabase.auth.getUser();
-
-    if (sessionError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session?.user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Get the user's profile to check if they have access
     const { data: profile } = await supabase
       .from('user_profiles')
       .select('is_verified, quidax_id')
-      .eq('user_id', user.id)
+      .eq('user_id', session.user.id)
       .single();
 
     if (!profile?.is_verified) {
-      return NextResponse.json({
+      return new Response(JSON.stringify({
         error: 'KYC verification required',
         message: 'Please complete KYC verification to access this feature',
         redirectTo: '/kyc'
-      }, { status: 403 });
+      }), {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     if (!profile?.quidax_id) {
-      return NextResponse.json({ error: 'Quidax account not linked' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'Quidax account not linked' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     // Build the Quidax API URL
-    const path = params.path.join('/');
     const url = new URL(request.url);
+    const path = url.pathname.split('/').slice(3).join('/');
     const quidaxUrl = `${QUIDAX_API_URL}/${path}${url.search}`;
 
     // Forward the request to Quidax
     const response = await fetch(quidaxUrl, {
+      method,
       headers: {
-        'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
-        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${QUIDAX_CONFIG.apiKey}`,
+        'Content-Type': 'application/json'
       },
+      ...(method !== 'GET' && request.body ? { body: request.body } : {})
     });
 
-    if (!response.ok) {
-      throw new Error(`Quidax API error: ${response.statusText}`);
-    }
-
     const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Quidax proxy error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process request' },
-      { status: 500 }
-    );
+    return new Response(JSON.stringify(data), {
+      status: response.status,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  } catch (error: any) {
+    console.error('[Quidax API] Error:', error);
+    return new Response(JSON.stringify({
+      status: 'error',
+      message: error.message || 'Failed to proxy request to Quidax'
+    }), {
+      status: error.status || 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 }
 
-export async function POST(request: NextRequest, { params }: { params: { path: string[] } }) {
-  try {
-    // Get the user session
-    const supabase = await getSupabaseServerClient();
-    const { data: { user }, error: sessionError } = await supabase.auth.getUser();
+export async function GET(request: Request) {
+  return handleRequest(request, 'GET');
+}
 
-    if (sessionError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    // Get the user's profile to check if they have access
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('is_verified, quidax_id')
-      .eq('user_id', user.id)
-      .single();
-
-    if (!profile?.is_verified) {
-      return NextResponse.json({
-        error: 'KYC verification required',
-        message: 'Please complete KYC verification to access this feature',
-        redirectTo: '/kyc'
-      }, { status: 403 });
-    }
-
-    if (!profile?.quidax_id) {
-      return NextResponse.json({ error: 'Quidax account not linked' }, { status: 400 });
-    }
-
-    // Build the Quidax API URL
-    const path = params.path.join('/');
-    const quidaxUrl = `${QUIDAX_API_URL}/${path}`;
-
-    // Forward the request to Quidax
-    const body = await request.json();
-    const response = await fetch(quidaxUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(`Quidax API error: ${response.statusText}`);
-    }
-
-    const data = await response.json();
-    return NextResponse.json(data);
-  } catch (error) {
-    console.error('Quidax proxy error:', error);
-    return NextResponse.json(
-      { error: 'Failed to process request' },
-      { status: 500 }
-    );
-  }
+export async function POST(request: Request) {
+  return handleRequest(request, 'POST');
 } 

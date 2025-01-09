@@ -1,185 +1,155 @@
 // app/admin/lib/api.ts
-import supabase from "@/lib/supabase/client";
-import { subDays, format, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
+import { cookies } from 'next/headers';
+import { Database } from '@/types/supabase';
 
-export interface DashboardStats {
-  totalUsers: number;
-  activeUsers: number;
-  totalReferrals: number;
-  totalRevenue: number;
-  userGrowth: number;
-  activeUserGrowth: number;
-  referralGrowth: number;
-  revenueGrowth: number;
-  chartData: {
-    date: string;
-    users: number;
-    transactions: number;
-    revenue: number;
-  }[];
-  recentActivity: {
-    id: string;
-    type: 'user' | 'transaction' | 'system' | 'security';
-    message: string;
-    timestamp: string;
-    metadata?: Record<string, any>;
-  }[];
-  systemHealth: {
-    name: string;
-    status: 'healthy' | 'warning' | 'critical';
-    value: number;
-    total?: number;
-    unit?: string;
-  }[];
+interface Transaction {
+  amount: number;
+  created_at: string;
 }
 
-export async function fetchDashboardStats(): Promise<DashboardStats> {
-  const today = new Date();
-  const thirtyDaysAgo = subDays(today, 30);
-  const previousThirtyDaysAgo = subDays(thirtyDaysAgo, 30);
-  
-  // Current period stats
-  const { data: currentUsers } = await supabase
-    .from('profiles')
-    .select('id, created_at, last_active')
-    .gte('created_at', thirtyDaysAgo.toISOString());
+interface User {
+  id: string;
+  created_at: string;
+}
 
-  const { data: previousUsers } = await supabase
-    .from('profiles')
-    .select('id')
-    .gte('created_at', previousThirtyDaysAgo.toISOString())
-    .lt('created_at', thirtyDaysAgo.toISOString());
+interface Activity {
+  type: string;
+  created_at: string;
+}
 
-  // Active users (active in last 7 days)
-  const sevenDaysAgo = subDays(today, 7);
-  const previousSevenDaysAgo = subDays(sevenDaysAgo, 7);
-  
-  const { data: activeUsers } = await supabase
-    .from('profiles')
-    .select('id')
-    .gte('last_active', sevenDaysAgo.toISOString());
+interface ChartData {
+  date: string;
+  revenue: number;
+  users: number;
+}
 
-  const { data: previousActiveUsers } = await supabase
-    .from('profiles')
-    .select('id')
-    .gte('last_active', previousSevenDaysAgo.toISOString())
-    .lt('last_active', sevenDaysAgo.toISOString());
+export async function getAdminDashboardData() {
+  const cookieStore = cookies();
+  const supabase = createServerComponentClient<Database>({ cookies: () => cookieStore });
 
-  // Revenue calculations
-  const { data: currentRevenue } = await supabase
-    .from('transactions')
-    .select('amount')
-    .gte('created_at', thirtyDaysAgo.toISOString())
-    .eq('status', 'completed');
+  // Get current date and date 30 days ago
+  const now = new Date();
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const previousThirtyDays = new Date(thirtyDaysAgo.getTime() - 30 * 24 * 60 * 60 * 1000);
 
-  const { data: previousRevenue } = await supabase
-    .from('transactions')
-    .select('amount')
-    .gte('created_at', previousThirtyDaysAgo.toISOString())
-    .lt('created_at', thirtyDaysAgo.toISOString())
-    .eq('status', 'completed');
+  // Format dates for database queries
+  const currentDate = now.toISOString();
+  const thirtyDaysAgoDate = thirtyDaysAgo.toISOString();
+  const previousThirtyDaysDate = previousThirtyDays.toISOString();
 
-  // Calculate growth rates
-  const calculateGrowth = (current: number, previous: number): number => {
-    if (previous === 0) return 100;
-    return Number(((current - previous) / previous * 100).toFixed(1));
-  };
+  try {
+    // Get current period metrics
+    const { data: currentRevenue } = await supabase
+      .from('transactions')
+      .select('amount, created_at')
+      .gte('created_at', thirtyDaysAgoDate)
+      .lte('created_at', currentDate);
 
-  const totalUsers = currentUsers?.length || 0;
-  const previousTotalUsers = previousUsers?.length || 0;
-  const currentActiveUsers = activeUsers?.length || 0;
-  const previousActiveUsersCount = previousActiveUsers?.length || 0;
-  
-  const currentRevenueTotal = currentRevenue?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
-  const previousRevenueTotal = previousRevenue?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0;
+    const { data: currentUsers } = await supabase
+      .from('users')
+      .select('id, created_at')
+      .gte('created_at', thirtyDaysAgoDate)
+      .lte('created_at', currentDate);
 
-  // Generate chart data for the last 30 days
-  const chartData = await Promise.all(
-    Array.from({ length: 30 }, (_, i) => {
-      const date = subDays(today, 29 - i);
-      const dateStr = format(date, 'yyyy-MM-dd');
-      
-      return supabase
+    const { data: currentActiveUsers } = await supabase
+      .from('user_sessions')
+      .select('user_id')
+      .gte('created_at', thirtyDaysAgoDate)
+      .lte('created_at', currentDate);
+
+    // Get previous period metrics for comparison
+    const { data: previousRevenue } = await supabase
+      .from('transactions')
+      .select('amount, created_at')
+      .gte('created_at', previousThirtyDaysDate)
+      .lt('created_at', thirtyDaysAgoDate);
+
+    const { data: previousUsers } = await supabase
+      .from('users')
+      .select('id, created_at')
+      .gte('created_at', previousThirtyDaysDate)
+      .lt('created_at', thirtyDaysAgoDate);
+
+    const { data: previousActiveUsers } = await supabase
+      .from('user_sessions')
+      .select('user_id')
+      .gte('created_at', previousThirtyDaysDate)
+      .lt('created_at', thirtyDaysAgoDate);
+
+    // Calculate totals
+    const currentUsersCount = currentUsers?.length || 0;
+    const previousUsersCount = previousUsers?.length || 0;
+    const currentActiveUsersCount = currentActiveUsers?.length || 0;
+    const previousActiveUsersCount = previousActiveUsers?.length || 0;
+    
+    const currentRevenueTotal = currentRevenue?.reduce((sum: number, t: Transaction) => sum + (t.amount || 0), 0) || 0;
+    const previousRevenueTotal = previousRevenue?.reduce((sum: number, t: Transaction) => sum + (t.amount || 0), 0) || 0;
+
+    // Generate chart data for the last 30 days
+    const chartData: ChartData[] = [];
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+      const { data } = await supabase
         .from('transactions')
         .select('amount, created_at')
-        .eq('status', 'completed')
-        .gte('created_at', `${dateStr}T00:00:00`)
-        .lte('created_at', `${dateStr}T23:59:59`)
-        .then(({ data }) => ({
-          date: dateStr,
-          revenue: data?.reduce((sum, t) => sum + (t.amount || 0), 0) || 0,
-          transactions: data?.length || 0,
-          users: currentUsers?.filter(u => 
-            format(new Date(u.created_at), 'yyyy-MM-dd') === dateStr
-          ).length || 0
-        }));
-    })
-  );
+        .gte('created_at', `${date}T00:00:00`)
+        .lt('created_at', `${date}T23:59:59`);
 
-  // Recent activity
-  const { data: activityData } = await supabase
-    .from('admin_activity_logs')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .limit(10);
+      const dailyRevenue = data?.reduce((sum: number, t: Transaction) => sum + (t.amount || 0), 0) || 0;
+      
+      const { data: dailyUsers } = await supabase
+        .from('users')
+        .select('id')
+        .gte('created_at', `${date}T00:00:00`)
+        .lt('created_at', `${date}T23:59:59`);
 
-  // Fetch current period referrals
-  const { data: currentReferrals } = await supabase
-    .from('referrals')
-    .select('id, created_at, status')
-    .gte('created_at', thirtyDaysAgo.toISOString())
-    .eq('status', 'completed');
+      chartData.unshift({
+        date,
+        revenue: dailyRevenue,
+        users: dailyUsers?.length || 0
+      });
+    }
 
-  // Fetch previous period referrals
-  const { data: previousReferrals } = await supabase
-    .from('referrals')
-    .select('id, created_at, status')
-    .gte('created_at', previousThirtyDaysAgo.toISOString())
-    .lt('created_at', thirtyDaysAgo.toISOString())
-    .eq('status', 'completed');
+    // Get recent activity
+    const { data: recentActivity } = await supabase
+      .from('user_activity')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(10);
 
-  // Calculate referral growth
-  const currentReferralCount = currentReferrals?.length || 0;
-  const previousReferralCount = previousReferrals?.length || 0;
-  const referralGrowth = calculateGrowth(currentReferralCount, previousReferralCount);
+    // Calculate percentage changes
+    const revenueChange = ((currentRevenueTotal - previousRevenueTotal) / previousRevenueTotal) * 100;
+    const userChange = ((currentUsersCount - previousUsersCount) / previousUsersCount) * 100;
+    const activeUserChange = ((currentActiveUsersCount - previousActiveUsersCount) / previousActiveUsersCount) * 100;
 
-  return {
-    totalUsers,
-    activeUsers: currentActiveUsers,
-    totalReferrals: currentReferralCount,
-    totalRevenue: currentRevenueTotal,
-    userGrowth: calculateGrowth(totalUsers, previousTotalUsers),
-    activeUserGrowth: calculateGrowth(currentActiveUsers, previousActiveUsersCount),
-    referralGrowth,
-    revenueGrowth: calculateGrowth(currentRevenueTotal, previousRevenueTotal),
-    chartData,
-    recentActivity: activityData?.map(activity => ({
-      id: activity.id,
+    // Format activity data
+    const formattedActivity = recentActivity?.map((activity: Activity) => ({
       type: activity.type,
-      message: activity.message,
-      timestamp: activity.created_at,
-      metadata: activity.metadata
-    })) || [],
-    systemHealth: [
-      {
-        name: 'API Response Time',
-        status: 'healthy',
-        value: 250,
-        unit: 'ms'
+      timestamp: new Date(activity.created_at).toLocaleString()
+    }));
+
+    return {
+      currentPeriod: {
+        revenue: currentRevenueTotal,
+        users: currentUsersCount,
+        activeUsers: currentActiveUsersCount
       },
-      {
-        name: 'Database Status',
-        status: 'healthy',
-        value: 100,
-        unit: '%'
+      previousPeriod: {
+        revenue: previousRevenueTotal,
+        users: previousUsersCount,
+        activeUsers: previousActiveUsersCount
       },
-      {
-        name: 'Storage Usage',
-        status: 'warning',
-        value: 85,
-        total: 100,
-        unit: '%'
-      }
-    ]
-  };
+      changes: {
+        revenue: revenueChange,
+        users: userChange,
+        activeUsers: activeUserChange
+      },
+      chartData,
+      recentActivity: formattedActivity || []
+    };
+  } catch (error) {
+    console.error('Error fetching admin dashboard data:', error);
+    throw error;
+  }
 } 

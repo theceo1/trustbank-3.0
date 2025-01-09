@@ -2,6 +2,12 @@ import { useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import supabase from '@/lib/supabase/client';
 
+interface TradePayload {
+  new: {
+    status: string;
+  };
+}
+
 interface RealTimeTradeUpdatesProps {
   tradeId: string;
   onUpdate: (status: string) => void;
@@ -21,7 +27,7 @@ export function RealTimeTradeUpdates({ tradeId, onUpdate }: RealTimeTradeUpdates
           table: 'trades',
           filter: `id=eq.${tradeId}`
         },
-        (payload) => {
+        (payload: TradePayload) => {
           const newStatus = payload.new.status;
           onUpdate(newStatus);
 

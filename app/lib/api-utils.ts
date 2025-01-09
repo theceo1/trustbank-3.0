@@ -1,38 +1,34 @@
 import { NextResponse } from 'next/server';
 
 export class APIError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number = 500,
-    public data?: any
-  ) {
+  status: number;
+
+  constructor(message: string, status: number = 500) {
     super(message);
+    this.status = status;
     this.name = 'APIError';
   }
 }
 
 export function handleApiError(error: unknown) {
   console.error('API Error:', error);
-
+  
   if (error instanceof APIError) {
     return NextResponse.json(
-      {
-        status: 'error',
-        message: error.message,
-        data: error.data
-      },
-      { status: error.statusCode }
+      { status: 'error', message: error.message },
+      { status: error.status }
     );
   }
 
-  // Handle other types of errors
-  const message = error instanceof Error ? error.message : 'An unexpected error occurred';
-  
+  if (error instanceof Error) {
+    return NextResponse.json(
+      { status: 'error', message: error.message },
+      { status: (error as any).status || 500 }
+    );
+  }
+
   return NextResponse.json(
-    {
-      status: 'error',
-      message
-    },
+    { status: 'error', message: 'An unexpected error occurred' },
     { status: 500 }
   );
 } 

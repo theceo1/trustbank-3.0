@@ -1,24 +1,48 @@
 // app/lib/services/payment/BankTransferProcessor.ts
 import { BasePaymentProcessor, PaymentProcessorResult, PaymentInitDetails } from './BasePaymentProcessor';
 import { TradeDetails } from '@/app/types/trade';
-import { QuidaxService } from '../quidax';
 
 export class BankTransferProcessor extends BasePaymentProcessor {
+  private static baseUrl = process.env.QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+  private static apiKey = process.env.QUIDAX_SECRET_KEY;
+
   async process(trade: TradeDetails): Promise<PaymentProcessorResult> {
     try {
-      const quidaxResult = await QuidaxService.processPayment({
-        ...trade,
-        payment_method: 'bank_transfer'
-      });
+      const response = await fetch(
+        `${BankTransferProcessor.baseUrl}/bank_transfers/initialize`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${BankTransferProcessor.apiKey}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({
+            amount: trade.amount,
+            currency: trade.currency,
+            reference: trade.reference!
+          })
+        }
+      );
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to initialize bank transfer');
+      }
+
+      const data = await response.json();
+      const bankTransfer = data.data;
  
       return {
         success: true,
-        reference: quidaxResult.reference,
+        reference: bankTransfer.reference,
         status: 'pending',
-        redirect_url: quidaxResult.payment_url,
         metadata: {
-          bank_details: quidaxResult.bank_details,
-          expires_at: quidaxResult.expires_at
+          bank_details: {
+            bank_name: bankTransfer.bank_name,
+            account_number: bankTransfer.account_number,
+            account_name: bankTransfer.account_name
+          }
         }
       };
     } catch (error) {
@@ -27,15 +51,12 @@ export class BankTransferProcessor extends BasePaymentProcessor {
   }
 
   async verifyPayment(reference: string): Promise<PaymentProcessorResult> {
-    const paymentDetails = await QuidaxService.getPaymentDetails(reference);
+    // TODO: Implement payment verification
     return {
-      success: paymentDetails.status === 'completed',
-      status: QuidaxService.mapQuidaxStatus(paymentDetails.status),
+      success: false,
+      status: 'pending',
       reference,
-      metadata: {
-        payment_proof: paymentDetails.payment_proof,
-        bank_reference: paymentDetails.bank_reference
-      }
+      metadata: {}
     };
   }
 
@@ -45,15 +66,39 @@ export class BankTransferProcessor extends BasePaymentProcessor {
   }
 
   async initializePayment(details: PaymentInitDetails): Promise<PaymentProcessorResult> {
-    const bankDetails = await QuidaxService.getBankDetails();
+    const response = await fetch(
+      `${BankTransferProcessor.baseUrl}/bank_transfers/initialize`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${BankTransferProcessor.apiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          amount: details.amount,
+          currency: details.currency,
+          reference: details.quidax_reference
+        })
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to initialize bank transfer');
+    }
+
+    const data = await response.json();
+    const bankTransfer = data.data;
+
     return {
       success: true,
       reference: details.quidax_reference,
       status: 'pending',
       metadata: {
-        bank_name: bankDetails.bank_name,
-        account_number: bankDetails.account_number,
-        account_name: 'TrustBank Limited',
+        bank_name: bankTransfer.bank_name,
+        account_number: bankTransfer.account_number,
+        account_name: bankTransfer.account_name,
         amount: details.amount
       }
     };

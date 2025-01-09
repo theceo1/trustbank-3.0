@@ -7,22 +7,20 @@ export const PLATFORM_FEES = {
   total: 0.03 // 3% Total fee
 };
 
-export type PaymentMethodType = 
-  | 'wallet' 
-  | 'card' 
-  | 'bank_transfer' 
-  | 'crypto' 
-  | 'qr_code' 
-  | 'mobile_money';
+export type PaymentMethodType = 'wallet' | 'card' | 'bank_transfer' | 'crypto' | 'qr_code' | 'mobile_money';
 
 export interface PaymentMethod {
   id: string;
   type: PaymentMethodType;
-  title: string;
+  name: string;
   description: string;
+  icon: string;
+  fees: {
+    percentage: number;
+    fixed: number;
+  };
   enabled: boolean;
-  comingSoon?: boolean;
-  supportedCountries?: string[];
+  metadata?: Record<string, any>;
 }
 
 export interface PaymentDetails {
@@ -44,18 +42,20 @@ export interface PaymentMethodSelectionProps {
   walletBalance?: number;
 }
 
-export type PaymentStatus = 'pending' | 'processing' | 'completed' | 'failed';
+export type PaymentStatus = 'initiated' | 'pending' | 'processing' | 'completed' | 'failed';
 
 export interface PaymentResult {
   status: PaymentStatus;
-  trade_id: string;
   reference: string;
-  payment_url?: string;
+  trade_id: string;
+  redirect_url?: string;
+  metadata?: Record<string, any>;
 }
 
 export interface PaymentProcessorProps {
   trade: TradeDetails;
   onComplete: (result: PaymentResult) => void;
+  isOptimized?: boolean;
 }
 
 export interface PaymentStatusProps {

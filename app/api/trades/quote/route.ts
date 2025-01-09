@@ -5,7 +5,7 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
 import type { Database } from '@/types/supabase';
 import { debug } from '@/app/lib/utils/debug';
-import { APIError, handleAPIError } from '@/lib/api-utils';
+import { APIError, handleApiError } from '@/app/lib/api-utils';
 
 const SUPPORTED_CURRENCIES = ['btc', 'eth', 'usdt', 'usdc', 'bnb', 'xrp'];
 
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
       unit: fromCurrency,
       kind: side === 'buy' ? 'ask' : 'bid',
       volume: amount.toString()
-    }).catch((error) => {
+    }).catch((error: Error & { status?: number }) => {
       debug.error('Quidax quote error:', error);
       throw new APIError(
         error.message || 'Failed to get quote from exchange',
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
 
     debug.trade('Received quote:', quote);
 
-    if (!quote || !quote.volume || !quote.price || !quote.receive || !quote.fee || !quote.total) {
+    if (!quote?.data?.volume || !quote.data.price || !quote.data.receive || !quote.data.fee || !quote.data.total) {
       throw new APIError('Invalid quote response from exchange', 500);
     }
 
@@ -102,16 +102,16 @@ export async function POST(request: Request) {
         id: quoteId,
         market,
         side,
-        amount: parseFloat(quote.volume.amount),
-        rate: parseFloat(quote.price.amount),
-        estimatedAmount: parseFloat(quote.receive.amount),
-        fee: parseFloat(quote.fee.amount),
-        total: parseFloat(quote.total.amount),
+        amount: parseFloat(quote.data.volume.amount),
+        rate: parseFloat(quote.data.price.amount),
+        estimatedAmount: parseFloat(quote.data.receive.amount),
+        fee: parseFloat(quote.data.fee.amount),
+        total: parseFloat(quote.data.total.amount),
         expiresAt: Date.now() + 14000 // 14 seconds expiry
       }
     });
   } catch (error) {
     debug.error('Quote error:', error);
-    return handleAPIError(error);
+    return handleApiError(error);
   }
 } 

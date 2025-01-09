@@ -1,7 +1,6 @@
 import { QuidaxUser, QuidaxWebhookEvent } from '@/app/types/quidax';
 import { QuidaxMarketService } from './quidax-market';
 import { QuidaxSwapService } from './quidax-swap';
-import { QuidaxWalletService } from './quidax-wallet';
 import { createHmac } from 'crypto';
 
 export class QuidaxService {
@@ -9,6 +8,7 @@ export class QuidaxService {
   private static apiKey = process.env.QUIDAX_SECRET_KEY;
   private static webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
 
+  // User-related methods
   static async createUser(params: {
     email: string;
     first_name: string;
@@ -81,8 +81,8 @@ export class QuidaxService {
   }
 
   // Market-related methods
-  static getMarketTicker = QuidaxMarketService.getMarketTicker;
   static getAllMarketTickers = QuidaxMarketService.getAllMarketTickers;
+  static getMarketPrice = QuidaxMarketService.getMarketPrice;
   static getQuote = QuidaxMarketService.getQuote;
 
   // Swap-related methods
@@ -90,11 +90,4 @@ export class QuidaxService {
   static confirmSwap = QuidaxSwapService.confirmSwap;
   static getSwapTransaction = QuidaxSwapService.getSwapTransaction;
   static getTemporaryQuotation = QuidaxSwapService.getTemporaryQuotation;
-
-  // Wallet-related methods
-  static getWallet = QuidaxWalletService.getWallet;
-  static getAllWallets = QuidaxWalletService.getAllWallets;
-  static getWalletAddress = QuidaxWalletService.getWalletAddress;
-  static createWalletAddress = QuidaxWalletService.createWalletAddress;
-  static createSubAccount = QuidaxWalletService.createSubAccount;
 } 

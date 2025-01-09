@@ -1,23 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
+  experimental: {
+    serverActions: true,
   },
-  poweredByHeader: false,
-  images: { 
-    unoptimized: true,
-    domains: ['localhost']
-  },
-  webpack: (config, { dev, isServer }) => {
-    if (dev) {
-      config.cache = false;
-    }
-    config.watchOptions = {
-      poll: 1000,
-      aggregateTimeout: 300,
-    }
+  webpack: (config, { isServer }) => {
+    // Add custom webpack config here if needed
     return config;
-  }
-};
+  },
+  images: {
+    domains: ['localhost'],
+  },
+}
 
-module.exports = nextConfig;
+module.exports = nextConfig

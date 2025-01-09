@@ -85,245 +85,103 @@ export interface CreateSubAccountParams {
 }
 
 export class QuidaxClient {
+  private baseUrl = 'https://www.quidax.com/api/v1';
   private apiKey: string;
-  private baseUrl: string;
 
-  constructor(apiKey = process.env.QUIDAX_SECRET_KEY) {
-    this.apiKey = apiKey || '';
-    this.baseUrl = QUIDAX_API_URL;
+  constructor(apiKey: string) {
+    this.apiKey = apiKey;
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const url = `${this.baseUrl}${endpoint}`;
-    const headers = {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${this.apiKey}`
-    };
-
-    console.log('Making request to:', url);
-    console.log('Request options:', {
-      ...options,
+  static async post(endpoint: string, data: any) {
+    const response = await fetch(`https://www.quidax.com/api/v1${endpoint}`, {
+      method: 'POST',
       headers: {
-        ...headers,
-        Authorization: 'Bearer [HIDDEN]'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`
+      },
+      body: JSON.stringify(data)
+    });
+    return response;
+  }
+
+  async fetchOrderBook(market: string) {
+    const response = await fetch(`${this.baseUrl}/markets/${market}/order_book`, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
       }
     });
+    return response.json();
+  }
 
-    const response = await fetch(url, {
-      ...options,
+  async createSubAccount(data: { email: string; first_name?: string; last_name?: string }) {
+    const response = await fetch(`${this.baseUrl}/users`, {
+      method: 'POST',
       headers: {
-        ...headers,
-        ...options.headers
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify(data)
+    });
+    return response.json();
+  }
+
+  async fetchUserWallets(userId: string) {
+    const response = await fetch(`${this.baseUrl}/users/${userId}/wallets`, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
       }
     });
+    return response.json();
+  }
 
+  async getTransactionStatus(reference: string) {
+    const response = await fetch(`${this.baseUrl}/transactions/${reference}`, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
+      }
+    });
+    return response.json();
+  }
+
+  async getRate(base: string, quote: string) {
+    const response = await fetch(`${this.baseUrl}/markets/${base}${quote}/ticker`, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
+      }
+    });
     const data = await response.json();
-    console.log('Response status:', response.status);
-    console.log('Response data:', data);
-
-    if (!response.ok) {
-      console.error('Request failed:', {
-        status: response.status,
-        statusText: response.statusText,
-        data
-      });
-      throw new Error(data.message || 'Request failed');
-    }
-
-    return data;
+    return data?.data?.last_price || null;
   }
 
-  async getUser(): Promise<QuidaxUser> {
-    const { data } = await this.request<{ data: QuidaxUser }>('/users/me');
-    return data;
-  }
-
-  async createSubAccount(params: CreateSubAccountParams): Promise<QuidaxUser> {
-    const { data } = await this.request<{ data: QuidaxUser }>('/users/sub_accounts', {
+  async confirmSwapQuotation(data: { user_id: string; quotation_id: string }) {
+    const response = await fetch(`${this.baseUrl}/swaps/confirm`, {
       method: 'POST',
-      body: JSON.stringify(params)
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${this.apiKey}`
+      },
+      body: JSON.stringify(data)
     });
-    return data;
-  }
-
-  async getDepositAddress(currency: string, userId: string, network?: string) {
-    const { data } = await this.request<{
-      data: {
-        address: string;
-        network: string;
-        destination_tag?: string;
-      }
-    }>(`/users/${userId}/wallets/${currency.toLowerCase()}/address`, {
-      method: 'POST',
-      body: JSON.stringify({ network })
-    });
-
-    return {
-      address: data.address,
-      network: data.network,
-      tag: data.destination_tag
-    };
-  }
-
-  async fetchUserWallets(userId: string = 'me'): Promise<QuidaxWallet[]> {
-    try {
-      console.log('Fetching wallets for user:', userId);
-      const { data } = await this.request<{ data: QuidaxWallet[] }>(
-        `/users/${userId}/wallets`
-      );
-      return data;
-    } catch (error) {
-      console.error('Error fetching wallets:', error);
-      throw error;
-    }
-  }
-
-  async getWallet(currency: string, userId: string): Promise<QuidaxWallet> {
-    const { data } = await this.request<{ data: QuidaxWallet }>(
-      `/users/${userId}/wallets/${currency.toLowerCase()}`
-    );
-    return data;
-  }
-
-  async getRate(base: string, quote: string): Promise<string> {
-    const { data } = await this.request<{ data: { ticker: { last: string } } }>(
-      `/markets/tickers/${base.toLowerCase()}${quote.toLowerCase()}`
-    );
-    return data.ticker.last;
-  }
-
-  async transferCrypto(
-    currency: string,
-    amount: string,
-    recipientId: string
-  ): Promise<{ id: string; status: string }> {
-    const { data } = await this.request<{ data: { id: string; status: string } }>('/transfers', {
-      method: 'POST',
-      body: JSON.stringify({
-        currency: currency.toLowerCase(),
-        amount,
-        recipient_id: recipientId
-      })
-    });
-    return data;
-  }
-
-  async getDepositHistory(currency?: string) {
-    const endpoint = currency 
-      ? `/users/deposits/${currency.toLowerCase()}`
-      : '/users/deposits';
-    
-    const { data } = await this.request<{ data: any[] }>(endpoint);
-    return data;
+    return response.json();
   }
 
   async getNetworks(currency: string) {
-    const { data } = await this.request<{ data: any[] }>(`/markets/networks/${currency.toLowerCase()}`);
-    return data;
-  }
-
-  async estimateDepositFee(currency: string, network: string) {
-    const { data } = await this.request<{ data: any }>(`/markets/estimate_network_fee`, {
-      method: 'POST',
-      body: JSON.stringify({
-        currency: currency.toLowerCase(),
-        network
-      })
+    const response = await fetch(`${this.baseUrl}/currencies/${currency}/networks`, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
+      }
     });
-    return data;
+    const data = await response.json();
+    return data.data || [];
   }
 
-  async validateAddress(currency: string, address: string, network?: string) {
-    const { data } = await this.request<{ data: { is_valid: boolean } }>(`/markets/validate_address`, {
-      method: 'POST',
-      body: JSON.stringify({
-        currency: currency.toLowerCase(),
-        address,
-        network
-      })
+  async getDepositAddress(currency: string, network: string) {
+    const response = await fetch(`${this.baseUrl}/wallets/${currency}/deposit_address?network=${network}`, {
+      headers: {
+        'Authorization': `Bearer ${this.apiKey}`
+      }
     });
-    return data.is_valid;
-  }
-
-  async createSwapQuotation(params: {
-    from_currency: string;
-    to_currency: string;
-    from_amount: string;
-    user_id: string;
-  }): Promise<SwapQuotationResponse> {
-    const { user_id, ...rest } = params;
-    const { data } = await this.request<{ data: SwapQuotationResponse }>(
-      `/users/${user_id}/swap_quotation`,
-      {
-        method: 'POST',
-        body: JSON.stringify(rest)
-      }
-    );
-    return data;
-  }
-
-  async confirmSwapQuotation(params: {
-    user_id: string;
-    quotation_id: string;
-  }): Promise<SwapResponse> {
-    const { user_id, quotation_id } = params;
-    const { data } = await this.request<{ status: string; message: string; data: SwapResponse }>(
-      `/users/${user_id}/swap_quotation/${quotation_id}/confirm`,
-      { method: 'POST' }
-    );
-    return data;
-  }
-
-  async refreshSwapQuotation(params: {
-    user_id: string;
-    quotation_id: string;
-    from_currency: string;
-    to_currency: string;
-    from_amount: string;
-  }): Promise<SwapQuotationResponse> {
-    const { user_id, quotation_id, ...rest } = params;
-    const { data } = await this.request<{ data: SwapQuotationResponse }>(
-      `/users/${user_id}/swap_quotation/${quotation_id}/refresh`,
-      {
-        method: 'POST',
-        body: JSON.stringify(rest)
-      }
-    );
-    return data;
-  }
-
-  async getSwapTransaction(params: {
-    user_id: string;
-    swap_transaction_id: string;
-  }): Promise<SwapResponse> {
-    const { user_id, swap_transaction_id } = params;
-    const { data } = await this.request<{ data: SwapResponse }>(
-      `/users/${user_id}/swap_transactions/${swap_transaction_id}`
-    );
-    return data;
-  }
-
-  async getSwapTransactions(userId: string): Promise<SwapResponse[]> {
-    const { data } = await this.request<{ data: SwapResponse[] }>(
-      `/users/${userId}/swap_transactions`
-    );
-    return data;
-  }
-
-  async getTemporarySwapQuotation(params: {
-    from_currency: string;
-    to_currency: string;
-    from_amount: string;
-    user_id: string;
-  }): Promise<SwapQuotationResponse> {
-    const { user_id, ...rest } = params;
-    const { data } = await this.request<{ data: SwapQuotationResponse }>(
-      `/users/${user_id}/temporary_swap_quotation`,
-      {
-        method: 'POST',
-        body: JSON.stringify(rest)
-      }
-    );
-    return data;
+    const data = await response.json();
+    return data.data || {};
   }
 } 

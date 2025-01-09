@@ -1,28 +1,65 @@
-import { TradeDetails, TradeParams, TradeStatus } from '@/app/types/trade';
-import { QuidaxService } from './quidax';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/app/types/database';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
 
 export class TradeService {
-  static async getTradeStatus(tradeId: string): Promise<{ status: TradeStatus }> {
+  private static supabase = createClientComponentClient<Database>();
+
+  static async createTrade(data: {
+    amount: number;
+    currency: string;
+    payment_method: string;
+    user_id: string;
+  }): Promise<TradeDetails> {
     try {
-      const response = await fetch(`/api/trades/${tradeId}/status`);
-      if (!response.ok) throw new Error('Failed to fetch trade status');
-      return response.json();
+      const { data: trade, error } = await this.supabase
+        .from('trades')
+        .insert({
+          amount: data.amount.toString(),
+          currency: data.currency,
+          payment_method: data.payment_method,
+          user_id: data.user_id,
+          status: TradeStatus.PENDING,
+          reference: `TRADE_${Date.now()}_${Math.random().toString(36).substring(7)}`
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      return trade;
     } catch (error) {
-      throw new Error('Failed to get trade status');
+      console.error('Error creating trade:', error);
+      throw error;
     }
   }
 
-  static async processPayment(tradeId: string, paymentMethod: string): Promise<void> {
+  static async getTrade(id: string): Promise<TradeDetails | null> {
     try {
-      const response = await fetch(`/api/trades/${tradeId}/process-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ paymentMethod })
-      });
-      
-      if (!response.ok) throw new Error('Payment processing failed');
+      const { data: trade, error } = await this.supabase
+        .from('trades')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (error) throw error;
+      return trade;
     } catch (error) {
-      throw new Error('Failed to process payment');
+      console.error('Error fetching trade:', error);
+      return null;
+    }
+  }
+
+  static async updateTradeStatus(id: string, status: TradeStatus): Promise<void> {
+    try {
+      const { error } = await this.supabase
+        .from('trades')
+        .update({ status })
+        .eq('id', id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating trade status:', error);
+      throw error;
     }
   }
 
@@ -30,30 +67,19 @@ export class TradeService {
     const { reference, status, metadata } = payload;
     
     try {
-      const trade = await this.getTradeByReference(reference);
+      const { data: trade, error } = await this.supabase
+        .from('trades')
+        .select('*')
+        .eq('reference', reference)
+        .single();
+
+      if (error) throw error;
       if (!trade) throw new Error('Trade not found');
 
-      await this.updateTradeStatus(trade.id, status, metadata);
+      await this.updateTradeStatus(trade.id, status as TradeStatus);
     } catch (error) {
       console.error('Webhook handler error:', error);
       throw error;
     }
-  }
-
-  private static async getTradeByReference(reference: string) {
-    // Implementation depends on your database setup
-    const response = await fetch(`/api/trades/by-reference/${reference}`);
-    if (!response.ok) return null;
-    return response.json();
-  }
-
-  private static async updateTradeStatus(tradeId: string, status: TradeStatus, metadata?: any) {
-    const response = await fetch(`/api/trades/${tradeId}/status`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status, metadata })
-    });
-
-    if (!response.ok) throw new Error('Failed to update trade status');
   }
 }

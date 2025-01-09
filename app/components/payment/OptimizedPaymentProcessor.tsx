@@ -1,11 +1,23 @@
 import { Suspense, lazy } from 'react';
 import { usePaymentOptimization } from '@/app/hooks/usePaymentOptimization';
 import { PaymentLoadingState } from '../ui/loading/PaymentLoadingState';
-import { PaymentProcessorProps } from '@/app/types/payment';
+import { PaymentProcessorProps, PaymentMethodType } from '@/app/types/payment';
 
-const WalletPayment = lazy(() => import('./methods/WalletPayment'));
-const CardPayment = lazy(() => import('./methods/CardPayment'));
-const BankTransferPayment = lazy(() => import('./methods/BankTransferPayment'));
+const WalletPayment = lazy(() => import('@/app/components/payment/methods/WalletPayment'));
+const CardPayment = lazy(() => import('@/app/components/payment/methods/CardPayment'));
+const BankTransferPayment = lazy(() => import('@/app/components/payment/methods/BankTransferPayment'));
+const CryptoPayment = lazy(() => import('@/app/components/payment/methods/CryptoPayment'));
+const QRCodePayment = lazy(() => import('@/app/components/payment/methods/QRCodePayment'));
+const MobileMoneyPayment = lazy(() => import('@/app/components/payment/methods/MobileMoneyPayment'));
+
+const PaymentComponents: Record<PaymentMethodType, React.LazyExoticComponent<React.ComponentType<PaymentProcessorProps>>> = {
+  wallet: WalletPayment,
+  card: CardPayment,
+  bank_transfer: BankTransferPayment,
+  crypto: CryptoPayment,
+  qr_code: QRCodePayment,
+  mobile_money: MobileMoneyPayment
+};
 
 export function OptimizedPaymentProcessor({
   trade,
@@ -15,11 +27,7 @@ export function OptimizedPaymentProcessor({
     trade.payment_method || 'wallet'
   );
 
-  const PaymentComponent = {
-    wallet: WalletPayment,
-    card: CardPayment,
-    bank_transfer: BankTransferPayment
-  }[trade.payment_method || 'wallet'] as React.ComponentType<any>;
+  const PaymentComponent = PaymentComponents[trade.payment_method || 'wallet'];
 
   const formatTime = (time: number): string => {
     return time < 60 

@@ -1,6 +1,6 @@
 import { motion, useScroll, useTransform } from 'framer-motion';
 import { useRef } from 'react';
-import { Shield, Zap, Globe, ChartBar } from 'lucide-react';
+import { Shield, Zap, Globe, BarChart2 } from 'lucide-react';
 
 const features = [
   {
@@ -19,7 +19,7 @@ const features = [
     description: "Trade from anywhere, anytime with our global infrastructure",
   },
   {
-    icon: <ChartBar className="w-4 h-4" />,
+    icon: <BarChart2 className="w-4 h-4" />,
     title: "Advanced Analytics",
     description: "Make informed decisions with real-time market insights",
   }

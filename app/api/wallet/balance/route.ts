@@ -2,8 +2,8 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
-import { APIError, handleAPIError } from '@/lib/api-utils';
+import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
+import { APIError, handleApiError } from '@/app/lib/api-utils';
 
 export async function GET() {
   try {
@@ -49,10 +49,11 @@ export async function GET() {
     }
 
     // Get the wallet balance from Quidax using their ID
-    const walletResponse = await QuidaxWalletService.getWallet(
+    const walletService = getWalletService();
+    const walletResponse = await walletService.getWallet(
       userProfile.quidax_id,
       'ngn'
-    ).catch((error) => {
+    ).catch((error: Error & { status?: number }) => {
       console.error('Quidax wallet error:', error);
       throw new APIError(
         error.message || 'Failed to fetch Quidax wallet data',
@@ -66,7 +67,7 @@ export async function GET() {
 
     // Find the NGN wallet from the response
     const ngnWallet = Array.isArray(walletResponse.data) 
-      ? walletResponse.data.find(w => w.currency.toLowerCase() === 'ngn')
+      ? walletResponse.data.find((w: { currency: string }) => w.currency.toLowerCase() === 'ngn')
       : walletResponse.data;
 
     if (!ngnWallet) {
@@ -96,6 +97,6 @@ export async function GET() {
 
   } catch (error) {
     console.error('Error fetching wallet:', error);
-    return handleAPIError(error);
+    return handleApiError(error);
   }
 } 

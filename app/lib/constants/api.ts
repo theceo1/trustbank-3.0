@@ -1,5 +1,5 @@
-export const QUIDAX_API_URL = 'https://www.quidax.com/api/v1';
-export const QUIDAX_WEBSOCKET_URL = 'wss://www.quidax.com/socket';
+export const QUIDAX_API_URL = process.env.NEXT_PUBLIC_QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
+export const QUIDAX_WEBSOCKET_URL = 'wss://ws.quidax.com';
 
 export const API_ENDPOINTS = {
   auth: {

@@ -37,7 +37,7 @@ export default function CryptoDeposit({ currency, onSuccess }: CryptoDepositProp
     const fetchNetworks = async () => {
       try {
         setIsLoading(true);
-        const quidaxClient = new QuidaxClient();
+        const quidaxClient = new QuidaxClient(process.env.NEXT_PUBLIC_QUIDAX_API_KEY || '');
         const networksData = await quidaxClient.getNetworks(currency);
         setNetworks(networksData);
         
@@ -61,7 +61,7 @@ export default function CryptoDeposit({ currency, onSuccess }: CryptoDepositProp
 
       try {
         setIsLoading(true);
-        const quidaxClient = new QuidaxClient();
+        const quidaxClient = new QuidaxClient(process.env.NEXT_PUBLIC_QUIDAX_API_KEY || '');
         const address = await quidaxClient.getDepositAddress(currency, selectedNetwork);
         setDepositAddress(address.address || '');
         if (address.tag) {

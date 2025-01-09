@@ -4,15 +4,35 @@ import { QuidaxClient } from './quidax-client';
 interface QuoteParams {
   market: string;
   unit: string;
-  kind: 'buy' | 'sell';
-  volume: number;
+  kind: 'ask' | 'bid';
+  volume: string;
 }
 
 interface QuoteResponse {
-  rate: number;
-  total: number;
-  fee: number;
-  receive: number;
+  status: string;
+  message: string;
+  data: {
+    price: {
+      unit: string;
+      amount: string;
+    };
+    total: {
+      unit: string;
+      amount: string;
+    };
+    volume: {
+      unit: string;
+      amount: string;
+    };
+    fee: {
+      unit: string;
+      amount: string;
+    };
+    receive: {
+      unit: string;
+      amount: string;
+    };
+  };
 }
 
 interface MarketTickerData {
@@ -98,5 +118,30 @@ export class QuidaxMarketService {
       console.error('Error fetching market price:', error);
       throw error;
     }
+  }
+
+  static async getQuote(params: QuoteParams): Promise<QuoteResponse> {
+    const { market, unit, kind, volume } = params;
+    const queryParams = new URLSearchParams({
+      market,
+      unit,
+      kind,
+      volume
+    });
+
+    const response = await fetch(`${this.BASE_URL}/quotes?${queryParams}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`
+      }
+    });
+
+    if (!response.ok) {
+      const error = new Error(`Failed to get quote: ${response.statusText}`);
+      (error as any).status = response.status;
+      throw error;
+    }
+
+    const data = await response.json();
+    return data;
   }
 } 

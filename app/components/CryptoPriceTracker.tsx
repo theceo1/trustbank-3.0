@@ -1,41 +1,55 @@
 import { useEffect, useState } from 'react';
 import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
 
-interface PriceData {
-  [key: string]: {
-    price: string;
-    change: string;
-  };
+interface CryptoPrice {
+  symbol: string;
+  price: string;
+  change24h: string;
 }
 
 export default function CryptoPriceTracker() {
-  const [prices, setPrices] = useState<PriceData>({});
+  const [prices, setPrices] = useState<CryptoPrice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchPrices = async () => {
       try {
-        const btcData = await QuidaxMarketService.getMarketTicker('btcusdt');
-        const ethData = await QuidaxMarketService.getMarketTicker('ethusdt');
-        const adaData = await QuidaxMarketService.getMarketTicker('adausdt');
+        const marketData = await QuidaxMarketService.getAllMarketTickers();
+        const tickers = marketData.data;
 
-        setPrices({
-          bitcoin: {
-            price: btcData.ticker.last,
-            change: btcData.ticker.price_change_percent
+        const cryptoPrices: CryptoPrice[] = [
+          {
+            symbol: 'BTC/USDT',
+            price: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+              .format(parseFloat(tickers['btcusdt']?.ticker.last || '0')),
+            change24h: ((parseFloat(tickers['btcusdt']?.ticker.last || '0') - 
+                        parseFloat(tickers['btcusdt']?.ticker.open || '0')) / 
+                        parseFloat(tickers['btcusdt']?.ticker.open || '1') * 100).toFixed(2)
           },
-          ethereum: {
-            price: ethData.ticker.last,
-            change: ethData.ticker.price_change_percent
+          {
+            symbol: 'ETH/USDT',
+            price: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+              .format(parseFloat(tickers['ethusdt']?.ticker.last || '0')),
+            change24h: ((parseFloat(tickers['ethusdt']?.ticker.last || '0') - 
+                        parseFloat(tickers['ethusdt']?.ticker.open || '0')) / 
+                        parseFloat(tickers['ethusdt']?.ticker.open || '1') * 100).toFixed(2)
           },
-          cardano: {
-            price: adaData.ticker.last,
-            change: adaData.ticker.price_change_percent
+          {
+            symbol: 'ADA/USDT',
+            price: new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' })
+              .format(parseFloat(tickers['adausdt']?.ticker.last || '0')),
+            change24h: ((parseFloat(tickers['adausdt']?.ticker.last || '0') - 
+                        parseFloat(tickers['adausdt']?.ticker.open || '0')) / 
+                        parseFloat(tickers['adausdt']?.ticker.open || '1') * 100).toFixed(2)
           }
-        });
-      } catch (error) {
-        console.error('Error fetching prices:', error);
-      } finally {
+        ];
+
+        setPrices(cryptoPrices);
+        setLoading(false);
+      } catch (err) {
+        console.error('Error fetching crypto prices:', err);
+        setError('Failed to fetch prices');
         setLoading(false);
       }
     };
@@ -50,14 +64,18 @@ export default function CryptoPriceTracker() {
     return <div>Loading prices...</div>;
   }
 
+  if (error) {
+    return <div className="text-red-500">{error}</div>;
+  }
+
   return (
-    <div className="grid grid-cols-3 gap-4">
-      {Object.entries(prices).map(([coin, data]) => (
-        <div key={coin} className="p-4 bg-white rounded-lg shadow">
-          <h3 className="text-lg font-semibold capitalize">{coin}</h3>
-          <p className="text-xl">${parseFloat(data.price).toFixed(2)}</p>
-          <p className={`text-sm ${parseFloat(data.change) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-            {parseFloat(data.change).toFixed(2)}%
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {prices.map((crypto) => (
+        <div key={crypto.symbol} className="bg-white p-4 rounded-lg shadow">
+          <h3 className="text-lg font-semibold">{crypto.symbol}</h3>
+          <p className="text-2xl font-bold mt-2">{crypto.price}</p>
+          <p className={`mt-1 ${parseFloat(crypto.change24h) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+            {parseFloat(crypto.change24h) >= 0 ? '+' : ''}{crypto.change24h}%
           </p>
         </div>
       ))}

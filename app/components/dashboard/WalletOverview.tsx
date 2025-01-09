@@ -66,7 +66,7 @@ export function WalletOverview() {
 
         // Filter out wallets with zero balance for cleaner UI
         const nonZeroWallets = data.data.filter(wallet => 
-          parseFloat(wallet.balance) > 0 || parseFloat(wallet.locked) > 0
+          parseFloat(wallet.balance) > 0 || parseFloat(wallet.locked) > 0 || parseFloat(wallet.staked) > 0
         );
         setWallets(nonZeroWallets);
         setError(null);

@@ -9,20 +9,16 @@ export const getReferralCode = () => {
   return '';
 };
 
-export function generateReferralCode(length: number = 8): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
+export function generateReferralCode(): string {
+  // Format: TB + 6 alphanumeric characters
+  return `TB${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 }
 
 export async function validateReferralCode(code: string): Promise<boolean> {
   if (!code) return true;
   
   const { data, error } = await supabaseClient
-    .from('profiles')
+    .from('user_profiles')
     .select('referral_code')
     .eq('referral_code', code)
     .single();

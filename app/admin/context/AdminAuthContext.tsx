@@ -74,12 +74,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       setIsAdmin(isAdminUser);
       if (!isAdminUser) {
         toast.error('Access denied. This area is for administrators only.');
-        router.push('/dashboard');
       }
     } catch (error) {
       console.error('Error checking admin status:', error);
       setIsAdmin(false);
-      router.push('/dashboard');
     } finally {
       setIsLoading(false);
     }

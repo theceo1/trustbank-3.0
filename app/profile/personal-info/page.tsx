@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { motion } from "framer-motion";
 import { useToast } from "@/hooks/use-toast";
-import BackButton from '@/components/ui/back-button';
+import BackButton from "../../../components/ui/back-button";
 import { User, Mail, Phone, MapPin, Briefcase, Calendar, Globe } from 'lucide-react';
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs";
 import {

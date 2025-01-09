@@ -7,8 +7,8 @@ import type { QuidaxSwapTransaction } from '@/app/types/quidax';
 
 export async function POST(request: Request) {
   try {
-    const cookieStore = await cookies();
-    const supabase = createRouteHandlerClient({ cookies: async () => cookieStore });
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
     
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) {
@@ -37,39 +37,36 @@ export async function POST(request: Request) {
     // Create quotation if not provided
     let quotationId = quoteId;
     if (!quotationId) {
-      const quotation = await QuidaxService.createQuotation({
-        userId: userData.quidax_id,
-        fromCurrency: fromCurrency.toLowerCase(),
-        toCurrency: toCurrency.toLowerCase(),
-        fromAmount: amount.toString()
+      const quotation = await QuidaxService.createSwapQuotation({
+        user_id: userData.quidax_id,
+        from_currency: fromCurrency.toLowerCase(),
+        to_currency: toCurrency.toLowerCase(),
+        from_amount: amount.toString()
       });
-      quotationId = quotation.id;
+      quotationId = quotation.data.id;
     }
 
     // Confirm the trade
-    const trade = await QuidaxService.confirmQuotation({
-      userId: userData.quidax_id,
-      quotationId
-    }) as QuidaxSwapTransaction;
+    const trade = await QuidaxService.confirmSwap(userData.quidax_id, quotationId);
 
     // Store trade in database
     const { data: tradeRecord } = await supabase
       .from('trades')
       .insert({
         user_id: session.user.id,
-        quidax_trade_id: trade.id,
+        quidax_trade_id: trade.data.id,
         from_currency: fromCurrency,
         to_currency: toCurrency,
         amount: amount,
-        status: trade.status,
-        rate: trade.execution_price
+        status: trade.data.status,
+        rate: trade.data.execution_price
       })
       .select()
       .single();
 
     return NextResponse.json({
       tradeId: tradeRecord.id,
-      status: trade.status
+      status: trade.data.status
     });
   } catch (error: any) {
     console.error('Trade execution error:', error);

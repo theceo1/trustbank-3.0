@@ -44,16 +44,35 @@ export class TradeStatusService {
     return () => clearInterval(intervalId);
   }
 
-  private static mapPaymentStatusToTradeStatus(status: PaymentStatus): TradeStatus {
+  static async updateTradeStatus(tradeId: string, paymentStatus: PaymentStatus) {
+    const tradeStatus = this.mapPaymentStatusToTradeStatus(paymentStatus);
+    
+    // Update trade status in database
+    const response = await fetch(`/api/trades/${tradeId}/status`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status: tradeStatus })
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to update trade status');
+    }
+
+    return tradeStatus;
+  }
+
+  private static mapPaymentStatusToTradeStatus(paymentStatus: PaymentStatus): TradeStatus {
     const statusMap: Record<PaymentStatus, TradeStatus> = {
       'initiated': TradeStatus.PENDING,
       'pending': TradeStatus.PENDING,
       'processing': TradeStatus.PROCESSING,
-      'confirming': TradeStatus.PROCESSING,
       'completed': TradeStatus.COMPLETED,
       'failed': TradeStatus.FAILED
     };
-    return statusMap[status] || TradeStatus.FAILED;
+
+    return statusMap[paymentStatus] || TradeStatus.FAILED;
   }
 
   static async verifyPayment(trade: TradeDetails): Promise<TradeStatus> {

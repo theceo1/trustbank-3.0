@@ -40,7 +40,7 @@ const defaultProcessors: Record<PaymentMethodType, PaymentProcessor> = {
 export class PaymentService {
   private static supabase = createClientComponentClient<Database>();
   private static processors: Record<PaymentMethodType, PaymentProcessor> = defaultProcessors;
-  private static quidaxClient = new QuidaxClient();
+  private static quidaxClient = new QuidaxClient(process.env.QUIDAX_SECRET_KEY || '');
 
   static registerProcessor(type: PaymentMethodType, processor: PaymentProcessor) {
     this.processors[type] = processor;

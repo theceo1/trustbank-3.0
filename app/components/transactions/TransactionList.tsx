@@ -10,11 +10,12 @@ import { Button } from "@/components/ui/button";
 import {
   Pagination,
   PaginationContent,
+  PaginationEllipsis,
   PaginationItem,
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-} from "@/components/ui/pagination";
+} from "../../../components/ui/pagination";
 import { TransactionStatusBadge } from "@/app/components/ui/transaction-status-badge";
 
 interface TransactionListProps {

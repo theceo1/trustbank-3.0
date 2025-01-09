@@ -8,7 +8,6 @@ const progressMap: Record<PaymentStatus, number> = {
   'initiated': 0,
   'pending': 25,
   'processing': 50,
-  'confirming': 75,
   'completed': 100,
   'failed': 0
 };

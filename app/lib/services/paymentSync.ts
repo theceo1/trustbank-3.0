@@ -1,32 +1,37 @@
 //app/lib/services/paymentSync.ts
-import { createClient } from '@supabase/supabase-js';
-import { QuidaxService } from "./quidax";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { Database } from '@/app/types/database';
+import { TradeStatus } from '@/app/types/trade';
+import { QuidaxClient } from './quidax-client';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export class PaymentSync {
+  private static supabase = createClientComponentClient<Database>();
+  private static quidaxClient = new QuidaxClient(process.env.QUIDAX_SECRET_KEY || '');
 
-export class PaymentSyncService {
-    static async syncPaymentStatus(tradeId: string) {
-      const { data: trade } = await supabase
+  static async syncTradeStatus(tradeId: string) {
+    try {
+      const { data: trade, error: fetchError } = await this.supabase
         .from('trades')
         .select('*')
         .eq('id', tradeId)
         .single();
-  
+
+      if (fetchError) throw fetchError;
       if (!trade) throw new Error('Trade not found');
-      if (!trade.quidax_reference) throw new Error('Quidax reference not found');
+      if (!trade.reference) throw new Error('Quidax reference not found');
   
-      const quidaxStatus = await QuidaxService.getTradeStatus(trade.quidax_reference);
+      const { status } = await this.quidaxClient.getTransactionStatus(trade.reference);
       
-      const { error } = await supabase
+      const { error } = await this.supabase
         .from('trades')
-        .update({ status: quidaxStatus })
-        .eq('id', tradeId);
+        .update({ status: status as TradeStatus })
+        .eq('id', trade.id);
 
       if (error) throw error;
-  
-      return quidaxStatus;
-    } 
+      return { status };
+    } catch (error) {
+      console.error('Error syncing trade status:', error);
+      throw error;
+    }
+  }
 }

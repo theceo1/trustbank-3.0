@@ -1,67 +1,76 @@
 "use client";
 
 import { useState } from 'react';
-import { Card } from '@/components/ui/card';
-import { RadioGroup } from '@/components/ui/radio-group';
-import { PaymentMethod } from '@/app/types/payment';
-import { cn } from '@/lib/utils';
+import { PaymentMethod, PaymentMethodType } from '@/app/types/payment';
+import { Card, CardContent } from '@/components/ui/card';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import Image from 'next/image';
+import { cn } from '@/app/lib/utils';
 
 interface PaymentMethodSelectorProps {
   methods: PaymentMethod[];
-  onSelect: (method: PaymentMethod) => void;
-  selectedMethod: PaymentMethod;
+  onSelect: (method: PaymentMethodType) => void;
+  selectedMethod?: PaymentMethodType;
 }
 
-export function PaymentMethodSelector({ 
+export function PaymentMethodSelector({
   methods,
   onSelect,
   selectedMethod
 }: PaymentMethodSelectorProps) {
-  const [selected, setSelected] = useState(selectedMethod);
+  const [selected, setSelected] = useState<PaymentMethodType | undefined>(selectedMethod);
 
-  const handleSelect = (method: PaymentMethod) => {
+  const handleSelect = (method: PaymentMethodType) => {
     setSelected(method);
     onSelect(method);
   };
 
   return (
     <RadioGroup
-      className="grid grid-cols-1 md:grid-cols-2 gap-4"
-      value={selected.id}
-      onValueChange={(value) => handleSelect(methods.find(m => m.id === value)!)}
+      defaultValue={selectedMethod}
+      onValueChange={(value) => handleSelect(value as PaymentMethodType)}
+      className="grid gap-4"
     >
       {methods.map((method) => (
-        <Card
-          key={method.id}
-          className={cn(
-            "relative p-4 cursor-pointer transition-all",
-            "hover:shadow-md",
-            "border-2",
-            selected?.id === method.id 
-              ? "border-primary bg-primary/5" 
-              : "border-transparent"
-          )}
-          onClick={() => handleSelect(method)}
-        >
-          <div className="flex items-center space-x-3">
-            <div className="flex-shrink-0">
+        <div key={method.type}>
+          <RadioGroupItem
+            value={method.type}
+            id={method.type}
+            className="peer sr-only"
+            disabled={!method.enabled}
+          />
+          <Label
+            htmlFor={method.type}
+            className={cn(
+              "flex items-center justify-between p-4 border rounded-lg cursor-pointer",
+              "hover:border-primary/50 transition-colors",
+              "peer-disabled:opacity-50 peer-disabled:cursor-not-allowed",
+              "peer-aria-checked:border-primary peer-aria-checked:bg-primary/5",
+              selected === method.type ? "border-primary bg-primary/5" : "border-border"
+            )}
+          >
+            <div className="flex items-center gap-4">
               <Image
                 src={`/images/payment/${method.type}.svg`}
-                alt={method.title}
+                alt={method.name}
                 width={32}
                 height={32}
                 className="w-8 h-8"
               />
+              <div>
+                <p className="font-medium">{method.name}</p>
+                <p className="text-sm text-muted-foreground">{method.description}</p>
+              </div>
             </div>
-            <div className="flex-grow">
-              <h4 className="font-medium text-gray-900">{method.title}</h4>
-              <p className="text-sm text-gray-500">
-                {method.description}
-              </p>
-            </div>
-          </div>
-        </Card>
+            {!method.enabled && (
+              <Badge variant="outline" className="ml-2">
+                Coming Soon
+              </Badge>
+            )}
+          </Label>
+        </div>
       ))}
     </RadioGroup>
   );

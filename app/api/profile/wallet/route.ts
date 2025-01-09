@@ -1,59 +1,45 @@
+import { NextRequest } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { NextResponse } from 'next/server';
-import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ 
-      cookies: () => cookieStore 
-    });
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const supabase = createRouteHandlerClient({ cookies });
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+    if (sessionError || !session) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // First get the user's profile to get their Quidax ID
-    const { data: userProfile } = await supabase
-      .from('user_profiles')
+    // Get user profile from Supabase
+    const { data: userProfile, error: profileError } = await supabase
+      .from('profiles')
       .select('quidax_id')
-      .eq('user_id', session.user.id)
+      .eq('id', session.user.id)
       .single();
 
-    if (!userProfile?.quidax_id) {
-      return NextResponse.json({ 
-        error: 'User profile not properly setup' 
-      }, { status: 400 });
+    if (profileError || !userProfile?.quidax_id) {
+      return Response.json(
+        { error: 'User profile or Quidax ID not found' },
+        { status: 404 }
+      );
     }
 
+    // Get the wallet service instance
+    const walletService = getWalletService();
+
     // Now fetch the wallet using their Quidax ID
-    const walletResponse = await QuidaxWalletService.getWallet(
+    const walletResponse = await walletService.getWallet(
       userProfile.quidax_id,
       'ngn' // or whatever default currency you want to use
     );
 
-    if (!walletResponse.data) {
-      return NextResponse.json({ 
-        error: 'Failed to fetch wallet data' 
-      }, { status: 500 });
-    }
-
-    return NextResponse.json({
-      status: "success",
-      data: {
-        currency: 'ngn',
-        balance: walletResponse.data.balance || "0.00",
-        pending: walletResponse.data.locked || "0.00",
-        total: walletResponse.data.total || "0.00"
-      }
-    });
-
-  } catch (error) {
+    return Response.json(walletResponse);
+  } catch (error: any) {
     console.error('Error fetching wallet:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch wallet details' }, 
+    return Response.json(
+      { error: error.message || 'Failed to fetch wallet' },
       { status: 500 }
     );
   }

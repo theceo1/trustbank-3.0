@@ -52,7 +52,7 @@ export function useRealtimeTransactions(userId: string | undefined) {
             table: 'transactions',
             filter: `user_id=eq.${userId}`
           },
-          async (payload) => {
+          async (payload: { new: any; old: any; eventType: 'INSERT' | 'UPDATE' | 'DELETE' }) => {
             console.log('Realtime update:', payload);
 
             // Refresh wallet balance

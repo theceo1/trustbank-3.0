@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CopyIcon, CheckIcon, Users, Gift } from 'lucide-react';
+import { CopyIcon, CheckIcon, Users, Gift, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface ReferralProgramProps {
@@ -29,6 +29,21 @@ export function ReferralProgram({ referralCode, referralStats, className = '' }:
     } catch (error) {
       console.error('Failed to copy:', error);
       toast.error('Failed to copy referral link');
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
+      await navigator.share({
+        title: 'Join TrustBank',
+        text: `Use my referral code: ${referralCode}`,
+        url: referralLink
+      });
+      toast.success('Referral link shared successfully');
+    } catch (error) {
+      // Fall back to copying if share is not supported
+      handleCopy();
     }
   };
 
@@ -59,6 +74,14 @@ export function ReferralProgram({ referralCode, referralStats, className = '' }:
               ) : (
                 <CopyIcon className="h-4 w-4" />
               )}
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={handleShare}
+              className="flex-shrink-0"
+            >
+              <Share2 className="h-4 w-4" />
             </Button>
           </div>
         </div>

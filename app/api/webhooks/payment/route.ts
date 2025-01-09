@@ -8,7 +8,7 @@ import { PaymentProcessorFactory } from '@/app/lib/services/payment/PaymentProce
 export async function POST(request: NextRequest) {
   try {
     const payload = await request.json();
-    const signature = request.headers.get('x-quidax-signature');
+    const signature = request.headers.get('x-quidax-signature') || undefined;
 
     if (!QuidaxService.verifyWebhookSignature(payload, signature)) {
       return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });

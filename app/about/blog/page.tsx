@@ -15,7 +15,7 @@ import {
   Clock, Tag, ChevronRight, Share2, BookmarkPlus, 
   Shield, DollarSign, Check 
 } from "lucide-react";
-import BackButton from "@/components/ui/back-button";
+import BackButton from "../../../components/ui/back-button";
 import supabase from '@/lib/supabase/client';
 
 const blogPosts = [

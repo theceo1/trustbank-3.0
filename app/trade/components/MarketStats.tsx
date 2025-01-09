@@ -29,14 +29,14 @@ export function MarketStats() {
           throw new Error('Invalid response format');
         }
 
-        const formattedData = data.reduce((acc: Record<string, CryptoData>, market: any) => {
-          acc[market.symbol] = {
-            current_price: market.price,
-            price_change_percentage_24h: market.change24h,
-            symbol: market.symbol
+        const formattedData: Record<string, CryptoData> = {};
+        Object.entries(data).forEach(([symbol, rate]: [string, any]) => {
+          formattedData[symbol] = {
+            current_price: parseFloat(rate.last),
+            price_change_percentage_24h: 0,
+            symbol
           };
-          return acc;
-        }, {});
+        });
         
         setMarketData(formattedData);
         setError(null);

@@ -21,6 +21,7 @@ export function OptimisticPaymentFlow({ trade, onComplete }: OptimisticPaymentFl
 
   const statusToProgress = useMemo(() => ({
     initiated: 0,
+    pending: 25,
     processing: 50,
     completed: 100,
     failed: 0
