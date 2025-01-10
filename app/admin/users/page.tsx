@@ -26,6 +26,8 @@ import supabase from "@/lib/supabase/client";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import UserDetailsDialog from "./components/UserDetailsDialog";
 
+export const dynamic = 'force-dynamic';
+
 interface User {
   id: string;
   email: string;

@@ -1,47 +1,38 @@
-import { NextResponse } from "next/server";
-import { rateLimiter } from "@/app/lib/middleware/rateLimiter";
-import { MarketRateService } from "@/app/lib/services/market-rate";
+import { NextResponse } from 'next/server';
+import redis from '@/lib/redis';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export async function GET(request: Request) {
-  const rateLimitResult = await rateLimiter(request);
-  if (rateLimitResult) return rateLimitResult;
-
   try {
-    const { searchParams } = new URL(request.url);
-    const currency = searchParams.get("currency");
-    const amount = Number(searchParams.get("amount"));
-    const type = searchParams.get("type") as 'buy' | 'sell';
-    
-    if (!currency || !amount || !type) {
-      return NextResponse.json(
-        { error: "Currency, amount and type are required" },
-        { status: 400 }
-      );
+    // If Redis is not available, return a default response
+    if (!redis) {
+      console.warn('[Transaction Rate] Redis is not available, returning default response');
+      return NextResponse.json({
+        status: 'success',
+        data: {
+          rate: 0,
+          timestamp: Date.now(),
+        }
+      });
     }
 
-    // Use crypto/rate endpoint instead of direct market rate service
-    const response = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL}/api/crypto/rate/${currency}`,
-      { next: { revalidate: 30 } }
-    );
+    const rate = await redis.get('current_rate');
+    const timestamp = await redis.get('rate_timestamp');
 
-    if (!response.ok) {
-      throw new Error('Failed to fetch rate');
-    }
-
-    const { rate } = await response.json();
-    
     return NextResponse.json({
-      rate,
-      amount,
-      total: amount * rate,
-      type
+      status: 'success',
+      data: {
+        rate: rate || 0,
+        timestamp: timestamp || Date.now(),
+      }
     });
   } catch (error) {
-    console.error("Rate fetch error:", error);
-    return NextResponse.json(
-      { error: "Failed to fetch rate" },
-      { status: 500 }
-    );
+    console.error('[Transaction Rate] Error:', error);
+    return NextResponse.json({
+      status: 'error',
+      error: 'Failed to fetch transaction rate'
+    }, { status: 500 });
   }
 }

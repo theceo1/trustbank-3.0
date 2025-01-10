@@ -26,7 +26,8 @@ export function MarketTicker() {
     const fetchMarketData = async () => {
       try {
         setError(null);
-        const response = await fetch('/api/market/tickers');
+        const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
+        const response = await fetch(`${baseUrl}/api/market/tickers`);
         
         if (!response.ok) {
           throw new Error('Failed to fetch market data');

@@ -1,7 +1,7 @@
 //app/components/dashboard/AccountBalance
 "use client";
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -48,65 +48,34 @@ export function AccountBalance() {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showBalance, setShowBalance] = useState(false);
 
-  const fetchBalance = async () => {
+  const fetchBalance = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/wallet/balances');
-      const data: ApiResponse = await response.json();
-
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const response = await fetch(`${baseUrl}/api/wallet/balance`);
       if (!response.ok) {
-        if (data.redirectTo) {
-          toast({
-            title: "Verification Required",
-            description: data.message || "Please complete KYC verification to view your balance",
-            variant: "destructive"
-          });
-        }
+        throw new Error('Failed to fetch balance');
+      }
+      const data: ApiResponse = await response.json();
+      if (data.status === 'success') {
+        setBalances([data.data]);
+        setBaseCurrency(data.data.reference_currency || 'NGN');
+        setError(null);
+      } else {
         throw new Error(data.error || 'Failed to fetch balance');
       }
-
-      if (data.status === 'success' && Array.isArray(data.data)) {
-        const ngnWallet = data.data.find(w => w.currency === 'NGN');
-        if (ngnWallet) {
-          setBalances([ngnWallet]);
-          setBaseCurrency(ngnWallet.reference_currency || 'NGN');
-          setError(null);
-        } else {
-          setBalances([{
-            currency: 'NGN',
-            balance: '0',
-            locked: '0',
-            staked: '0',
-            converted_balance: '0',
-            reference_currency: 'NGN',
-            is_crypto: false
-          }]);
-          setBaseCurrency('NGN');
-          setError(null);
-        }
-      } else {
-        throw new Error('Invalid response format');
-      }
     } catch (err) {
-      console.error('Error fetching balance:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch balance');
-      toast({
-        title: "Error",
-        description: err instanceof Error ? err.message : 'Failed to fetch balance',
-        variant: "destructive"
-      });
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (user?.id) {
       fetchBalance();
-      // Refresh every 30 seconds
       const interval = setInterval(fetchBalance, 30000);
 
-      // Listen for balance update events
       const handleBalanceUpdate = () => {
         fetchBalance();
       };
@@ -117,7 +86,7 @@ export function AccountBalance() {
         window.removeEventListener('balanceUpdate', handleBalanceUpdate);
       };
     }
-  }, [user?.id]);
+  }, [user?.id, fetchBalance]);
 
   if (error) {
     return (

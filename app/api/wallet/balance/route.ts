@@ -5,6 +5,9 @@ import { NextResponse } from 'next/server';
 import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
 import { APIError, handleApiError } from '@/app/lib/api-utils';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
+
 export async function GET() {
   try {
     const cookieStore = cookies();

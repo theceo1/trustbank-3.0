@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Card, CardContent } from "@/app/components/ui/card";
 import { formatDate, formatCurrency } from "@/app/lib/utils";
 import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
@@ -22,30 +22,33 @@ export function TradeHistory() {
   const { user } = useAuth();
   const { toast } = useToast();
 
-  const fetchTrades = async () => {
-    if (!user) return;
-    
+  const fetchTrades = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-      const userTrades = await UnifiedTradeService.getTradeHistory(user.id);
-      setTrades(userTrades);
-    } catch (error: any) {
-      const errorMessage = error.message || 'Failed to load trade history';
-      setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+      const response = await fetch(`${baseUrl}/api/trades/history`);
+      if (!response.ok) {
+        throw new Error('Failed to fetch trade history');
+      }
+      const data = await response.json();
+      if (data.status === 'success') {
+        setTrades(data.data);
+        setError(null);
+      } else {
+        throw new Error(data.error || 'Failed to fetch trade history');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch trade history');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchTrades();
-  }, [user]);
+    if (user?.id) {
+      fetchTrades();
+    }
+  }, [user?.id, fetchTrades]);
 
   if (loading) {
     return (

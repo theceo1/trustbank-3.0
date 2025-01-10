@@ -1,71 +1,59 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '@/app/context/AuthContext';
-import supabaseClient from '@/app/lib/supabase/client';
+import { useState, useEffect, useCallback } from 'react';
+import { User } from '@/app/types/user';
 import { Database } from '@/app/types/supabase';
 
-type Profile = Database['public']['Tables']['profiles']['Row'];
+type UserProfile = Database['public']['Tables']['profiles']['Row'];
 
-export function useUserProfile() {
-  const { user } = useAuth();
-  const [profile, setProfile] = useState<Profile | null>(null);
+export function useUserProfile(user: User | null) {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      fetchProfile();
-    } else {
-      setProfile(null);
-      setLoading(false);
-    }
-  }, [user]);
-
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async () => {
     try {
       setLoading(true);
-      setError(null);
-
-      const { data, error } = await supabaseClient
-        .from('profiles')
-        .select('*')
-        .eq('id', user!.id)
-        .single();
-
-      if (error) {
-        throw error;
+      const response = await fetch('/api/profile');
+      if (!response.ok) {
+        throw new Error('Failed to fetch profile');
       }
-
+      const data = await response.json();
       setProfile(data);
     } catch (err) {
-      setError(err as Error);
+      setError(err instanceof Error ? err : new Error('Unknown error'));
       console.error('Error fetching profile:', err);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const updateProfile = async (updates: Partial<Profile>) => {
+  useEffect(() => {
+    if (user) {
+      fetchProfile();
+    }
+  }, [user, fetchProfile]);
+
+  const updateProfile = async (updates: Partial<UserProfile>) => {
     try {
       setLoading(true);
-      setError(null);
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(updates),
+      });
 
-      const { data, error } = await supabaseClient
-        .from('profiles')
-        .update(updates)
-        .eq('id', user!.id)
-        .select()
-        .single();
-
-      if (error) {
-        throw error;
+      if (!response.ok) {
+        throw new Error('Failed to update profile');
       }
 
-      setProfile(data);
-      return { data, error: null };
+      const updatedProfile = await response.json();
+      setProfile(updatedProfile);
+      return updatedProfile;
     } catch (err) {
-      setError(err as Error);
+      setError(err instanceof Error ? err : new Error('Unknown error'));
       console.error('Error updating profile:', err);
-      return { data: null, error: err as Error };
+      throw err;
     } finally {
       setLoading(false);
     }

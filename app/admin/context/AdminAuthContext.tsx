@@ -66,7 +66,7 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
     return () => {
       subscription.unsubscribe();
     };
-  }, []);
+  }, [supabase, router]);
 
   const checkAdminStatus = async (userId: string) => {
     try {

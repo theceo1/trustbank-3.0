@@ -1,29 +1,48 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import type { Database } from '@/types/supabase';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'edge';
 
 export async function GET() {
-  const cookieStore = cookies();
-  const supabase = createRouteHandlerClient<Database>({ 
-    cookies: () => cookieStore 
-  });
-  
   try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (sessionError || !session) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const { data: balance } = await supabase
-      .from('balances')
-      .select('*')
+    // Get user's wallet balance
+    const { data: wallet, error: walletError } = await supabase
+      .from('wallets')
+      .select('balance, currency')
       .eq('user_id', session.user.id)
       .single();
 
-    return NextResponse.json(balance || { total: 0, available: 0, pending: 0 });
+    if (walletError) {
+      return NextResponse.json(
+        { error: 'Failed to fetch wallet balance' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      status: 'success',
+      data: wallet
+    });
+
   } catch (error) {
-    console.error('Balance error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('Error fetching balance:', error);
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 }

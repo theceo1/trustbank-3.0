@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { formatNumber } from "@/lib/utils";
 import { QUIDAX_WEBSOCKET_URL } from "@/app/lib/constants/api";
@@ -23,8 +23,7 @@ export function OrderBook({ currency }: OrderBookProps) {
   const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
   const MAX_RETRIES = 3;
   
-  // Fallback REST API call
-  const fetchOrderBookREST = async () => {
+  const fetchOrderBookREST = useCallback(async () => {
     try {
       const response = await fetch(`/api/market/orderbook/${currency}ngn`);
       if (!response.ok) {
@@ -42,21 +41,24 @@ export function OrderBook({ currency }: OrderBookProps) {
       console.error('[OrderBook] REST API error:', error);
       setConnectionState('error');
     }
-  };
+  }, [currency]);
 
   useEffect(() => {
     let ws: WebSocket | null = null;
     let reconnectTimeout: NodeJS.Timeout;
     let pingInterval: NodeJS.Timeout;
+    let isConnecting = false;
     
     const connect = () => {
+      if (isConnecting) return;
+      
       try {
-        console.log('[OrderBook] Connecting to WebSocket:', QUIDAX_WEBSOCKET_URL);
+        isConnecting = true;
         setConnectionState('connecting');
         ws = new WebSocket(QUIDAX_WEBSOCKET_URL);
         
         ws.onopen = () => {
-          console.log('[OrderBook] WebSocket connected successfully');
+          isConnecting = false;
           setConnectionState('connected');
           
           // Subscribe to order book data
@@ -65,7 +67,6 @@ export function OrderBook({ currency }: OrderBookProps) {
             channels: ['orderbook'],
             markets: [`${currency}ngn`]
           };
-          console.log('[OrderBook] Subscribing to market:', subscribeMessage);
           ws?.send(JSON.stringify(subscribeMessage));
           
           // Set up ping interval to keep connection alive
@@ -81,19 +82,10 @@ export function OrderBook({ currency }: OrderBookProps) {
         ws.onmessage = (event) => {
           try {
             const data = JSON.parse(event.data);
-            console.log('[OrderBook] WebSocket message received:', data);
             
-            if (data.event === 'pong') {
-              console.log('[OrderBook] Received pong from server');
-              return;
-            }
+            if (data.event === 'pong') return;
             
             if (data.event === 'update' && data.channel === 'orderbook') {
-              console.log('[OrderBook] Updating order book:', {
-                asks: data.data.asks?.length || 0,
-                bids: data.data.bids?.length || 0
-              });
-              
               // Transform the data to match our format
               const transformedOrders = {
                 bids: data.data.bids.map(([price, amount]: [string, string]) => ({
@@ -117,40 +109,32 @@ export function OrderBook({ currency }: OrderBookProps) {
         };
         
         ws.onclose = (event) => {
-          console.log('[OrderBook] WebSocket disconnected:', {
-            code: event.code,
-            reason: event.reason,
-            wasClean: event.wasClean
-          });
+          isConnecting = false;
           clearInterval(pingInterval);
           setConnectionState('disconnected');
           
           if (retryCount < MAX_RETRIES) {
-            const delay = 1000 * Math.pow(2, retryCount);
-            console.log(`[OrderBook] Reconnecting in ${delay}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Cap at 10 seconds
             reconnectTimeout = setTimeout(() => {
               setRetryCount(prev => prev + 1);
               connect();
             }, delay);
           } else {
-            console.log('[OrderBook] Max retries reached, falling back to REST API');
             fetchOrderBookREST();
           }
         };
         
-        ws.onerror = (error) => {
-          console.error('[OrderBook] WebSocket error:', error);
+        ws.onerror = () => {
+          isConnecting = false;
           setConnectionState('error');
           if (retryCount >= MAX_RETRIES) {
-            console.log('[OrderBook] Max retries reached, falling back to REST API');
             fetchOrderBookREST();
           }
         };
       } catch (error) {
-        console.error('[OrderBook] Error creating WebSocket:', error);
+        isConnecting = false;
         setConnectionState('error');
         if (retryCount >= MAX_RETRIES) {
-          console.log('[OrderBook] Max retries reached, falling back to REST API');
           fetchOrderBookREST();
         }
       }
@@ -159,14 +143,13 @@ export function OrderBook({ currency }: OrderBookProps) {
     connect();
     
     return () => {
-      console.log('[OrderBook] Cleaning up WebSocket connection');
       clearTimeout(reconnectTimeout);
       clearInterval(pingInterval);
       if (ws?.readyState === WebSocket.OPEN) {
         ws.close();
       }
     };
-  }, [currency, retryCount]);
+  }, [currency, retryCount, setConnectionState, fetchOrderBookREST]);
   
   if (connectionState === 'error' && orders.bids.length === 0 && orders.asks.length === 0) {
     return (

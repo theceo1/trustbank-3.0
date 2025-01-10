@@ -1,35 +1,25 @@
 import { NextResponse } from 'next/server';
-import { QuidaxMarketService } from '@/app/lib/services/quidax-market';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    const marketData = await QuidaxMarketService.getAllMarketTickers();
-    const ticker = marketData?.data?.btcngn?.ticker;
+    const response = await fetch('https://api.coingecko.com/api/v3/global');
+    const data = await response.json();
 
-    if (!ticker) {
+    if (!data || !data.data) {
       throw new Error('Invalid market data received');
     }
 
-    return new Response(JSON.stringify({
-      status: 'success',
-      data: {
-        last_price: parseFloat(ticker.last),
-        high_24h: parseFloat(ticker.high),
-        low_24h: parseFloat(ticker.low),
-        volume_24h: parseFloat(ticker.vol),
-        open_24h: parseFloat(ticker.open)
-      }
-    }), {
-      headers: { 'Content-Type': 'application/json' }
+    return NextResponse.json({
+      success: true,
+      data: data.data
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Market Stats API] Error:', error);
-    return new Response(JSON.stringify({
-      status: 'error',
-      message: error.message || 'Failed to fetch market stats'
-    }), {
-      status: error.status || 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    return NextResponse.json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to fetch market stats'
+    }, { status: 500 });
   }
 } 

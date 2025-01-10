@@ -16,6 +16,8 @@ import DashboardHeader from '@/app/components/dashboard/DashboardHeader';
 import Announcements from '@/app/components/dashboard/Announcements';
 import { motion } from 'framer-motion';
 
+export const dynamic = 'force-dynamic';
+
 export default function DashboardPage() {
   const { user, session, loading } = useAuth();
   const router = useRouter();

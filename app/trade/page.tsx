@@ -41,6 +41,9 @@ interface QuoteResponse {
   data: TradeQuotation;
 }
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export default function TradePage() {
   const { user } = useAuth();
   const router = useRouter();

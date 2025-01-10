@@ -31,23 +31,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const supabase = getSupabaseClient();
 
   const updateAuthState = async (newSession: Session | null) => {
-    console.log('Updating auth state:', {
-      hasSession: !!newSession,
-      userId: newSession?.user?.id,
-      email: newSession?.user?.email
-    });
-    
     if (newSession) {
-      // Verify session is still valid
-      const { data: { session: verifiedSession }, error } = await supabase.auth.getSession();
-      if (error || !verifiedSession) {
-        console.error('Session verification failed:', error);
-        setSession(null);
-        setUser(null);
-        return;
-      }
-      setSession(verifiedSession);
-      setUser(verifiedSession.user);
+      setSession(newSession);
+      setUser(newSession.user);
     } else {
       setSession(null);
       setUser(null);
@@ -55,105 +41,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   useEffect(() => {
-    let mounted = true;
-
-    // Initialize session on mount
-    const initSession = async () => {
-      try {
-        console.log('Initializing session...');
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          return;
-        }
-
-        if (initialSession && mounted) {
-          console.log('Found existing session:', {
-            userId: initialSession.user.id,
-            email: initialSession.user.email
-          });
-          await updateAuthState(initialSession);
-        } else {
-          console.log('No existing session found');
-        }
-      } catch (error) {
-        console.error('Error initializing session:', error);
-      } finally {
-        if (mounted) {
-          setLoading(false);
-        }
-      }
-    };
-
-    // Subscribe to auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event: AuthChangeEvent, currentSession: Session | null) => {
-      console.log('Auth state changed:', {
-        event,
-        userId: currentSession?.user?.id,
-        email: currentSession?.user?.email
-      });
-
-      if (!mounted) return;
-
-      if (currentSession) {
-        await updateAuthState(currentSession);
-        
-        if (event === 'SIGNED_IN') {
-          console.log('User signed in, refreshing...');
-          router.refresh();
-        }
-      } else {
-        await updateAuthState(null);
-        
-        if (event === 'SIGNED_OUT') {
-          console.log('User signed out, redirecting...');
-          router.refresh();
-          router.push('/auth/login');
-        }
-      }
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
+      setUser(session?.user ?? null);
+      setLoading(false);
     });
 
-    initSession();
-
     return () => {
-      mounted = false;
       subscription.unsubscribe();
     };
-  }, [router]);
+  }, [supabase.auth]);
 
   const signIn = async (email: string, password: string) => {
     try {
-      console.log('Attempting sign in for:', email);
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
-        console.error('Sign in error:', error);
         return { error };
       }
 
       if (data.session) {
-        console.log('Sign in successful:', {
-          userId: data.session.user.id,
-          email: data.session.user.email
-        });
         await updateAuthState(data.session);
         router.refresh();
       }
 
       return { error: null };
     } catch (error) {
-      console.error('Unexpected sign in error:', error);
       return { error };
     }
   };
 
   const signInWithGoogle = async () => {
     try {
-      console.log('Initiating Google sign in...');
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -171,8 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      console.log('Attempting sign out...');
-      
       // First clear local state
       setUser(null);
       setSession(null);
@@ -185,8 +104,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      console.log('Sign out successful');
-      
       // Force clear any remaining auth state
       await updateAuthState(null);
       
@@ -208,14 +125,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle,
     signOut,
   };
-
-  console.log('Auth context state:', {
-    hasUser: !!user,
-    hasSession: !!session,
-    loading,
-    userId: user?.id,
-    email: user?.email
-  });
 
   return (
     <AuthContext.Provider value={contextValue}>

@@ -1,224 +1,116 @@
 "use client";
 
-import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
-import { Skeleton } from '../ui/skeleton';
-import { TrendingUp, TrendingDown, RefreshCw } from 'lucide-react';
-import { formatCurrency } from '../../lib/utils';
-import { Button } from '../ui/button';
-import { useToast } from '../../hooks/use-toast';
-import { QuidaxMarketService } from '../../lib/services/quidax-market';
+import { useEffect, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
-interface MarketData {
-  ticker: {
-    name: string;
-    base_unit: string;
-    quote_unit: string;
-    low: string;
-    high: string;
-    last: string;
-    vol: string;
-    buy: string;
-    sell: string;
-    open: string;
+interface MarketStats {
+  data: {
+    market_cap_percentage: {
+      [key: string]: number;
+    };
+    total_market_cap: {
+      usd: number;
+    };
+    total_volume: {
+      usd: number;
+    };
+    market_cap_change_percentage_24h_usd: number;
   };
-}
-
-interface MarketTickerData {
-  name: string;
-  base_unit: string;
-  quote_unit: string;
-  ticker: {
-    low: string;
-    high: string;
-    last: string;
-    vol: string;
-    buy: string;
-    sell: string;
-    open: string;
-  };
-}
-
-interface MarketTickersResponse {
-  status: string;
-  message: string;
-  data: Record<string, MarketTickerData>;
 }
 
 export default function MarketStats() {
-  const [data, setData] = useState<Record<string, MarketData> | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState<MarketStats | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { toast } = useToast();
-
-  const fetchMarketData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const response = await QuidaxMarketService.getAllMarketTickers();
-      console.log('Market data response:', response); // Debug log
-      
-      const marketData: Record<string, MarketData> = {};
-      
-      // Filter for USDT and NGN pairs
-      Object.entries(response.data).forEach(([market, data]) => {
-        if (data.quote_unit === 'usdt' || data.quote_unit === 'ngn') {
-          marketData[market] = {
-            ticker: {
-              name: data.name,
-              base_unit: data.base_unit,
-              quote_unit: data.quote_unit,
-              ...data.ticker
-            }
-          };
-        }
-      });
-
-      console.log('Processed market data:', marketData); // Debug log
-      setData(marketData);
-    } catch (err: any) {
-      const errorMessage = err.message || 'Failed to fetch market data';
-      console.error('Market data fetch error:', err); // Debug log
-      setError(errorMessage);
-      toast({
-        title: 'Error',
-        description: errorMessage,
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchMarketData();
-    const interval = setInterval(fetchMarketData, 10000); // Update every 10 seconds
-    
-    return () => clearInterval(interval);
+    const fetchMarketStats = async () => {
+      try {
+        const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
+        const response = await fetch(`${baseUrl}/api/market/stats`);
+        if (!response.ok) {
+          throw new Error('Failed to fetch market stats');
+        }
+        const data = await response.json();
+        setStats(data);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Failed to fetch market stats');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMarketStats();
   }, []);
 
-  const getTopGainers = () => {
-    if (!data) return [];
-    return Object.entries(data)
-      .map(([market, { ticker }]) => ({
-        market,
-        name: ticker.name,
-        change: ((parseFloat(ticker.last) - parseFloat(ticker.open)) / parseFloat(ticker.open)) * 100,
-        price: parseFloat(ticker.last),
-        quote_unit: ticker.quote_unit
-      }))
-      .filter(({ change }) => !isNaN(change))
-      .sort((a, b) => b.change - a.change)
-      .slice(0, 3);
-  };
-
-  const getTopVolume = () => {
-    if (!data) return [];
-    return Object.entries(data)
-      .map(([market, { ticker }]) => ({
-        market,
-        name: ticker.name,
-        volume: parseFloat(ticker.vol) * parseFloat(ticker.last),
-        price: parseFloat(ticker.last),
-        quote_unit: ticker.quote_unit
-      }))
-      .filter(({ volume }) => !isNaN(volume))
-      .sort((a, b) => b.volume - a.volume)
-      .slice(0, 3);
-  };
-
-  if (error) {
+  if (loading) {
     return (
-      <Card className="bg-destructive/10">
+      <Card>
         <CardContent className="p-6">
-          <div className="flex flex-col items-center space-y-4">
-            <p className="text-destructive text-sm">{error}</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchMarketData}
-              className="flex items-center space-x-2"
-            >
-              <RefreshCw className="h-4 w-4" />
-              <span>Retry</span>
-            </Button>
+          <div className="space-y-4">
+            <Skeleton className="h-4 w-[250px]" />
+            <Skeleton className="h-4 w-[200px]" />
+            <Skeleton className="h-4 w-[150px]" />
           </div>
         </CardContent>
       </Card>
     );
   }
 
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-red-500">
+            Failed to load market statistics. Please try again later.
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!stats?.data) {
+    return null;
+  }
+
+  const {
+    market_cap_percentage,
+    total_market_cap,
+    total_volume,
+    market_cap_change_percentage_24h_usd
+  } = stats.data;
+
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-lg font-semibold">
-          Market Overview
-        </CardTitle>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={fetchMarketData}
-          className="h-8 w-8 p-0"
-          title="Refresh"
-        >
-          <RefreshCw className="h-4 w-4" />
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        {loading ? (
-          <>
-            <Skeleton className="h-20" />
-            <Skeleton className="h-20" />
-          </>
-        ) : data ? (
-          <>
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">Top Gainers</h3>
-              <div className="space-y-2">
-                {getTopGainers().map(({ market, name, change, price, quote_unit }) => (
-                  <div key={market} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{name}</p>
-                      <p className="text-sm text-muted-foreground">{market.toUpperCase()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{formatCurrency(price, quote_unit)}</p>
-                      <p className={`text-sm ${change >= 0 ? 'text-green-500' : 'text-red-500'} flex items-center justify-end`}>
-                        {change >= 0 ? (
-                          <TrendingUp className="h-3 w-3 mr-1" />
-                        ) : (
-                          <TrendingDown className="h-3 w-3 mr-1" />
-                        )}
-                        {change.toFixed(2)}%
-                      </p>
-                    </div>
-                  </div>
+      <CardContent className="p-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">Market Overview</h3>
+            <p className="text-sm text-gray-500">
+              Total Market Cap: ${total_market_cap.usd.toLocaleString()}
+            </p>
+            <p className="text-sm text-gray-500">
+              24h Volume: ${total_volume.usd.toLocaleString()}
+            </p>
+            <p className="text-sm text-gray-500">
+              24h Change: {market_cap_change_percentage_24h_usd.toFixed(2)}%
+            </p>
+          </div>
+          <div>
+            <h4 className="text-md font-semibold">Market Dominance</h4>
+            <div className="space-y-2">
+              {Object.entries(market_cap_percentage)
+                .slice(0, 5)
+                .map(([coin, percentage]) => (
+                  <p key={coin} className="text-sm text-gray-500">
+                    {coin.toUpperCase()}: {percentage.toFixed(2)}%
+                  </p>
                 ))}
-              </div>
             </div>
-
-            <div>
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">Top Volume</h3>
-              <div className="space-y-2">
-                {getTopVolume().map(({ market, name, volume, price, quote_unit }) => (
-                  <div key={market} className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{name}</p>
-                      <p className="text-sm text-muted-foreground">{market.toUpperCase()}</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-medium">{formatCurrency(price, quote_unit)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Vol: {formatCurrency(volume, quote_unit)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : null}
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
