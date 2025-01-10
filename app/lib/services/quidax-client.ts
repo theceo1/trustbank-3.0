@@ -105,12 +105,32 @@ export class QuidaxClient {
   }
 
   async fetchOrderBook(market: string) {
-    const response = await fetch(`${this.baseUrl}/markets/${market}/order_book`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`
+    try {
+      const response = await fetch(`${this.baseUrl}/markets/${market}/order_book`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch order book');
       }
-    });
-    return response.json();
+
+      const data = await response.json();
+      if (!data || !data.data || !data.data.asks || !data.data.bids) {
+        throw new Error('Invalid order book data received');
+      }
+
+      return {
+        asks: data.data.asks,
+        bids: data.data.bids
+      };
+    } catch (error) {
+      console.error('Error fetching order book:', error);
+      throw error;
+    }
   }
 
   async createSubAccount(data: { email: string; first_name?: string; last_name?: string }) {
@@ -126,12 +146,29 @@ export class QuidaxClient {
   }
 
   async fetchUserWallets(userId: string) {
-    const response = await fetch(`${this.baseUrl}/users/${userId}/wallets`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`
+    try {
+      const response = await fetch(`${this.baseUrl}/users/${userId}/wallets`, {
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Accept': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to fetch user wallets');
       }
-    });
-    return response.json();
+
+      const data = await response.json();
+      if (!data || !data.data) {
+        throw new Error('Invalid wallet data received');
+      }
+
+      return data.data;
+    } catch (error) {
+      console.error('Error fetching user wallets:', error);
+      throw error;
+    }
   }
 
   async getTransactionStatus(reference: string) {

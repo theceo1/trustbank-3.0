@@ -17,6 +17,18 @@ export async function GET(request: Request) {
     const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
     const orderBook = await quidaxClient.fetchOrderBook(market);
 
+    if (!orderBook || !orderBook.bids || !orderBook.asks) {
+      return new Response(JSON.stringify({
+        status: 'error',
+        message: 'Invalid order book data received'
+      }), {
+        status: 400,
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
+
     return new Response(JSON.stringify({
       status: 'success',
       data: {

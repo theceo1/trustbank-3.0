@@ -61,8 +61,8 @@ export default function WalletOverview() {
       if (data.status === 'success' && Array.isArray(data.data)) {
         setBalances(data.data.map((wallet: any) => ({
           currency: wallet.currency,
-          balance: wallet.balance.toString(),
-          locked: wallet.locked.toString()
+          balance: (wallet.balance ?? 0).toString(),
+          locked: (wallet.locked ?? 0).toString()
         })));
       } else {
         console.error('Invalid wallet data:', data);
