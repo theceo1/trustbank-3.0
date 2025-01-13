@@ -1,117 +1,101 @@
-import { QuidaxClient } from '../app/lib/services/quidax-client';
-import { QuidaxUser, QuidaxWallet } from '../app/types/quidax';
+import { QuidaxClient, QuidaxResponse, QuidaxWallet } from '@/app/lib/services/quidax-client';
 import dotenv from 'dotenv';
 
-// Load environment variables from .env.local
-dotenv.config({ path: '.env.local' });
+dotenv.config();
 
-// Constants
-const TEST_USER_ID = '157fa815-214e-4ecd-8a25-448fe4815ff1';
 const QUIDAX_API_URL = 'https://www.quidax.com/api/v1';
 
-async function main() {
+async function getWalletBalance(userId: string, currency: string): Promise<string> {
+  const client = new QuidaxClient(process.env.QUIDAX_SECRET_KEY!);
   try {
-    console.log('Starting test...');
-    const apiKey = process.env.QUIDAX_SECRET_KEY;
-    if (!apiKey) {
-      throw new Error('QUIDAX_SECRET_KEY is not set in environment variables');
-    }
-    const quidaxClient = new QuidaxClient(apiKey);
+    const response = await client.getWallet(userId, currency);
+    const wallet = response.data[0];
+    return wallet.balance;
+  } catch (error) {
+    console.error(`Error getting ${currency} balance:`, error);
+    throw error;
+  }
+}
 
-    // [1] Get user details
-    console.log('\n[1] Getting user details...');
-    const userResponse = await fetch(
-      `${QUIDAX_API_URL}/users/${TEST_USER_ID}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Accept': 'application/json'
-        }
-      }
-    );
+async function testInstantSwap() {
+  try {
+    const userId = process.env.TEST_USER_ID!;
+    const client = new QuidaxClient(process.env.QUIDAX_SECRET_KEY!);
+
+    // Get user's wallets
+    console.log('Fetching user wallets...');
+    const walletsResponse = await client.fetchUserWallets(userId);
+    const wallets = walletsResponse.data;
     
-    if (!userResponse.ok) {
-      throw new Error('Failed to fetch user details');
-    }
-    
-    const userData = await userResponse.json();
-    if (!userData?.data) {
-      throw new Error('Invalid user data received');
-    }
-    console.log('User details:', userData.data);
+    // Find BTC and USDT wallets
+    const btcWallet = wallets.find(w => w.currency === 'btc');
+    const usdtWallet = wallets.find(w => w.currency === 'usdt');
 
-    // [2] Get user wallets
-    console.log('\n[2] Getting user wallets...');
-    const walletsResponse = await quidaxClient.fetchUserWallets(TEST_USER_ID);
-    if (!walletsResponse?.data) {
-      throw new Error('Failed to fetch user wallets');
+    if (!btcWallet || !usdtWallet) {
+      throw new Error('BTC or USDT wallet not found');
     }
-    console.log('User wallets:', walletsResponse.data.map((w: QuidaxWallet) => ({ 
-      currency: w.currency, 
-      balance: w.balance 
-    })));
 
-    // [3] Get USDT/NGN rate
-    console.log('\n[3] Getting USDT/NGN rate...');
-    const rate = await quidaxClient.getRate('usdt', 'ngn');
-    console.log('USDT/NGN rate:', rate);
+    console.log('Current balances:');
+    console.log(`BTC: ${btcWallet.balance}`);
+    console.log(`USDT: ${usdtWallet.balance}`);
 
-    // [4] Create swap quotation
-    console.log('\n[4] Creating swap quotation...');
+    // Get BTC/USDT rate
+    console.log('\nGetting BTC/USDT rate...');
+    const rate = await client.getRate('btc', 'usdt');
+    console.log('BTC/USDT rate:', rate);
+
+    // Create swap quotation
+    console.log('\nCreating swap quotation...');
     const quotationResponse = await fetch(
-      `${QUIDAX_API_URL}/users/${TEST_USER_ID}/swap_quotation`,
+      `${QUIDAX_API_URL}/users/${userId}/swap_quotation`,
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY!}`,
           'Content-Type': 'application/json',
           'Accept': 'application/json'
         },
         body: JSON.stringify({
-          from_currency: 'usdt',
-          to_currency: 'ngn',
-          from_amount: '0.05'
+          from_currency: 'btc',
+          to_currency: 'usdt',
+          from_amount: '0.001' // Small test amount
         })
       }
     );
-    
+
     if (!quotationResponse.ok) {
       throw new Error('Failed to create swap quotation');
     }
     
     const quotationData = await quotationResponse.json();
-    if (!quotationData?.data) {
-      throw new Error('Invalid quotation data received');
-    }
     console.log('Swap quotation:', quotationData.data);
 
-    // [5] Confirm swap
-    console.log('\n[5] Confirming swap...');
-    const swapConfirmation = await quidaxClient.confirmSwapQuotation({
-      user_id: TEST_USER_ID,
+    // Confirm swap
+    console.log('\nConfirming swap...');
+    const swapConfirmation = await client.confirmSwapQuotation({
+      user_id: userId,
       quotation_id: quotationData.data.id
     });
-    if (!swapConfirmation?.data) {
-      throw new Error('Failed to confirm swap');
-    }
     console.log('Swap confirmation:', swapConfirmation.data);
 
-    // [6] Get updated balances
-    console.log('\n[6] Getting updated balances...');
-    const updatedWalletsResponse = await quidaxClient.fetchUserWallets(TEST_USER_ID);
-    if (!updatedWalletsResponse?.data) {
-      throw new Error('Failed to fetch updated wallets');
-    }
-    console.log('Updated wallets:', updatedWalletsResponse.data.map((w: QuidaxWallet) => ({ 
-      currency: w.currency, 
-      balance: w.balance 
-    })));
+    // Get updated balances
+    console.log('\nGetting updated balances...');
+    const updatedWalletsResponse = await client.fetchUserWallets(userId);
+    const updatedWallets = updatedWalletsResponse.data;
+    
+    const updatedBtcWallet = updatedWallets.find(w => w.currency === 'btc');
+    const updatedUsdtWallet = updatedWallets.find(w => w.currency === 'usdt');
+
+    console.log('Updated balances:');
+    console.log(`BTC: ${updatedBtcWallet?.balance}`);
+    console.log(`USDT: ${updatedUsdtWallet?.balance}`);
 
     console.log('\nTest completed successfully!');
   } catch (error) {
-    console.error('Test failed:', error);
-    process.exit(1);
+    console.error('Error in instant swap test:', error);
+    throw error;
   }
 }
 
-main(); 
+// Run the test
+testInstantSwap().catch(console.error); 

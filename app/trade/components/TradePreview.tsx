@@ -1,31 +1,34 @@
 //app/trade/components/TradePreview.tsx
- 
 "use client";
 
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/app/components/ui/progress";
+import { Separator } from "@/app/components/ui/separator";
+import { formatCurrency, formatNumber } from "@/app/lib/utils/format";
 import { TradeDetails } from "@/app/types/trade";
-import { formatCurrency } from "@/lib/utils";
-import { Shield, Clock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
-import { formatCryptoAmount } from '@/app/lib/utils';
-import { Progress } from "@/components/ui/progress";
+import { Loader2, RefreshCw, Shield, Clock, AlertCircle, ArrowRight } from "lucide-react";
+import { useEffect, useState } from "react";
 
-interface TradePreviewProps {
+const formatCryptoAmount = (amount: number): string => {
+  return formatNumber(amount);
+};
+
+export interface TradePreviewProps {
   tradeDetails: TradeDetails;
-  onConfirm: () => Promise<void>;
+  onConfirm: () => void;
   onCancel: () => void;
-  isLoading?: boolean;
-  isOpen?: boolean;
+  onRefreshQuote: () => void;
+  isLoading: boolean;
+  isOpen: boolean;
   expiryTime: number;
 }
 
-export function TradePreview({
+export default function TradePreview({
   tradeDetails,
   onConfirm,
   onCancel,
+  onRefreshQuote,
   isLoading,
   isOpen,
   expiryTime
@@ -62,28 +65,22 @@ export function TradePreview({
     : tradeDetails.amount - fees.service - fees.network;
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-    >
-      <Card className="w-full max-w-md mx-auto bg-white/95 dark:bg-gray-900/95 shadow-2xl border-0">
-        <CardHeader className="space-y-1 pb-4">
-          <CardTitle className="text-xl font-bold">Confirm Your Trade</CardTitle>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">
+    <Dialog open={isOpen} onOpenChange={onCancel}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Confirm Your Trade</DialogTitle>
+          <div className="flex items-center justify-between mt-2">
+            <span className="text-sm text-muted-foreground">
               Rate valid for:
-            </p>
+            </span>
             <div className="flex items-center gap-2">
               <Progress value={(timeLeft / 14) * 100} className="w-24" />
               <span className="text-sm font-medium">{timeLeft}s</span>
             </div>
           </div>
-        </CardHeader>
+        </DialogHeader>
 
-        <CardContent className="space-y-6">
-          {/* Trade Summary */}
+        <div className="grid gap-4 py-4">
           <div className="space-y-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-100 dark:border-green-900">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">You {tradeDetails.type}</span>
@@ -99,7 +96,6 @@ export function TradePreview({
             </div>
           </div>
 
-          {/* Fees Breakdown */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Shield className="h-4 w-4" />
@@ -122,13 +118,11 @@ export function TradePreview({
             </div>
           </div>
 
-          {/* Estimated Time */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Clock className="h-4 w-4" />
             <span>Estimated processing time: 5-15 minutes</span>
           </div>
 
-          {/* Action Buttons */}
           <div className="grid grid-cols-2 gap-3 pt-2">
             <Button
               variant="outline"
@@ -161,8 +155,8 @@ export function TradePreview({
               )}
             </Button>
           </div>
-        </CardContent>
-      </Card>
-    </motion.div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

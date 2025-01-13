@@ -62,10 +62,11 @@ export default function CryptoDeposit({ currency, onSuccess }: CryptoDepositProp
       try {
         setIsLoading(true);
         const quidaxClient = new QuidaxClient(process.env.NEXT_PUBLIC_QUIDAX_API_KEY || '');
-        const address = await quidaxClient.getDepositAddress(currency, selectedNetwork);
-        setDepositAddress(address.address || '');
-        if (address.tag) {
-          setTag(address.tag);
+        const response = await quidaxClient.getDepositAddress(currency, selectedNetwork);
+        const addressData = response.data;
+        setDepositAddress(addressData.address);
+        if (addressData.tag) {
+          setTag(addressData.tag);
         }
       } catch (error) {
         console.error('Error getting deposit address:', error);

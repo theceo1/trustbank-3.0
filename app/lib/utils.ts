@@ -93,7 +93,9 @@ export function throttle<T extends (...args: any[]) => any>(
   }
 }
 
-export function formatCryptoAmount(amount: number | string, decimals: number = 8): string {
+export function formatCryptoAmount(amount: number | string | undefined | null, decimals: number = 8): string {
+  if (amount === undefined || amount === null) return '0';
   const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
+  if (isNaN(numAmount)) return '0';
   return numAmount.toFixed(decimals).replace(/\.?0+$/, '');
 }

@@ -17,6 +17,10 @@ export class QuidaxSwapService {
       user_id: params.user_id === 'me' ? 'me' : '***'
     });
 
+    if (!this.apiKey) {
+      throw new Error('Quidax API key not configured');
+    }
+
     try {
       const response = await fetch(
         `${this.baseUrl}/users/${params.user_id}/swap_quotation`,
@@ -35,23 +39,52 @@ export class QuidaxSwapService {
         }
       );
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('[QuidaxSwap] Failed to create quotation:', error);
-        throw new Error(error.message || 'Failed to create swap quotation');
+      let responseData;
+      const responseText = await response.text();
+      
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[QuidaxSwap] Failed to parse response:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseText,
+          parseError
+        });
+        throw new Error(`Invalid response from Quidax API: ${response.statusText}`);
       }
 
-      const result = await response.json();
-      console.log('[QuidaxSwap] Successfully created quotation:', result);
-      return result;
+      if (!response.ok) {
+        console.error('[QuidaxSwap] Failed to create quotation:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: responseData,
+          endpoint: `/users/${params.user_id}/swap_quotation`
+        });
+        throw new Error(responseData.message || `Failed to create swap quotation: ${response.statusText}`);
+      }
+
+      console.log('[QuidaxSwap] Successfully created quotation:', responseData);
+      return responseData;
     } catch (error) {
       console.error('[QuidaxSwap] Create swap quotation error:', error);
       throw error;
     }
   }
 
-  static async confirmSwap(userId: string, quotationId: string): Promise<{ data: QuidaxSwapTransaction }> {
+  static async confirmSwap(userId: string, quotationId: string): Promise<{ data: QuidaxSwapTransaction; error?: { message: string; status: number } }> {
     console.log('[QuidaxSwap] Confirming swap:', { userId: userId === 'me' ? 'me' : '***', quotationId });
+    
+    if (!this.apiKey) {
+      return {
+        data: null as any,
+        error: {
+          message: 'Quidax API key not configured',
+          status: 500
+        }
+      };
+    }
+
     try {
       const response = await fetch(
         `${this.baseUrl}/users/${userId}/swap_quotation/${quotationId}/confirm`,
@@ -59,28 +92,70 @@ export class QuidaxSwapService {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${this.apiKey}`,
+            'Content-Type': 'application/json',
             'Accept': 'application/json'
           }
         }
       );
 
-      if (!response.ok) {
-        const error = await response.json();
-        console.error('[QuidaxSwap] Failed to confirm swap:', error);
-        throw new Error(error.message || 'Failed to confirm swap');
+      let responseData;
+      const responseText = await response.text();
+      
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[QuidaxSwap] Failed to parse response:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseText,
+          parseError
+        });
+        return {
+          data: null as any,
+          error: {
+            message: `Invalid response from Quidax API: ${response.statusText}`,
+            status: 500
+          }
+        };
       }
 
-      const result = await response.json();
-      console.log('[QuidaxSwap] Successfully confirmed swap:', result);
-      return result;
-    } catch (error) {
+      if (!response.ok) {
+        console.error('[QuidaxSwap] Failed to confirm swap:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: responseData,
+          endpoint: `/users/${userId}/swap_quotation/${quotationId}/confirm`
+        });
+        return {
+          data: null as any,
+          error: {
+            message: responseData.message || `Failed to confirm swap: ${response.statusText}`,
+            status: response.status
+          }
+        };
+      }
+
+      console.log('[QuidaxSwap] Successfully confirmed swap:', responseData);
+      return { data: responseData.data };
+    } catch (error: any) {
       console.error('[QuidaxSwap] Confirm swap error:', error);
-      throw error;
+      return {
+        data: null as any,
+        error: {
+          message: error.message || 'Failed to confirm swap',
+          status: 500
+        }
+      };
     }
   }
 
   static async getSwapTransaction(userId: string, transactionId: string): Promise<{ data: QuidaxSwapTransaction }> {
     console.log('[QuidaxSwap] Getting swap transaction:', { userId: userId === 'me' ? 'me' : '***', transactionId });
+    
+    if (!this.apiKey) {
+      throw new Error('Quidax API key not configured');
+    }
+
     try {
       const response = await fetch(
         `${this.baseUrl}/users/${userId}/swap_transactions/${transactionId}`,
@@ -94,7 +169,12 @@ export class QuidaxSwapService {
 
       if (!response.ok) {
         const error = await response.json();
-        console.error('[QuidaxSwap] Failed to fetch transaction:', error);
+        console.error('[QuidaxSwap] Failed to fetch transaction:', {
+          status: response.status,
+          statusText: response.statusText,
+          error,
+          endpoint: `/users/${userId}/swap_transactions/${transactionId}`
+        });
         throw new Error(error.message || 'Failed to fetch swap transaction');
       }
 
@@ -112,11 +192,16 @@ export class QuidaxSwapService {
     from_currency: string;
     to_currency: string;
     from_amount: string;
-  }): Promise<{ data: QuidaxTemporaryQuotation }> {
-    console.log('[QuidaxSwap] Getting temporary quotation:', {
+  }): Promise<{ data: QuidaxQuotation }> {
+    console.log('[QuidaxSwap] Getting temporary quotation with params:', {
       ...params,
       user_id: params.user_id === 'me' ? 'me' : '***'
     });
+
+    if (!this.apiKey) {
+      throw new Error('Quidax API key not configured');
+    }
+
     try {
       const response = await fetch(
         `${this.baseUrl}/users/${params.user_id}/temporary_swap_quotation`,
@@ -128,8 +213,8 @@ export class QuidaxSwapService {
             'Accept': 'application/json'
           },
           body: JSON.stringify({
-            from_currency: params.from_currency.toLowerCase(),
-            to_currency: params.to_currency.toLowerCase(),
+            from_currency: params.from_currency.toUpperCase(),
+            to_currency: params.to_currency.toUpperCase(),
             from_amount: params.from_amount
           })
         }
@@ -137,15 +222,20 @@ export class QuidaxSwapService {
 
       if (!response.ok) {
         const error = await response.json();
-        console.error('[QuidaxSwap] Failed to get temporary quotation:', error);
-        throw new Error(error.message || 'Failed to get temporary quotation');
+        console.error('[QuidaxSwap] Failed to get temporary quotation:', {
+          status: response.status,
+          statusText: response.statusText,
+          error,
+          endpoint: `/users/${params.user_id}/temporary_swap_quotation`
+        });
+        throw new Error(error.message || 'Failed to get temporary swap quotation');
       }
 
       const result = await response.json();
       console.log('[QuidaxSwap] Successfully got temporary quotation:', result);
       return result;
     } catch (error) {
-      console.error('[QuidaxSwap] Temporary quotation error:', error);
+      console.error('[QuidaxSwap] Get temporary quotation error:', error);
       throw error;
     }
   }

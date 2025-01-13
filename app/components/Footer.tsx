@@ -1,40 +1,39 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
-import { 
-  Facebook, 
-  Instagram, 
-  X, 
-  AtSign, 
-  MessageCircle,
-  Globe,
-  BookOpen,
-  Wallet,
-  BarChart3,
-  Calculator,
-  Shield,
-  HelpCircle,
-  Mail,
-  FileText,
-  GraduationCap,
-  Eye,
-  Target,
-  Newspaper,
-  ExternalLink,
-  Send,
-  DollarSign,
-  Repeat,
-  Gift,
-  Headphones,
-  AlertCircle,
-  BookMarked,
-  Users,
-  ChevronRight,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { InstantSwapModal } from "@/components/modals/InstantSwapModal";
+import { BuyCryptoModal } from "@/components/modals/BuyCryptoModal";
+import {
+  BarChart3,
+  Globe,
+  Wallet,
+  Calculator,
+  Repeat,
+  DollarSign,
+  Eye,
+  Target,
+  Newspaper,
+  Users,
+  BookMarked,
+  HelpCircle,
+  Mail,
+  Shield,
+  FileText,
+  GraduationCap,
+  Headphones,
+  AlertCircle,
+  ChevronRight,
+  Facebook,
+  Instagram,
+  X,
+  AtSign,
+  MessageCircle,
+  Send
+} from "lucide-react";
 
 // Custom Meta logo component for the latest design
 function MetaLogo() {
@@ -66,24 +65,27 @@ function TikTokLogo() {
 interface LinkItem {
   name: string;
   href: string;
-  icon: JSX.Element;
+  icon: React.ReactNode;
   isNew?: boolean;
 }
 
 interface SocialLink {
   name: string;
   href: string;
-  icon: JSX.Element;
+  icon: React.ReactNode;
 }
 
 export default function Footer() {
+  const [isSwapModalOpen, setIsSwapModalOpen] = useState(false);
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+
   const quickLinks: LinkItem[] = [
     { name: "Market", href: "/market", icon: <BarChart3 className="w-4 h-4" /> },
     { name: "Trade", href: "/trade", icon: <Globe className="w-4 h-4" /> },
     { name: "Wallet", href: "/profile/wallet", icon: <Wallet className="w-4 h-4" /> },
     { name: "Calculator", href: "/calculator", icon: <Calculator className="w-4 h-4" /> },
-    { name: "Instant Swap", href: "/swap", icon: <Repeat className="w-4 h-4" />, isNew: true },
-    { name: "Buy Crypto", href: "/buy", icon: <DollarSign className="w-4 h-4" />, isNew: true },
+    { name: "Instant Swap", href: "#", icon: <Repeat className="w-4 h-4" />, isNew: true },
+    { name: "Buy Crypto", href: "#", icon: <DollarSign className="w-4 h-4" />, isNew: true },
   ];
 
   const aboutLinks: LinkItem[] = [
@@ -115,43 +117,12 @@ export default function Footer() {
   ];
 
   return (
-    <motion.footer 
-      className="bg-background relative mt-auto"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      {/* Gradient overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-green-50/20 via-background to-background dark:from-green-950/20 dark:via-background dark:to-background pointer-events-none" />
-
-      {/* Newsletter Section */}
-      <div className="relative border-b">
-        <div className="container mx-auto py-12 px-4">
-          <div className="max-w-2xl mx-auto text-center space-y-4">
-            <h2 className="text-2xl font-bold">Stay Updated</h2>
-            <p className="text-muted-foreground">
-              Get the latest news about cryptocurrency markets and exclusive offers
-            </p>
-            <div className="flex flex-col sm:flex-row gap-2 max-w-md mx-auto">
-              <input
-                type="email"
-                placeholder="Enter your email"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-              />
-              <Button className="bg-green-600 hover:bg-green-700">
-                Subscribe
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Main Footer Content */}
-      <div className="container mx-auto py-12 px-4 relative">
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 lg:gap-12">
+    <footer className="border-t bg-background">
+      <div className="container px-4 md:px-6 py-8 md:py-12">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand Section */}
           <div className="space-y-6">
-          <div>
+            <div>
               <h3 className="font-bold text-2xl mb-2">trustBank</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Your trusted partner in <span className="text-green-600 font-medium">Crypto | Simplified</span>. 
@@ -179,73 +150,90 @@ export default function Footer() {
           </div>
 
           {/* Quick Links Section */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-lg">Quick Links</h4>
-            <ul className="space-y-3">
+          <div>
+            <h3 className="font-semibold mb-6">Quick Links</h3>
+            <ul className="space-y-4">
               {quickLinks.map((link) => (
                 <li key={link.name}>
-                  <Link 
-                    href={link.href} 
-                    className="group text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
-                  >
-                    <span className="text-green-600 group-hover:translate-x-1 transition-transform">
+                  {link.name === "Instant Swap" ? (
+                    <button
+                      onClick={() => setIsSwapModalOpen(true)}
+                      className="flex items-center text-sm hover:text-green-600 text-muted-foreground transition-colors"
+                    >
                       {link.icon}
-                    </span>
-                    {link.name}
-                    {link.isNew && (
-                      <Badge className="ml-2 bg-green-600/10 text-green-600">New</Badge>
-                    )}
-                </Link>
-              </li>
+                      <span className="ml-2">{link.name}</span>
+                      {link.isNew && (
+                        <Badge className="ml-2 bg-green-600/10 text-green-600">New</Badge>
+                      )}
+                    </button>
+                  ) : link.name === "Buy Crypto" ? (
+                    <button
+                      onClick={() => setIsBuyModalOpen(true)}
+                      className="flex items-center text-sm hover:text-green-600 text-muted-foreground transition-colors"
+                    >
+                      {link.icon}
+                      <span className="ml-2">{link.name}</span>
+                      {link.isNew && (
+                        <Badge className="ml-2 bg-green-600/10 text-green-600">New</Badge>
+                      )}
+                    </button>
+                  ) : (
+                    <Link
+                      href={link.href}
+                      className="flex items-center text-sm hover:text-green-600 text-muted-foreground transition-colors"
+                    >
+                      {link.icon}
+                      <span className="ml-2">{link.name}</span>
+                      {link.isNew && (
+                        <Badge className="ml-2 bg-green-600/10 text-green-600">New</Badge>
+                      )}
+                    </Link>
+                  )}
+                </li>
               ))}
             </ul>
           </div>
 
           {/* About Section */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-lg">About</h4>
-            <ul className="space-y-3">
+          <div>
+            <h3 className="font-semibold mb-6">About</h3>
+            <ul className="space-y-4">
               {aboutLinks.map((link) => (
                 <li key={link.name}>
-                  <Link 
-                    href={link.href} 
-                    className="group text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
+                  <Link
+                    href={link.href}
+                    className="flex items-center text-sm hover:text-green-600 text-muted-foreground transition-colors"
                   >
-                    <span className="text-green-600 group-hover:translate-x-1 transition-transform">
-                      {link.icon}
-                    </span>
-                    {link.name}
-                </Link>
-              </li>
+                    {link.icon}
+                    <span className="ml-2">{link.name}</span>
+                  </Link>
+                </li>
               ))}
             </ul>
           </div>
 
           {/* Support Section */}
-          <div className="space-y-4">
-            <h4 className="font-semibold text-lg">Support</h4>
-            <ul className="space-y-3">
+          <div>
+            <h3 className="font-semibold mb-6">Support</h3>
+            <ul className="space-y-4">
               {supportLinks.map((link) => (
                 <li key={link.name}>
-                  <Link 
-                    href={link.href} 
-                    className="group text-sm text-muted-foreground hover:text-foreground transition-colors flex items-center gap-2"
+                  <Link
+                    href={link.href}
+                    className="flex items-center text-sm hover:text-green-600 text-muted-foreground transition-colors"
                   >
-                    <span className="text-green-600 group-hover:translate-x-1 transition-transform">
-                      {link.icon}
-                    </span>
-                    {link.name}
-                </Link>
-              </li>
+                    {link.icon}
+                    <span className="ml-2">{link.name}</span>
+                  </Link>
+                </li>
               ))}
             </ul>
           </div>
         </div>
 
-        {/* Bottom Section */}
-        <div className="mt-12 pt-8 border-t border-border">
+        {/* Social Links and Copyright */}
+        <div className="mt-12 pt-8 border-t">
           <div className="flex flex-col gap-6">
-            {/* Social Links */}
             <div className="flex flex-wrap justify-center gap-6">
               {socialLinks.map((social) => (
                 <Link
@@ -256,49 +244,40 @@ export default function Footer() {
                   className="text-muted-foreground hover:text-green-600 transition-colors"
                   aria-label={social.name}
                 >
-                  <motion.div
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.95 }}
-                  >
-                    {social.icon}
-                  </motion.div>
+                  {social.icon}
                 </Link>
               ))}
             </div>
 
-            {/* Copyright and Company Info */}
             <div className="flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-muted-foreground">
               <p>© {new Date().getFullYear()} trustBank. All rights reserved.</p>
               
               <div className="flex items-center gap-4">
-                <Link href="/privacy-policy" className="hover:text-foreground transition-colors">
+                <Link href="/privacy-policy" className="hover:text-green-600 transition-colors">
                   Privacy Policy
                 </Link>
                 <Separator orientation="vertical" className="h-4" />
-                <Link href="/terms-of-service" className="hover:text-foreground transition-colors">
+                <Link href="/terms-of-service" className="hover:text-green-600 transition-colors">
                   Terms of Service
                 </Link>
                 <Separator orientation="vertical" className="h-4" />
-                <Link href="/security" className="hover:text-foreground transition-colors">
+                <Link href="/security" className="hover:text-green-600 transition-colors">
                   Security
-                </Link>
-              </div>
-
-              <div>
-                Powered by{' '}
-                <Link 
-                  href="https://www.trustbank.tech" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-green-600 hover:text-green-500 font-medium"
-                >
-                  Digital Kloud Transact Limited
                 </Link>
               </div>
             </div>
           </div>
         </div>
       </div>
-    </motion.footer>
+
+      <InstantSwapModal 
+        isOpen={isSwapModalOpen} 
+        onClose={() => setIsSwapModalOpen(false)} 
+      />
+      <BuyCryptoModal 
+        isOpen={isBuyModalOpen} 
+        onClose={() => setIsBuyModalOpen(false)} 
+      />
+    </footer>
   );
 } 

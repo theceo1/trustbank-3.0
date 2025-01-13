@@ -76,13 +76,11 @@ export default function DashboardPage() {
   // Show loading state while checking auth
   if (loading || !isInitialized) {
     return (
-      <div className="flex h-screen items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-        >
-          <Loader2 className="h-8 w-8 text-green-600" />
-        </motion.div>
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-3 p-8 rounded-lg bg-card">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Loading your dashboard...</p>
+        </div>
       </div>
     );
   }
@@ -91,13 +89,9 @@ export default function DashboardPage() {
   if (isLoading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center">
-          <motion.div
-            animate={{ rotate: 360 }}
-            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-          >
-            <Loader2 className="h-8 w-8 text-green-600" />
-          </motion.div>
+        <div className="flex flex-col items-center justify-center gap-3 p-8 rounded-lg bg-card">
+          <Loader2 className="h-8 w-8 text-primary animate-spin" />
+          <p className="text-sm text-muted-foreground">Fetching your data...</p>
         </div>
       </div>
     );
@@ -110,12 +104,7 @@ export default function DashboardPage() {
 
   return (
     <div className="container relative mx-auto px-4 py-8">
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="grid gap-8"
-      >
+      <div className="grid gap-8">
         {/* Dashboard Header with Welcome Message */}
         <DashboardHeader 
           displayName={user.user_metadata?.full_name || user.email?.split('@')[0] || 'User'} 
@@ -124,58 +113,26 @@ export default function DashboardPage() {
 
         {/* Account Balance and Transaction Limits */}
         <div className="grid gap-6 md:grid-cols-2">
-          <motion.div
-            initial={{ x: -20 }}
-            animate={{ x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <AccountBalance />
-          </motion.div>
-          <motion.div
-            initial={{ x: 20 }}
-            animate={{ x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <TransactionLimits />
-          </motion.div>
+          <AccountBalance />
+          <TransactionLimits />
         </div>
 
         {/* Announcements/Ads Section */}
-        <motion.div
-          initial={{ y: 20 }}
-          animate={{ y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
+        <div>
           <Announcements isVerified={profile?.is_verified || false} />
-        </motion.div>
+        </div>
 
         {/* Quick Actions and Recent Transactions */}
         <div className="grid gap-6 md:grid-cols-2">
-          <motion.div
-            initial={{ x: -20 }}
-            animate={{ x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <QuickActions className="h-full" />
-          </motion.div>
-          <motion.div
-            initial={{ x: 20 }}
-            animate={{ x: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <RecentTransactionsList />
-          </motion.div>
+          <QuickActions className="h-full" />
+          <RecentTransactionsList />
         </div>
 
         {/* Wallet Overview */}
-        <motion.div
-          initial={{ y: 20 }}
-          animate={{ y: 0 }}
-          transition={{ duration: 0.3 }}
-        >
+        <div>
           <WalletOverview />
-        </motion.div>
-      </motion.div>
+        </div>
+      </div>
     </div>
   );
 }

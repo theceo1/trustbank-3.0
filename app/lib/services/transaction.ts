@@ -10,10 +10,7 @@ export interface TransactionFilters {
 }
 
 export class TransactionService {
-  static async getUserTransactions(
-    userId: string, 
-    filters?: TransactionFilters
-  ): Promise<Transaction[]> {
+  static async getUserTransactions(userId: string, filters?: TransactionFilters) {
     try {
       let query = supabase
         .from('transactions')
@@ -21,33 +18,47 @@ export class TransactionService {
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (filters) {
-        if (filters.status && filters.status !== 'all') {
-          query = query.eq('status', filters.status.toUpperCase());
+      if (filters?.status && filters.status !== 'all') {
+        query = query.eq('status', filters.status);
+      }
+
+      if (filters?.type) {
+        query = query.eq('type', filters.type);
+      }
+
+      if (filters?.dateRange) {
+        const now = new Date();
+        let startDate;
+
+        switch (filters.dateRange) {
+          case 'today':
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            break;
+          case 'week':
+            startDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+          case 'month':
+            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            break;
+          default:
+            startDate = null;
         }
 
-        if (filters.dateRange && filters.dateRange !== 'all') {
-          const date = new Date();
-          switch(filters.dateRange) {
-            case 'today':
-              date.setHours(0, 0, 0, 0);
-              break;
-            case 'week':
-              date.setDate(date.getDate() - 7);
-              break;
-            case 'month':
-              date.setMonth(date.getMonth() - 1);
-              break;
-          }
-          query = query.gte('created_at', date.toISOString());
+        if (startDate) {
+          query = query.gte('created_at', startDate.toISOString());
         }
       }
 
+      if (filters?.limit) {
+        query = query.limit(filters.limit);
+      }
+
       const { data, error } = await query;
+
       if (error) throw error;
       return data || [];
     } catch (error) {
-      console.error('Error fetching user transactions:', error);
+      console.error('Error fetching transactions:', error);
       throw error;
     }
   }

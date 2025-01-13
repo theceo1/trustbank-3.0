@@ -1,208 +1,84 @@
 import { QuidaxService } from '@/app/lib/services/quidax';
-import debug from 'debug';
-import dotenv from 'dotenv';
-import { resolve } from 'path';
 
-// Load environment variables from the root directory
-const envPath = resolve(process.cwd(), '.env.local');
-console.log('Loading environment from:', envPath);
-dotenv.config({ path: envPath });
-
-const log = debug('transfer:usdt');
-
-interface TransferConfig {
-  // Sender details (User 1)
-  senderId: string;
-  senderEmail: string;
-  senderQuidaxSn: string;
-  
-  // Receiver details (User 2)
-  receiverId: string;
-  receiverEmail: string;
-  receiverQuidaxSn: string;
-
-  // Transfer details
+interface TransferParams {
+  fromUserId: string;
+  toUserId: string;
   amount: string;
 }
 
-interface WalletData {
-  id: string;
-  currency: string;
-  balance: string;
-  pending_balance: string;
-  total_balance: string;
-  total_deposits: string;
-  total_withdrawals: string;
-}
-
-interface WalletResponse {
-  status: string;
-  message: string;
-  data: WalletData[];
-}
-
-interface TransferResponse {
-  success: boolean;
-  reference: string;
-  status: string;
-}
-
-const MAX_WAIT_TIME = 60000; // 60 seconds
-const CHECK_INTERVAL = 2000; // 2 seconds
-
-async function transferUSDT(config: TransferConfig) {
+async function transferUSDT({ fromUserId, toUserId, amount }: TransferParams) {
   try {
-    log('🚀 Starting USDT transfer process...');
-    log('👤 Sender Details:', {
-      userId: config.senderEmail,
-      quidaxSn: config.senderQuidaxSn
-    });
-    log('👥 Receiver Details:', {
-      userId: config.receiverEmail,
-      quidaxSn: config.receiverQuidaxSn
-    });
+    const quidaxService = QuidaxService.getInstance();
 
-    // 1. Check sender's USDT balance
-    log('💰 Checking sender USDT balance...');
-    const senderBalanceResponse = await QuidaxService.getWalletBalance(
-      config.senderId,
+    // Check source wallet balance
+    console.log('Checking source USDT balance...');
+    const sourceResponse = await quidaxService.getWalletBalance(fromUserId, 'usdt');
+    if (!sourceResponse.ok) {
+      throw new Error('Failed to fetch source wallet balance');
+    }
+    const sourceWallet = await sourceResponse.json();
+    console.log('Source USDT balance:', sourceWallet.data[0]?.balance || '0');
+
+    // Verify sufficient balance
+    const currentBalance = parseFloat(sourceWallet.data[0]?.balance || '0');
+    const transferAmount = parseFloat(amount);
+    if (currentBalance < transferAmount) {
+      throw new Error(`Insufficient balance. Required: ${amount}, Available: ${currentBalance}`);
+    }
+
+    // Transfer USDT
+    console.log('Initiating USDT transfer...');
+    const transferResponse = await quidaxService.transfer(
+      fromUserId,
+      toUserId,
+      amount,
       'usdt'
-    ) as WalletResponse;
+    );
 
-    if (!senderBalanceResponse?.data?.[0]) {
-      throw new Error('Failed to fetch sender USDT balance');
+    if (!transferResponse.ok) {
+      throw new Error('Failed to transfer USDT');
     }
-    const senderBalance = senderBalanceResponse.data[0];
+    const transfer = await transferResponse.json();
+    console.log('Transfer completed:', transfer.data);
 
-    log('💰 Sender USDT Balance:', {
-      balance: senderBalance.balance,
-      pending: senderBalance.pending_balance
-    });
+    // Check final balances
+    console.log('Checking final balances...');
+    const finalSourceResponse = await quidaxService.getWalletBalance(fromUserId, 'usdt');
+    const finalDestResponse = await quidaxService.getWalletBalance(toUserId, 'usdt');
 
-    if (Number(senderBalance.balance) < Number(config.amount)) {
-      throw new Error(`Insufficient USDT balance. Required: ${config.amount}, Available: ${senderBalance.balance}`);
-    }
-
-    // 2. Transfer USDT to receiver
-    log('🔄 Transferring USDT to receiver...');
-    const transferResult = await QuidaxService.transfer(
-      config.senderId,
-      config.receiverId,
-      config.amount,
-      'usdt'
-    ) as TransferResponse;
-
-    if (!transferResult.success) {
-      throw new Error('Transfer failed');
-    }
-
-    log('🎉 Transfer initiated:', {
-      reference: transferResult.reference,
-      status: transferResult.status
-    });
-
-    // 3. Wait for transaction completion
-    log('⏳ Waiting for transaction to complete...');
-    let transactionStatus = { status: transferResult.status, reference: transferResult.reference };
-    let startTime = Date.now();
-
-    while (transactionStatus.status === 'pending' && Date.now() - startTime < MAX_WAIT_TIME) {
-      await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
-      const response = await QuidaxService.getWalletBalance(config.senderId, 'usdt') as WalletResponse;
-      transactionStatus.status = response.status === 'success' ? 'completed' : 'pending';
-      log('🔄 Transaction status:', transactionStatus.status);
-    }
-
-    if (transactionStatus.status !== 'completed') {
-      throw new Error(`Transaction ${transactionStatus.status}: ${transactionStatus.reference}`);
-    }
-
-    // 4. Check final balances
-    const senderFinalBalanceResponse = await QuidaxService.getWalletBalance(
-      config.senderId,
-      'usdt'
-    ) as WalletResponse;
-    const receiverFinalBalanceResponse = await QuidaxService.getWalletBalance(
-      config.receiverId,
-      'usdt'
-    ) as WalletResponse;
-
-    if (!senderFinalBalanceResponse?.data?.[0] || !receiverFinalBalanceResponse?.data?.[0]) {
+    if (!finalSourceResponse.ok || !finalDestResponse.ok) {
       throw new Error('Failed to fetch final balances');
     }
-    const senderFinalBalance = senderFinalBalanceResponse.data[0];
-    const receiverFinalBalance = receiverFinalBalanceResponse.data[0];
 
-    log('💰 Final Balances:', {
-      sender: {
-        balance: senderFinalBalance.balance,
-        change: Number(senderFinalBalance.balance) - Number(senderBalance.balance)
-      },
-      receiver: {
-        balance: receiverFinalBalance.balance
-      }
-    });
+    const finalSourceWallet = await finalSourceResponse.json();
+    const finalDestWallet = await finalDestResponse.json();
 
-    // Return transaction summary
+    console.log('Final source USDT balance:', finalSourceWallet.data[0]?.balance || '0');
+    console.log('Final destination USDT balance:', finalDestWallet.data[0]?.balance || '0');
+
     return {
-      success: true,
-      data: {
-        transfer: {
-          reference: transferResult.reference,
-          status: transferResult.status,
-          amount: config.amount
-        },
-        balances: {
-          initial: {
-            sender: senderBalance
-          },
-          final: {
-            sender: senderFinalBalance,
-            receiver: receiverFinalBalance
-          }
-        }
+      transfer: transfer.data,
+      finalBalances: {
+        source: finalSourceWallet.data[0]?.balance || '0',
+        destination: finalDestWallet.data[0]?.balance || '0'
       }
     };
   } catch (error) {
-    log('❌ Error:', error);
+    console.error('Error in USDT transfer:', error);
     throw error;
   }
 }
 
-// Execute if running directly
-if (require.main === module) {
-  const config: TransferConfig = {
-    // Sender details (User 1 - has USDT)
-    senderId: '157fa815-214e-4ecd-8a25-448fe4815ff1',
-    senderEmail: 'test1735848851306@trustbank.tech',
-    senderQuidaxSn: 'QDX2DWWIOH4',
+// Example usage
+const fromUserId = process.argv[2];
+const toUserId = process.argv[3];
+const amount = process.argv[4];
 
-    // Receiver details (User 2 - will receive USDT)
-    receiverId: '6b642f27-db18-4282-8752-363f590d4fc0',
-    receiverEmail: 'receiver1735852152575@trustbank.tech',
-    receiverQuidaxSn: 'QDXZXBTAH6H',
+if (!fromUserId || !toUserId || !amount) {
+  console.error('Usage: ts-node transfer-usdt-to-receiver.ts <fromUserId> <toUserId> <amount>');
+  process.exit(1);
+}
 
-    // Transfer amount
-    amount: '0.5' // Transfer 0.5 USDT
-  };
-
-  transferUSDT(config)
-    .then(result => {
-      log('✨ Transfer completed successfully:', result);
-      log('💫 User notification:', {
-        title: 'USDT Transfer Completed',
-        message: `Successfully transferred ${result.data.transfer.amount} USDT to ${config.receiverEmail}`,
-        type: 'success',
-        details: {
-          reference: result.data.transfer.reference,
-          status: result.data.transfer.status,
-          debitedWallet: 'USDT',
-          creditedWallet: 'USDT'
-        }
-      });
-    })
-    .catch(error => {
-      log('❌ Error:', error);
-      process.exit(1);
-    });
-} 
+transferUSDT({ fromUserId, toUserId, amount })
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1)); 

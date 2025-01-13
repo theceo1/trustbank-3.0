@@ -16,7 +16,8 @@ import {
   Share2,
   Shield,
   HelpCircle,
-  MessageSquare
+  MessageSquare,
+  DollarSign
 } from "lucide-react";
 
 interface SidebarLink {
@@ -43,6 +44,12 @@ const sidebarLinks: SidebarLink[] = [
     href: "/admin/transactions",
     icon: <CreditCard className="h-5 w-5" />,
     requiredPermission: "transactions:view",
+  },
+  {
+    title: "Revenue",
+    href: "/admin/revenue",
+    icon: <DollarSign className="h-5 w-5" />,
+    requiredPermission: "reports:view",
   },
   {
     title: "Analytics",

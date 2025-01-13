@@ -50,56 +50,41 @@ export async function middleware(request: NextRequest) {
   );
 
   // Check if path is public
-  if (PUBLIC_PATHS.some(path => request.nextUrl.pathname.startsWith(path))) {
+  const isPublicPath = PUBLIC_PATHS.some(path => request.nextUrl.pathname.startsWith(path));
+  if (isPublicPath) {
     return response;
   }
 
   try {
     const supabase = createMiddlewareClient({ req: request, res: response });
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    const { data: { session } } = await supabase.auth.getSession();
 
-    // Handle session refresh errors
-    if (sessionError) {
-      console.error('Session error:', sessionError);
-      // Only redirect to login if it's a fatal session error
-      if (sessionError.message.includes('invalid token') || sessionError.message.includes('expired')) {
-        const redirectUrl = new URL('/auth/login', request.url);
-        redirectUrl.searchParams.set('redirect', request.url);
-        return NextResponse.redirect(redirectUrl);
-      }
-      // For other errors, allow the request to continue
-      return response;
-    }
-
-    // Check if trying to access admin routes
-    if (ADMIN_PATHS.some(path => request.nextUrl.pathname.startsWith(path))) {
-      if (!session) {
-        const redirectUrl = new URL('/auth/login', request.url);
-        redirectUrl.searchParams.set('redirect', request.url);
-        return NextResponse.redirect(redirectUrl);
-      }
-
-      // Check if user is admin
-      if (!session.user.app_metadata?.is_admin) {
-        return NextResponse.redirect(new URL('/dashboard', request.url));
-      }
-
-      return response;
-    }
-
-    // For non-admin protected routes
+    // If no session and not on a public path, redirect to login
     if (!session) {
       const redirectUrl = new URL('/auth/login', request.url);
       redirectUrl.searchParams.set('redirect', request.url);
       return NextResponse.redirect(redirectUrl);
     }
 
-    // Session exists and is valid
+    // Check if trying to access admin routes
+    const isAdminPath = ADMIN_PATHS.some(path => request.nextUrl.pathname.startsWith(path));
+    if (isAdminPath && !session.user.app_metadata?.is_admin) {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
+
+    // Update session if needed
+    const { data: { session: refreshedSession } } = await supabase.auth.getSession();
+    if (refreshedSession?.access_token !== session.access_token) {
+      // Session was refreshed, update the response
+      return response;
+    }
+
     return response;
   } catch (error) {
     console.error('Middleware error:', error);
-    // Only redirect on fatal errors
-    if (error instanceof Error && (error.message.includes('invalid token') || error.message.includes('expired'))) {
+    // Only redirect on auth-related errors
+    if (error instanceof Error && 
+        (error.message.includes('auth') || error.message.includes('token') || error.message.includes('session'))) {
       const redirectUrl = new URL('/auth/login', request.url);
       redirectUrl.searchParams.set('redirect', request.url);
       return NextResponse.redirect(redirectUrl);

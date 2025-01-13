@@ -55,7 +55,8 @@ export async function GET(request: Request) {
     }
 
     return NextResponse.json({
-      transactions,
+      status: 'success',
+      data: transactions,
       pagination: {
         total: count,
         offset,
@@ -65,7 +66,10 @@ export async function GET(request: Request) {
   } catch (error) {
     console.error('Error fetching transactions:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch transactions' },
+      { 
+        status: 'error',
+        error: 'Failed to fetch transactions' 
+      },
       { status: 500 }
     );
   }

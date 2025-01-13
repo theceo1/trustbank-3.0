@@ -1,18 +1,21 @@
 // app/profile/page.tsx
 "use client";
 
+import { motion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/app/context/AuthContext";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Copy, CheckCircle, AlertCircle, Shield, User, Mail, Phone, Link as LinkIcon, Calendar, Globe, Clock, Key } from "lucide-react";
+import { Copy, CheckCircle, AlertCircle, Shield, User, Mail, Phone, Link as LinkIcon, Calendar, Globe, Clock, Key, Edit } from "lucide-react";
 import Link from "next/link";
 import { useToast } from "@/hooks/use-toast";
 import { formatDistance } from 'date-fns';
+import { ReferralProgram } from "@/components/profile/ReferralProgram";
+import TransactionHistory from "@/components/payment/TransactionHistory";
 
 interface UserProfile {
   id: string;
@@ -57,6 +60,14 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [referralCopied, setReferralCopied] = useState(false);
+  const [referralStats, setReferralStats] = useState({
+    totalReferrals: 0,
+    activeReferrals: 0,
+    totalEarnings: 0,
+    pendingEarnings: 0
+  });
+  const [editMode, setEditMode] = useState(false);
+  const [editedProfile, setEditedProfile] = useState<Partial<UserProfile>>({});
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -68,8 +79,25 @@ export default function ProfilePage() {
         if (!response.ok) {
           throw new Error('Failed to fetch profile');
         }
-        const data = await response.json();
-        setProfile(data);
+        const { data } = await response.json();
+        
+        // Get the last sign in time from the user object
+        const lastSignIn = user.last_sign_in_at || new Date().toISOString();
+        
+        setProfile({
+          ...data,
+          last_sign_in_at: lastSignIn
+        });
+        setEditedProfile(data);
+
+        // Fetch referral stats if we have a referral code
+        if (data.referral_code) {
+          const statsResponse = await fetch(`/api/referrals/stats?code=${data.referral_code}`);
+          if (statsResponse.ok) {
+            const statsData = await statsResponse.json();
+            setReferralStats(statsData);
+          }
+        }
       } catch (err) {
         console.error('Error fetching profile:', err);
         setError(err instanceof Error ? err.message : 'Failed to load profile');
@@ -80,6 +108,42 @@ export default function ProfilePage() {
 
     fetchProfile();
   }, [user]);
+
+  const handleEditProfile = async () => {
+    try {
+      const response = await fetch('/api/profile', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          full_name: editedProfile.full_name,
+          phone: editedProfile.phone,
+          country: editedProfile.country,
+        }),
+      });
+
+      const { data, error } = await response.json();
+
+      if (!response.ok || error) {
+        throw new Error(error || 'Failed to update profile');
+      }
+
+      setProfile(data);
+      setEditMode(false);
+      toast({
+        title: 'Success',
+        description: 'Profile updated successfully',
+      });
+    } catch (err) {
+      console.error('Error updating profile:', err);
+      toast({
+        title: 'Error',
+        description: err instanceof Error ? err.message : 'Failed to update profile',
+        variant: 'destructive',
+      });
+    }
+  };
 
   const copyReferralCode = () => {
     if (profile?.referral_code) {
@@ -93,248 +157,279 @@ export default function ProfilePage() {
     }
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Not available';
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  };
-
-  const formatTimeAgo = (dateString?: string) => {
-    if (!dateString) return 'Never';
-    return formatDistance(new Date(dateString), new Date(), { addSuffix: true });
-  };
-
   if (loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="container mx-auto p-6">
+        <div className="animate-pulse space-y-4">
+          <div className="h-8 bg-gray-200 rounded w-1/4"></div>
+          <div className="h-32 bg-gray-200 rounded"></div>
+          <div className="h-32 bg-gray-200 rounded"></div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="container mx-auto p-4">
+      <div className="container mx-auto p-6">
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-          </div>
-    );
-  }
-
-  if (!profile) {
-    return (
-      <div className="container mx-auto p-4">
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Please sign in to view your profile.</AlertDescription>
         </Alert>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4 space-y-6 pt-20">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">My Profile</h1>
-        {!profile.is_verified && (
-          <Button asChild variant="outline">
-            <Link href="/profile/verification">
-              <Shield className="mr-2 h-4 w-4" />
-              Verify Identity
-            </Link>
-          </Button>
-        )}
-      </div>
-
-      <Tabs defaultValue="profile" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="profile" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Profile Details</TabsTrigger>
+    <div className="container mx-auto p-6 space-y-6">
+      <Tabs defaultValue="overview" className="space-y-4">
+        <TabsList className="bg-gray-100">
+          <TabsTrigger value="overview" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Overview</TabsTrigger>
           <TabsTrigger value="security" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Security</TabsTrigger>
-          <TabsTrigger value="limits" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Limits & Verification</TabsTrigger>
           <TabsTrigger value="referrals" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">Referrals</TabsTrigger>
+          <TabsTrigger value="history" className="data-[state=active]:bg-green-600 data-[state=active]:text-white">History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="profile" className="space-y-4">
+        <TabsContent value="overview">
           <Card>
-            <CardHeader>
-              <CardTitle>Personal Information</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-2xl font-bold">Profile Information</CardTitle>
+              {!editMode ? (
+                <Button
+                  variant="ghost"
+                  onClick={() => setEditMode(true)}
+                  className="text-green-600 hover:text-green-700"
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit
+                </Button>
+              ) : (
+                <div className="flex space-x-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setEditMode(false);
+                      setEditedProfile(profile || {});
+                    }}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={handleEditProfile}
+                    className="text-green-600 hover:text-green-700"
+                  >
+                    Save Changes
+                  </Button>
+                </div>
+              )}
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-6 md:grid-cols-2">
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Full Name</Label>
-                  <div className="flex items-center space-x-2">
-                    <User className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{profile.full_name}</span>
-                  </div>
+                  {editMode ? (
+                    <Input
+                      value={editedProfile.full_name || ''}
+                      onChange={(e) => setEditedProfile({ ...editedProfile, full_name: e.target.value })}
+                    />
+                  ) : (
+                    <div className="text-lg font-medium">{profile?.full_name}</div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <div className="flex items-center space-x-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{profile.email}</span>
-                  </div>
+                  <div className="text-lg font-medium">{profile?.email}</div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Phone Number</Label>
-                  <div className="flex items-center space-x-2">
-                    <Phone className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{profile.phone || 'Not provided'}</span>
-                  </div>
+                  <Label>Phone</Label>
+                  {editMode ? (
+                    <Input
+                      value={editedProfile.phone || ''}
+                      onChange={(e) => setEditedProfile({ ...editedProfile, phone: e.target.value })}
+                    />
+                  ) : (
+                    <div className="text-lg font-medium">{profile?.phone || 'Not set'}</div>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Country</Label>
+                  {editMode ? (
+                    <Input
+                      value={editedProfile.country || ''}
+                      onChange={(e) => setEditedProfile({ ...editedProfile, country: e.target.value })}
+                    />
+                  ) : (
+                    <div className="text-lg font-medium">{profile?.country || 'Not set'}</div>
+                  )}
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-medium">Account Status</h3>
+                    <p className="text-sm text-gray-500">
+                      Member since {new Date(profile?.created_at || '').toLocaleDateString()}
+                    </p>
+                  </div>
                   <div className="flex items-center space-x-2">
-                    <Globe className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{profile.country || 'Not specified'}</span>
+                    <Shield className={profile?.is_verified ? "text-green-500" : "text-yellow-500"} />
+                    <span className={`font-medium ${profile?.is_verified ? "text-green-500" : "text-yellow-500"}`}>
+                      {profile?.is_verified ? 'Verified' : 'Unverified'}
+                    </span>
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Member Since</Label>
-                  <div className="flex items-center space-x-2">
-                    <Calendar className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{formatDate(profile.auth_created_at || profile.created_at)}</span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Last Sign In</Label>
-                  <div className="flex items-center space-x-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-medium">{formatTimeAgo(profile.last_sign_in_at)}</span>
-                  </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <Clock className="h-8 w-8 mx-auto text-green-600 mb-2" />
+                        <div className="font-medium">Last Sign In</div>
+                        <div className="text-sm text-gray-500">
+                          {profile?.last_sign_in_at
+                            ? formatDistance(new Date(profile.last_sign_in_at), new Date(), { addSuffix: true })
+                            : 'Never'}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <Shield className="h-8 w-8 mx-auto text-green-600 mb-2" />
+                        <div className="font-medium">KYC Level</div>
+                        <div className="text-sm text-gray-500">
+                          Level {profile?.kyc_level || 0}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="text-center">
+                        <Globe className="h-8 w-8 mx-auto text-green-600 mb-2" />
+                        <div className="font-medium">Trading Limits</div>
+                        <div className="text-sm text-gray-500">
+                          Daily: ₦{profile?.daily_limit?.toLocaleString() || '0'}
+                          <br />
+                          Monthly: ₦{profile?.monthly_limit?.toLocaleString() || '0'}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="security" className="space-y-4">
+        <TabsContent value="security">
           <Card>
             <CardHeader>
               <CardTitle>Security Settings</CardTitle>
+              <CardDescription>Manage your account security and authentication settings</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <h3 className="font-medium">Two-Factor Authentication</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Add an extra layer of security to your account
-                    </p>
-                  </div>
-                  <Button variant="outline">
-                    <Key className="h-4 w-4 mr-2" />
-                    Enable 2FA
-                  </Button>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <h3 className="font-medium">Change Password</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Update your password regularly to keep your account secure
-                    </p>
-                  </div>
-                  <Button variant="outline">Change Password</Button>
-                </div>
-              </div>
+            <CardContent className="space-y-4">
+              <Link href="/profile/security" className="block">
+                <Button variant="outline" className="w-full justify-start">
+                  <Key className="mr-2 h-4 w-4" />
+                  Security Settings
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="limits" className="space-y-4">
+        <TabsContent value="referrals">
           <Card>
-            <CardHeader>
-              <CardTitle>Verification Status & Limits</CardTitle>
+            <CardHeader className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/10 dark:to-green-800/10 rounded-t-lg">
+              <CardTitle className="text-2xl">
+                <span className="text-green-600">Earn</span> While You Share
+              </CardTitle>
+              <CardDescription className="text-base">
+                Share your referral code with friends and earn up to 20% commission on their trading fees. The more they trade, the more you earn!
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Shield className={`h-5 w-5 ${profile.is_verified ? 'text-green-500' : 'text-yellow-500'}`} />
-                <span className="font-medium">
-                  KYC Level {profile.kyc_level} - {profile.kyc_status.charAt(0).toUpperCase() + profile.kyc_status.slice(1)}
-                </span>
-              </div>
+              {profile?.referral_code ? (
+                <>
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <div className="font-mono text-lg font-semibold">{profile.referral_code}</div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={copyReferralCode}
+                      className={referralCopied ? "text-green-600" : "text-green-600"}
+                    >
+                      {referralCopied ? (
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                      ) : (
+                        <Copy className="h-4 w-4 mr-2" />
+                      )}
+                      {referralCopied ? "Copied!" : "Copy Code"}
+                    </Button>
+                  </div>
 
-              {!profile.is_verified && (
-                <Alert className="mb-4">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">{referralStats.totalReferrals}</div>
+                          <div className="text-sm text-gray-500">Total Referrals</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">{referralStats.activeReferrals}</div>
+                          <div className="text-sm text-gray-500">Active Referrals</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">₦{referralStats.totalEarnings.toLocaleString()}</div>
+                          <div className="text-sm text-gray-500">Total Earnings</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card>
+                      <CardContent className="pt-6">
+                        <div className="text-center">
+                          <div className="text-2xl font-bold">₦{referralStats.pendingEarnings.toLocaleString()}</div>
+                          <div className="text-sm text-gray-500">Pending Earnings</div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </>
+              ) : (
+                <Alert>
                   <AlertCircle className="h-4 w-4" />
                   <AlertDescription>
-                    Complete your KYC verification to increase your trading limits.
-                    <Button asChild variant="link" className="pl-2">
-                      <Link href="/profile/verification">Verify Now</Link>
-                    </Button>
+                    No referral code found. Please contact support to get your referral code.
                   </AlertDescription>
                 </Alert>
               )}
-
-              <div className="grid gap-6">
-                {[1, 2, 3].map((tier) => (
-                  <div key={tier} className="space-y-3">
-                    <h3 className="font-medium">Tier {tier} Limits</h3>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>Daily Limit</Label>
-                        <div className="text-lg font-medium">
-                          ₦{profile.verification_limits?.[`tier${tier}` as keyof typeof profile.verification_limits]?.daily.toLocaleString() || '0'}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Monthly Limit</Label>
-                        <div className="text-lg font-medium">
-                          ₦{profile.verification_limits?.[`tier${tier}` as keyof typeof profile.verification_limits]?.monthly.toLocaleString() || '0'}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <CheckCircle className={`h-4 w-4 ${profile[`tier${tier}_verified` as keyof typeof profile] ? 'text-green-500' : 'text-gray-300'}`} />
-                      <span className="text-sm text-muted-foreground">
-                        {profile[`tier${tier}_verified` as keyof typeof profile] ? 'Verified' : 'Not Verified'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="referrals" className="space-y-4">
+        <TabsContent value="history">
           <Card>
             <CardHeader>
-              <CardTitle>Referral Program</CardTitle>
+              <CardTitle>Transaction History</CardTitle>
+              <CardDescription>View your recent transactions and trading activity</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div>
-                  <h3 className="font-medium mb-2">Your Referral Code</h3>
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      readOnly
-                      value={profile.referral_code || 'Not available'}
-                      className="font-mono"
-                    />
-                    <Button
-                      size="icon"
-                      variant="outline"
-                      onClick={copyReferralCode}
-                      disabled={!profile.referral_code}
-                    >
-                      {referralCopied ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <Copy className="h-4 w-4" />
-                      )}
-                    </Button>
-                  </div>
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Share your referral code with friends and earn rewards when they sign up and trade.
-                  </p>
-                </div>
-              </div>
+            <CardContent>
+              <TransactionHistory limit={10} />
             </CardContent>
           </Card>
         </TabsContent>

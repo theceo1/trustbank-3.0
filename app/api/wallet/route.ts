@@ -18,16 +18,32 @@ export async function GET() {
     }
 
     // First get the user's profile to get their Quidax ID
-    const { data: userProfile } = await supabase
-      .from('profiles')
-      .select('quidax_id')
-      .eq('id', session.user.id)
+    const { data: userProfile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('quidax_id, is_verified')
+      .eq('user_id', session.user.id)
       .single();
+
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      return NextResponse.json({ 
+        error: 'Failed to fetch user profile' 
+      }, { status: 500 });
+    }
 
     if (!userProfile?.quidax_id) {
       return NextResponse.json({ 
-        error: 'User profile not properly setup' 
+        error: 'User profile not properly setup',
+        setup_required: true
       }, { status: 400 });
+    }
+
+    if (!userProfile.is_verified) {
+      return NextResponse.json({
+        error: 'KYC verification required',
+        message: 'Please complete your identity verification to access your wallet.',
+        redirectTo: '/profile/verification'
+      }, { status: 403 });
     }
 
     const walletService = getWalletService();

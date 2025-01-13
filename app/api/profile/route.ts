@@ -2,59 +2,96 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { ProfileService } from '@/lib/services/profile';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function POST(request: Request) {
   try {
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-
+    
     // Get current user
     const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user profile with all details
-    const { data: profile, error: profileError } = await supabase
+    const { name, email } = await request.json();
+
+    // Create profile using ProfileService
+    const profile = await ProfileService.createProfile(user.id, email);
+
+    // Update additional profile data
+    const { data: updatedProfile, error: updateError } = await supabase
       .from('user_profiles')
-      .select(`
-        id,
-        user_id,
-        full_name,
-        email,
-        phone,
-        country,
-        referral_code,
-        kyc_level,
-        kyc_status,
-        is_verified,
-        created_at,
-        daily_limit,
-        monthly_limit,
-        quidax_id,
-        tier1_verified,
-        tier2_verified,
-        tier3_verified,
-        verification_limits
-      `)
+      .update({
+        full_name: name,
+        referral_stats: {
+          totalReferrals: 0,
+          activeReferrals: 0,
+          totalEarnings: 0,
+          pendingEarnings: 0
+        }
+      })
       .eq('user_id', user.id)
+      .select()
       .single();
 
-    if (profileError) {
-      console.error('Error fetching profile:', profileError);
-      return NextResponse.json(
-        { error: 'Failed to fetch profile data' },
-        { status: 500 }
-      );
+    if (updateError) {
+      throw updateError;
     }
 
+    return NextResponse.json(updatedProfile);
+  } catch (error) {
+    console.error('Error creating profile:', error);
+    return NextResponse.json(
+      { error: 'Failed to create profile' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function GET(request: Request) {
+  try {
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const profile = await ProfileService.getProfile(user.id);
     return NextResponse.json(profile);
   } catch (error) {
-    console.error('Error in profile route:', error);
+    console.error('Error fetching profile:', error);
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: 'Failed to fetch profile' },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(request: Request) {
+  try {
+    const cookieStore = cookies();
+    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    
+    // Get current user
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const updates = await request.json();
+    const profile = await ProfileService.updateProfile(user.id, updates);
+    return NextResponse.json(profile);
+  } catch (error) {
+    console.error('Error updating profile:', error);
+    return NextResponse.json(
+      { error: 'Failed to update profile' },
       { status: 500 }
     );
   }

@@ -1,44 +1,30 @@
-import { QuidaxService } from '../app/lib/services/quidax';
-import debug from 'debug';
-import dotenv from 'dotenv';
-import { resolve } from 'path';
+import { QuidaxService } from '@/app/lib/services/quidax';
 
-// Load environment variables from the root directory
-const envPath = resolve(process.cwd(), '.env.local');
-console.log('Loading environment from:', envPath);
-dotenv.config({ path: envPath });
-
-const log = debug('wallet:admin');
-
-async function main() {
+async function getAdminWallet(currency: string) {
   try {
-    const userId = process.env.QUIDAX_USER_ID;
-    if (!userId) {
-      throw new Error('QUIDAX_USER_ID is required');
+    const adminId = process.env.QUIDAX_ADMIN_ID;
+    if (!adminId) {
+      throw new Error('QUIDAX_ADMIN_ID environment variable is required');
     }
 
-    log('🔍 Getting admin wallet for user:', userId);
+    const quidaxService = QuidaxService.getInstance();
+    const response = await quidaxService.getWalletBalance(adminId, currency);
 
-    const walletData = await QuidaxService.getWalletBalance(userId, 'usdt');
-    if (!walletData?.data?.length) {
-      throw new Error('No wallet data found');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch ${currency} wallet balance`);
     }
 
-    const wallet = walletData.data[0];
-    if (!wallet) {
-      throw new Error('No USDT wallet found');
-    }
-
-    log('💰 Admin Wallet:', {
-      balance: wallet.balance || '0',
-      pending: wallet.pending_balance || '0',
-      total: wallet.total_balance || '0'
-    });
-
+    const data = await response.json();
+    console.log(`${currency.toUpperCase()} Wallet Balance:`, data);
+    return data;
   } catch (error) {
-    log('❌ Error:', error);
-    process.exit(1);
+    console.error('Error fetching admin wallet:', error);
+    throw error;
   }
 }
 
-main(); 
+// Example usage
+const currency = process.argv[2]?.toLowerCase() || 'usdt';
+getAdminWallet(currency)
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1)); 

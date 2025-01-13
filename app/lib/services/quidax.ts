@@ -1,7 +1,6 @@
-import { QuidaxUser, QuidaxWebhookEvent } from '@/app/types/quidax';
-import { QuidaxMarketService } from './quidax-market';
-import { QuidaxSwapService } from './quidax-swap';
+import { QUIDAX_CONFIG } from '../config/quidax';
 import { createHmac } from 'crypto';
+import { QuidaxUser, QuidaxWebhookEvent } from '@/app/types/quidax';
 
 export class QuidaxError extends Error {
   constructor(
@@ -14,142 +13,136 @@ export class QuidaxError extends Error {
   }
 }
 
-export class QuidaxService {
-  private static baseUrl = process.env.QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
-  private static apiKey = process.env.QUIDAX_SECRET_KEY;
-  private static webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
+interface WalletAddress {
+  id: string;
+  address: string;
+  network: string;
+  currency: string;
+}
 
-  // User-related methods
-  static async createUser(params: {
-    email: string;
-    first_name: string;
-    last_name: string;
-    phone?: string;
-    country?: string;
-  }): Promise<QuidaxUser> {
+interface QuidaxResponse<T> {
+  status: string;
+  message: string;
+  data: T;
+}
+
+export class QuidaxService {
+  private static readonly baseUrl = QUIDAX_CONFIG.apiUrl;
+  private static readonly apiKey = QUIDAX_CONFIG.apiKey;
+  private static readonly webhookSecret = QUIDAX_CONFIG.webhookSecret;
+
+  private static async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    if (!QuidaxService.apiKey) {
+      throw new Error('Quidax API key not configured');
+    }
+
+    const response = await fetch(`${QuidaxService.baseUrl}${endpoint}`, {
+      ...options,
+      headers: {
+        'Authorization': `Bearer ${QuidaxService.apiKey}`,
+        'Accept': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'API request failed');
+    }
+
+    const data = await response.json();
+    return data;
+  }
+
+  static async fetchWalletAddress(userId: string, currency: string): Promise<{ data: { address: string; tag?: string } }> {
     try {
-      const response = await fetch(
-        `${this.baseUrl}/users`,
+      const response = await QuidaxService.makeRequest<{ data: { address: string; tag?: string } }>(
+        `/users/${userId}/wallets/${currency.toLowerCase()}/address`
+      );
+      return response;
+    } catch (error) {
+      console.error('Error fetching wallet address:', error);
+      throw error;
+    }
+  }
+
+  static async fetchWalletAddresses(userId: string): Promise<{ data: Array<{ currency: string; address: string; tag?: string }> }> {
+    try {
+      const response = await QuidaxService.makeRequest<{ data: Array<{ currency: string; address: string; tag?: string }> }>(
+        `/users/${userId}/wallets`
+      );
+      return response;
+    } catch (error) {
+      console.error('Error fetching wallet addresses:', error);
+      throw error;
+    }
+  }
+
+  static async createWalletAddress(userId: string, currency: string): Promise<{ data: { address: string; tag?: string } }> {
+    try {
+      const response = await QuidaxService.makeRequest<{ data: { address: string; tag?: string } }>(
+        `/users/${userId}/wallets/${currency.toLowerCase()}/address`,
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
             'Content-Type': 'application/json',
-            'Accept': 'application/json'
           },
-          body: JSON.stringify(params)
         }
       );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to create user');
-      }
-
-      const data = await response.json();
-      return data.data;
+      return response;
     } catch (error) {
-      console.error('Create user error:', error);
+      console.error('Error creating wallet address:', error);
       throw error;
     }
   }
 
-  static async getUser(userId: string): Promise<QuidaxUser> {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}/users/${userId}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Accept': 'application/json'
-          }
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch user details');
+  static async fetchOrderBook(market: string): Promise<Response> {
+    const url = `${QuidaxService.baseUrl}/markets/${market}/order_book`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${QuidaxService.apiKey}`
       }
-
-      const data = await response.json();
-      return data.data;
-    } catch (error) {
-      console.error('Get user error:', error);
-      throw error;
-    }
+    });
+    return response;
   }
 
-  static verifyWebhookSignature(webhook: QuidaxWebhookEvent, signature?: string): boolean {
-    if (!this.webhookSecret || !signature) {
-      return false;
-    }
-
-    const hmac = createHmac('sha256', this.webhookSecret);
-    const calculatedSignature = hmac
-      .update(JSON.stringify(webhook))
-      .digest('hex');
-
-    return signature === calculatedSignature;
+  static async createSwapQuotation(params: any): Promise<Response> {
+    const response = await fetch(`${QuidaxService.baseUrl}/instant_orders/quote`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${QuidaxService.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
+    });
+    return response;
   }
 
-  // Market-related methods
-  static getAllMarketTickers = QuidaxMarketService.getAllMarketTickers;
-  static getMarketPrice = QuidaxMarketService.getMarketPrice;
-  static getQuote = QuidaxMarketService.getQuote;
+  static async confirmSwap(params: any): Promise<Response> {
+    const response = await fetch(`${QuidaxService.baseUrl}/instant_orders`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${QuidaxService.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
+    });
+    return response;
+  }
 
-  // Swap-related methods
-  static createSwapQuotation = QuidaxSwapService.createSwapQuotation;
-  static confirmSwap = QuidaxSwapService.confirmSwap;
-  static getSwapTransaction = QuidaxSwapService.getSwapTransaction;
-  static getTemporaryQuotation = QuidaxSwapService.getTemporaryQuotation;
-
-  // Wallet-related methods
-  static async getWalletBalance(userId: string, currency: string) {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}/users/${userId}/wallets/${currency}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Accept': 'application/json'
-          }
+  static async getWalletBalance(userId: string, currency: string): Promise<Response> {
+    const response = await fetch(
+      `${QuidaxService.baseUrl}/users/${userId}/wallets/${currency}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${QuidaxService.apiKey}`,
+          'Accept': 'application/json'
         }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new QuidaxError(
-          error.message || 'Failed to fetch wallet balance',
-          error.code || 'WALLET_ERROR',
-          response.status
-        );
       }
-
-      const data = await response.json();
-      
-      // Validate response structure
-      if (!data || typeof data !== 'object') {
-        throw new QuidaxError(
-          'Invalid response format',
-          'INVALID_RESPONSE',
-          500
-        );
-      }
-
-      // Ensure data property exists and is an array
-      if (!data.data || !Array.isArray(data.data)) {
-        return {
-          status: 'success',
-          message: 'No wallet data found',
-          data: []
-        };
-      }
-
-      // Return the validated response
-      return data;
-    } catch (error) {
-      console.error('Get wallet balance error:', error);
-      throw error;
-    }
+    );
+    return response;
   }
 
   static async transfer(
@@ -157,49 +150,41 @@ export class QuidaxService {
     toUserId: string,
     amount: string,
     currency: string
-  ) {
-    try {
-      const response = await fetch(
-        `${this.baseUrl}/transfers`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          body: JSON.stringify({
-            from_user_id: fromUserId,
-            to_user_id: toUserId,
-            amount,
-            currency
-          })
-        }
-      );
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new QuidaxError(
-          error.message || 'Failed to transfer funds',
-          error.code || 'TRANSFER_ERROR',
-          response.status
-        );
+  ): Promise<Response> {
+    const response = await fetch(
+      `${QuidaxService.baseUrl}/transfers`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${QuidaxService.apiKey}`,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify({
+          from_user_id: fromUserId,
+          to_user_id: toUserId,
+          amount,
+          currency
+        })
       }
-
-      const data = await response.json();
-      return {
-        success: true,
-        reference: data.data.id,
-        status: data.data.status,
-        ...data.data
-      };
-    } catch (error) {
-      console.error('Transfer error:', error);
-      throw error;
-    }
+    );
+    return response;
   }
 
-  // Status mapping
+  static verifyWebhookSignature(webhook: QuidaxWebhookEvent, signature?: string): boolean {
+    if (!QuidaxService.webhookSecret || !signature) {
+      return false;
+    }
+
+    const hmac = createHmac('sha256', QuidaxService.webhookSecret);
+    const calculatedSignature = hmac
+      .update(JSON.stringify(webhook))
+      .digest('hex');
+
+    return signature === calculatedSignature;
+  }
+
+  // Helper method to map status
   static mapQuidaxStatus(status: string): string {
     const statusMap: Record<string, string> = {
       'done': 'completed',

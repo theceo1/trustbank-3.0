@@ -2,11 +2,11 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { CopyIcon, CheckIcon, Users, Gift, Share2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Copy, CheckCircle, AlertCircle } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface ReferralProgramProps {
-  referralCode: string;
+  referralCode: string | null;
   referralStats: {
     totalReferrals: number;
     activeReferrals: number;
@@ -14,120 +14,155 @@ interface ReferralProgramProps {
     pendingEarnings: number;
   };
   className?: string;
+  onGenerateCode?: () => void;
 }
 
-export function ReferralProgram({ referralCode, referralStats, className = '' }: ReferralProgramProps) {
+export function ReferralProgram({ referralCode, referralStats, className, onGenerateCode }: ReferralProgramProps) {
+  const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
-  const handleCopy = async () => {
+  const copyToClipboard = async () => {
+    if (!referralCode) return;
     try {
-      const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
-      await navigator.clipboard.writeText(referralLink);
+      await navigator.clipboard.writeText(referralCode);
       setCopied(true);
-      toast.success('Referral link copied to clipboard');
+      toast({
+        title: 'Copied!',
+        description: 'Referral code copied to clipboard',
+      });
       setTimeout(() => setCopied(false), 2000);
-    } catch (error) {
-      console.error('Failed to copy:', error);
-      toast.error('Failed to copy referral link');
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to copy referral code',
+        variant: 'destructive',
+      });
     }
   };
 
-  const handleShare = async () => {
+  const handleGenerateCode = async () => {
+    if (!onGenerateCode) return;
+    setIsGenerating(true);
     try {
-      const referralLink = `${window.location.origin}/register?ref=${referralCode}`;
-      await navigator.share({
-        title: 'Join trustBank',
-        text: `Use my referral code: ${referralCode}`,
-        url: referralLink
+      await onGenerateCode();
+      toast({
+        title: 'Success!',
+        description: 'Your referral code has been generated.',
       });
-      toast.success('Referral link shared successfully');
-    } catch (error) {
-      // Fall back to copying if share is not supported
-      handleCopy();
+    } catch (err) {
+      toast({
+        title: 'Error',
+        description: 'Failed to generate referral code',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsGenerating(false);
     }
   };
+
+  if (!referralCode) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="text-center">
+            <AlertCircle className="h-8 w-8 text-yellow-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">No Referral Code</h3>
+            <p className="text-gray-500 mb-4">
+              Generate your referral code to start earning rewards when friends join and trade.
+            </p>
+            <Button
+              onClick={handleGenerateCode}
+              disabled={isGenerating}
+            >
+              {isGenerating ? 'Generating...' : 'Generate Referral Code'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
-    <Card className={className}>
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">Referral Program</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Your Referral Code
-          </h3>
-          <div className="flex space-x-2">
-            <Input
-              value={referralCode}
-              readOnly
-              className="font-mono bg-white dark:bg-gray-700"
-            />
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleCopy}
-              className="flex-shrink-0"
-            >
-              {copied ? (
-                <CheckIcon className="h-4 w-4 text-green-500" />
-              ) : (
-                <CopyIcon className="h-4 w-4" />
-              )}
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={handleShare}
-              className="flex-shrink-0"
-            >
-              <Share2 className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Users className="h-8 w-8 text-blue-500" />
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Referrals</p>
-                <p className="text-2xl font-bold">{referralStats.totalReferrals}</p>
-              </div>
+    <div className={className}>
+      <Card>
+        <CardHeader>
+          <CardTitle>Referral Program</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <h3 className="text-lg font-medium mb-4">Your Referral Code</h3>
+            <div className="flex items-center space-x-2">
+              <Input
+                readOnly
+                value={referralCode}
+                className="font-mono bg-gray-50 dark:bg-gray-800"
+              />
+              <Button
+                size="icon"
+                variant="outline"
+                onClick={copyToClipboard}
+                className="flex-shrink-0"
+              >
+                {copied ? (
+                  <CheckCircle className="h-4 w-4 text-green-500" />
+                ) : (
+                  <Copy className="h-4 w-4" />
+                )}
+              </Button>
             </div>
-            <p className="mt-2 text-sm text-gray-500">
-              {referralStats.activeReferrals} active users
+            <p className="text-sm text-gray-500 mt-2">
+              Share your referral code with friends and earn rewards when they sign up and trade.
             </p>
           </div>
 
-          <div className="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
-            <div className="flex items-center space-x-3">
-              <Gift className="h-8 w-8 text-green-500" />
-              <div>
-                <p className="text-sm text-gray-500 dark:text-gray-400">Total Earnings</p>
-                <p className="text-2xl font-bold">₦{referralStats.totalEarnings.toLocaleString()}</p>
-              </div>
-            </div>
-            <p className="mt-2 text-sm text-gray-500">
-              ₦{referralStats.pendingEarnings.toLocaleString()} pending
-            </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {referralStats.totalReferrals}
+                  </div>
+                  <p className="text-sm text-gray-500">Total Referrals</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    {referralStats.activeReferrals}
+                  </div>
+                  <p className="text-sm text-gray-500">Active Referrals</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-green-600">
+                    ₦{referralStats.totalEarnings.toLocaleString()}
+                  </div>
+                  <p className="text-sm text-gray-500">Total Earnings</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-yellow-600">
+                    ₦{referralStats.pendingEarnings.toLocaleString()}
+                  </div>
+                  <p className="text-sm text-gray-500">Pending Earnings</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
-
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg">
-          <h3 className="font-medium mb-2">How it works</h3>
-          <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
-            <li>• Share your referral code with friends</li>
-            <li>• Earn 20% of their trading fees for 6 months</li>
-            <li>• Your friends get 10% off their trading fees</li>
-            <li>• No limit on number of referrals</li>
-          </ul>
-        </div>
-
-        <Button className="w-full" variant="default">
-          View Referral History
-        </Button>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 } 

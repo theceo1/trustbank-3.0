@@ -1,37 +1,30 @@
-import debug from 'debug';
-import { QuidaxService } from '../app/lib/services/quidax';
+import { QuidaxService } from '@/app/lib/services/quidax';
 
-const log = debug('balance:usdt');
-
-async function main() {
+async function checkUSDTBalance(userId: string) {
   try {
-    const userId = process.env.QUIDAX_USER_ID;
-    if (!userId) {
-      throw new Error('QUIDAX_USER_ID is required');
+    const quidaxService = QuidaxService.getInstance();
+    const response = await quidaxService.getWalletBalance(userId, 'usdt');
+
+    if (!response.ok) {
+      throw new Error('Failed to fetch USDT balance');
     }
 
-    log('🔍 Checking USDT balance for user:', userId);
-
-    const walletData = await QuidaxService.getWalletBalance(userId, 'usdt');
-    if (!walletData?.data?.length) {
-      throw new Error('No wallet data found');
-    }
-
-    const wallet = walletData.data[0];
-    if (!wallet) {
-      throw new Error('No USDT wallet found');
-    }
-
-    log('💰 USDT Balance:', {
-      balance: wallet.balance || '0',
-      pending: wallet.pending_balance || '0',
-      total: wallet.total_balance || '0'
-    });
-
+    const data = await response.json();
+    console.log('USDT Balance:', data);
+    return data;
   } catch (error) {
-    log('❌ Error:', error);
-    process.exit(1);
+    console.error('Error checking USDT balance:', error);
+    throw error;
   }
 }
 
-main(); 
+// Example usage
+const userId = process.argv[2];
+if (!userId) {
+  console.error('Please provide a user ID');
+  process.exit(1);
+}
+
+checkUSDTBalance(userId)
+  .then(() => process.exit(0))
+  .catch(() => process.exit(1)); 

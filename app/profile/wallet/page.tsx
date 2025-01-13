@@ -3,11 +3,17 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowUpDown, History, ArrowDown, ArrowUp, Loader2, AlertCircle, LinkIcon } from "lucide-react";
+import { History, Loader2, AlertCircle, LinkIcon, TrendingUp, Wallet, ArrowUpRight } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Link from 'next/link';
+import WalletCard from "@/components/wallet/WalletCard";
+import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
+
+// Core currencies we want to display
+const CORE_CURRENCIES = ['ngn', 'btc', 'eth', 'usdt', 'usdc', 'bnb'];
 
 interface Transaction {
   id: string;
@@ -19,27 +25,13 @@ interface Transaction {
 }
 
 interface WalletData {
-  id: string;
-  name: string;
   currency: string;
   balance: string;
-  locked: string;
-  staked: string;
-  converted_balance: string;
-  reference_currency: string;
-  is_crypto: boolean;
-  blockchain_enabled: boolean;
-  default_network: string | null;
-  networks: {
-    id: string;
-    name: string;
-    deposits_enabled: boolean;
-    withdraws_enabled: boolean;
-  }[];
 }
 
 export default function WalletPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +51,14 @@ export default function WalletPage() {
         setError(null);
         setErrorType(null);
         
-        const response = await fetch('/api/wallet/balances');
+        const response = await fetch('/api/wallet', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+        
         if (!response.ok) {
           const data = await response.json();
           
@@ -82,14 +81,26 @@ export default function WalletPage() {
           throw new Error('Unable to load wallet information. Please try again later.');
         }
         
-        // Filter out wallets with zero balance for cleaner UI
-        const nonZeroWallets = data.data.filter((wallet: WalletData) => 
-          parseFloat(wallet.balance) > 0 || parseFloat(wallet.locked) > 0
-        );
-        setWallets(nonZeroWallets);
+        // Filter and sort wallets to show core currencies first
+        const filteredWallets = data.data
+          .filter((wallet: WalletData) => CORE_CURRENCIES.includes(wallet.currency.toLowerCase()))
+          .sort((a: WalletData, b: WalletData) => {
+            const indexA = CORE_CURRENCIES.indexOf(a.currency.toLowerCase());
+            const indexB = CORE_CURRENCIES.indexOf(b.currency.toLowerCase());
+            return indexA - indexB;
+          });
+
+        setWallets(filteredWallets);
 
         // Fetch transactions
-        const txResponse = await fetch('/api/transactions');
+        const txResponse = await fetch('/api/transactions', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include'
+        });
+        
         if (txResponse.ok) {
           const txData = await txResponse.json();
           if (txData.status === 'success' && Array.isArray(txData.data)) {
@@ -97,7 +108,6 @@ export default function WalletPage() {
           }
         }
       } catch (err) {
-        console.error('Error fetching wallet data:', err);
         setError(err instanceof Error ? err.message : 'Unable to fetch wallet information. Please try again later.');
       } finally {
         setLoading(false);
@@ -105,10 +115,7 @@ export default function WalletPage() {
     };
 
     fetchWalletData();
-    // Refresh wallet data every minute
-    const interval = setInterval(fetchWalletData, 60000);
-    return () => clearInterval(interval);
-  }, [user]);
+  }, [user]); // Removed auto-refresh interval
 
   if (loading) {
     return (
@@ -150,103 +157,158 @@ export default function WalletPage() {
 
   return (
     <div className="container mx-auto p-4 space-y-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Wallet</h1>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <ArrowDown className="mr-2 h-4 w-4" /> Deposit
-          </Button>
-          <Button variant="outline" size="sm">
-            <ArrowUp className="mr-2 h-4 w-4" /> Withdraw
-          </Button>
-          <Button variant="outline" size="sm">
-            <ArrowUpDown className="mr-2 h-4 w-4" /> Transfer
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-3xl font-bold">Wallet</h1>
+          <Button
+            variant="outline"
+            className="flex items-center gap-2"
+            onClick={() => router.push('/profile/activity')}
+          >
+            <History className="h-4 w-4" />
+            View All Activity
           </Button>
         </div>
-      </div>
 
-      {wallets.length === 0 ? (
-        <Card>
-          <CardContent className="py-8">
-            <div className="text-center text-muted-foreground">
-              No wallet information available
-            </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {wallets.map((wallet) => (
-            <Card key={wallet.currency} className="bg-card">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-lg font-medium">
-                  {wallet.name}
-                </CardTitle>
-                <span className="text-sm text-muted-foreground">Available</span>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(parseFloat(wallet.balance), wallet.currency)}
-                </div>
-                {parseFloat(wallet.locked) > 0 && (
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    Locked: {formatCurrency(parseFloat(wallet.locked), wallet.currency)}
-                  </div>
-                )}
-                {parseFloat(wallet.staked) > 0 && (
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    Staked: {formatCurrency(parseFloat(wallet.staked), wallet.currency)}
-                  </div>
-                )}
-                {wallet.converted_balance && wallet.reference_currency && (
-                  <div className="mt-2 text-sm text-muted-foreground">
-                    ≈ {formatCurrency(parseFloat(wallet.converted_balance), wallet.reference_currency)}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+        {/* Promotional Banners */}
+        <div className="grid gap-4 md:grid-cols-2 mb-8">
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.1 }}
+            className="bg-gradient-to-r from-green-600/10 to-green-600/5 rounded-lg p-6"
+          >
+            <h3 className="text-xl font-semibold mb-2">Start Trading Today</h3>
+            <p className="text-muted-foreground mb-4">Buy, sell, and swap your favorite cryptocurrencies instantly.</p>
+            <Button onClick={() => router.push('/trade')} className="bg-green-600 hover:bg-green-700">
+              Trade Now <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          </motion.div>
 
-      <div className="mt-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <History className="h-5 w-5" /> Recent Transactions
-          </h2>
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.3, delay: 0.2 }}
+            className="bg-gradient-to-r from-blue-600/10 to-blue-600/5 rounded-lg p-6"
+          >
+            <h3 className="text-xl font-semibold mb-2">Refer & Earn</h3>
+            <p className="text-muted-foreground mb-4">Invite friends and earn up to $50 USDT for each referral.</p>
+            <Button variant="outline" onClick={() => router.push('/profile/referral')}>
+              Get Started <ArrowUpRight className="ml-2 h-4 w-4" />
+            </Button>
+          </motion.div>
         </div>
-        
-        {transactions.length > 0 ? (
-          <div className="rounded-lg border bg-card">
-            <div className="divide-y">
-              {transactions.map((tx) => (
-                <div key={tx.id} className="p-4 flex items-center justify-between">
-                  <div>
-                    <div className="font-medium capitalize">{tx.type}</div>
-                    <div className="text-sm text-muted-foreground">
-                      {new Date(tx.created_at).toLocaleString()}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className={`font-medium ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
-                      {tx.type === 'credit' ? '+' : '-'}{formatCurrency(parseFloat(tx.amount), tx.currency)}
-                    </div>
-                    <div className="text-sm text-muted-foreground capitalize">
-                      {tx.status}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
+
+        {wallets.length === 0 ? (
           <Card>
             <CardContent className="py-8">
               <div className="text-center text-muted-foreground">
-                No transactions yet
+                No wallet information available
               </div>
             </CardContent>
           </Card>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {wallets.map((wallet) => (
+              <WalletCard
+                key={wallet.currency}
+                currency={wallet.currency}
+                balance={parseFloat(wallet.balance)}
+                showTransfer={wallet.currency.toLowerCase() !== 'ngn'}
+                onTrade={() => router.push(`/trade/${wallet.currency.toLowerCase()}`)}
+                percentageChange={0}
+              />
+            ))}
+          </div>
         )}
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <History className="h-5 w-5" /> Recent Transactions
+            </h2>
+          </div>
+          
+          {transactions.length > 0 ? (
+            <Card>
+              <CardContent className="p-0">
+                <div className="divide-y">
+                  {transactions.map((tx) => (
+                    <motion.div
+                      key={tx.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="p-4 flex items-center justify-between hover:bg-muted/50 transition-colors"
+                    >
+                      <div>
+                        <div className="font-medium capitalize">{tx.type}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {new Date(tx.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-medium ${tx.type === 'credit' ? 'text-green-600' : 'text-red-600'}`}>
+                          {tx.type === 'credit' ? '+' : '-'}{formatCurrency(parseFloat(tx.amount), tx.currency)}
+                        </div>
+                        <div className="text-sm text-muted-foreground capitalize">
+                          {tx.status}
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            <Card>
+              <CardContent className="py-8">
+                <div className="text-center text-muted-foreground">
+                  No transactions yet
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </motion.div>
+      </motion.div>
+
+      {/* Quick Actions */}
+      <div className="grid gap-4 md:grid-cols-2 mt-8 mb-8">
+        <Card className="hover:bg-accent/50 cursor-pointer transition-colors" onClick={() => router.push('/trade')}>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="bg-green-600/10 p-3 rounded-full">
+                <TrendingUp className="h-6 w-6 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Trade</h3>
+                <p className="text-sm text-muted-foreground">Buy, sell, and swap cryptocurrencies</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:bg-accent/50 cursor-pointer transition-colors" onClick={() => router.push('/profile/security')}>
+          <CardContent className="p-6">
+            <div className="flex items-center gap-4">
+              <div className="bg-orange-600/10 p-3 rounded-full">
+                <Wallet className="h-6 w-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="font-semibold">Security</h3>
+                <p className="text-sm text-muted-foreground">Manage wallet security</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
@@ -30,7 +30,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const supabase = getSupabaseClient();
 
-  const updateAuthState = async (newSession: Session | null) => {
+  const updateAuthState = useCallback(async (newSession: Session | null) => {
     if (newSession) {
       setSession(newSession);
       setUser(newSession.user);
@@ -38,18 +38,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setSession(null);
       setUser(null);
     }
-  };
+    setLoading(false);
+  }, []);
+
+  const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
+    console.log('Auth state changed:', event, session?.user?.email);
+    
+    if (event === 'SIGNED_OUT') {
+      await updateAuthState(null);
+      router.replace('/auth/login');
+    } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      await updateAuthState(session);
+    } else if (event === 'USER_UPDATED') {
+      await updateAuthState(session);
+    }
+  }, [updateAuthState, router]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event: AuthChangeEvent, session: Session | null) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
+    let subscription: { unsubscribe: () => void } | null = null;
+
+    const initializeAuth = async () => {
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        await updateAuthState(initialSession);
+
+        const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(handleAuthChange);
+        subscription = sub;
+      } catch (error) {
+        console.error('Error initializing auth:', error);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
 
     return () => {
-      subscription.unsubscribe();
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
-  }, [supabase.auth]);
+  }, [supabase, updateAuthState, handleAuthChange]);
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -64,7 +92,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       if (data.session) {
         await updateAuthState(data.session);
-        router.refresh();
       }
 
       return { error: null };
@@ -92,11 +119,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     try {
-      // First clear local state
-      setUser(null);
-      setSession(null);
-      
-      // Then sign out from Supabase
       const { error } = await supabase.auth.signOut();
       
       if (error) {
@@ -104,13 +126,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
 
-      // Force clear any remaining auth state
       await updateAuthState(null);
-      
-      // Clear any cached data
-      router.refresh();
-      
-      // Redirect to login page
       router.replace('/auth/login');
     } catch (error) {
       console.error('Unexpected sign out error:', error);

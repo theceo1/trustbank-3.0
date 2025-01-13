@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowDownUp, Loader2 } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
+import { useAuth } from "@/app/context/AuthContext";
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 const SUPPORTED_CURRENCIES = [
   { symbol: 'btc', name: 'Bitcoin' },
@@ -20,13 +22,25 @@ const SUPPORTED_CURRENCIES = [
 
 export function InstantSwap() {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const supabase = createClientComponentClient();
   const [fromCurrency, setFromCurrency] = useState('usdt');
   const [toCurrency, setToCurrency] = useState('sol');
   const [amount, setAmount] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [quote, setQuote] = useState<any>(null);
+  const [quotationTimer, setQuotationTimer] = useState(0);
 
   const handleGetQuote = async () => {
+    if (!user?.id) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please sign in to continue.",
+      });
+      return;
+    }
+
     if (!amount || isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
       toast({
         variant: "destructive",
@@ -38,23 +52,46 @@ export function InstantSwap() {
 
     try {
       setIsLoading(true);
-      const response = await fetch('/api/swap/quote', {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No authentication session available');
+
+      const response = await fetch('/api/trades/quote', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({
-          from_currency: fromCurrency.toUpperCase(),
-          to_currency: toCurrency.toUpperCase(),
+          from_currency: fromCurrency.toLowerCase(),
+          to_currency: toCurrency.toLowerCase(),
           from_amount: amount
         })
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to get quote');
+        throw new Error(error.error || 'Failed to get quote');
       }
 
-      const data = await response.json();
-      setQuote(data.data);
+      const { data } = await response.json();
+      if (!data?.id) {
+        throw new Error('Invalid quote response - missing ID');
+      }
+
+      setQuote(data);
+      setQuotationTimer(14);
+
+      // Start countdown timer
+      const timer = setInterval(() => {
+        setQuotationTimer((prev) => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+
     } catch (error) {
       toast({
         variant: "destructive",
@@ -67,7 +104,16 @@ export function InstantSwap() {
   };
 
   const handleSwap = async () => {
-    if (!quote) {
+    if (!user?.id) {
+      toast({
+        variant: "destructive",
+        title: "Authentication Required",
+        description: "Please sign in to continue.",
+      });
+      return;
+    }
+
+    if (!quote?.id) {
       toast({
         variant: "destructive",
         title: "No Quote",
@@ -76,32 +122,61 @@ export function InstantSwap() {
       return;
     }
 
+    // Add a 2 second buffer to the expiry time
+    const expiryTime = new Date(quote.expires_at).getTime() + 2000;
+    if (Date.now() > expiryTime) {
+      toast({
+        variant: "destructive",
+        title: "Quote Expired",
+        description: "Please get a new quote.",
+      });
+      setQuote(null);
+      return;
+    }
+
     try {
       setIsLoading(true);
-      const response = await fetch('/api/swap/confirm', {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No authentication session available');
+
+      const response = await fetch('/api/trades/confirm', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`
+        },
         body: JSON.stringify({
-          quotation_id: quote.id
+          tradeId: quote.id,
+          userId: user.id,
+          type: 'swap',
+          currency: fromCurrency,
+          amount: parseFloat(amount),
+          rate: parseFloat(quote.quoted_price),
+          fees: {
+            platform: parseFloat(amount) * 0.016, // 1.6% platform fee
+            processing: parseFloat(amount) * 0.014, // 1.4% processing fee
+            total: parseFloat(amount) * 0.03 // 3% total fee
+          }
         })
       });
 
       if (!response.ok) {
         const error = await response.json();
-        throw new Error(error.message || 'Failed to confirm swap');
+        throw new Error(error.error || 'Failed to confirm swap');
       }
 
-      const data = await response.json();
+      const { data } = await response.json();
       
       // Show success message
       toast({
         title: "Swap Successful",
-        description: `Successfully swapped ${amount} ${fromCurrency.toUpperCase()} to ${data.data.received_amount} ${toCurrency.toUpperCase()}`,
+        description: `Successfully swapped ${amount} ${fromCurrency.toUpperCase()} to ${quote.to_amount} ${toCurrency.toUpperCase()}`,
       });
 
       // Reset form
       setAmount('');
       setQuote(null);
+      setQuotationTimer(0);
 
       // Trigger balance updates in parent components
       const event = new CustomEvent('balanceUpdate');
@@ -129,6 +204,7 @@ export function InstantSwap() {
     setFromCurrency(toCurrency);
     setToCurrency(temp);
     setQuote(null);
+    setQuotationTimer(0);
   };
 
   return (
@@ -143,7 +219,11 @@ export function InstantSwap() {
             <div className="flex space-x-2">
               <Select
                 value={fromCurrency}
-                onValueChange={setFromCurrency}
+                onValueChange={(value) => {
+                  setFromCurrency(value);
+                  setQuote(null);
+                  setQuotationTimer(0);
+                }}
                 disabled={isLoading}
               >
                 <SelectTrigger className="w-[140px]">
@@ -168,6 +248,7 @@ export function InstantSwap() {
                 onChange={(e) => {
                   setAmount(e.target.value);
                   setQuote(null);
+                  setQuotationTimer(0);
                 }}
                 disabled={isLoading}
               />
@@ -190,7 +271,11 @@ export function InstantSwap() {
             <div className="flex space-x-2">
               <Select
                 value={toCurrency}
-                onValueChange={setToCurrency}
+                onValueChange={(value) => {
+                  setToCurrency(value);
+                  setQuote(null);
+                  setQuotationTimer(0);
+                }}
                 disabled={isLoading}
               >
                 <SelectTrigger className="w-[140px]">
@@ -219,20 +304,71 @@ export function InstantSwap() {
           </div>
 
           {quote && (
-            <div className="text-sm space-y-1 text-muted-foreground">
-              <div>Rate: 1 {fromCurrency.toUpperCase()} = {quote.quoted_price} {toCurrency.toUpperCase()}</div>
-              <div>Expires in: {new Date(quote.expires_at).toLocaleTimeString()}</div>
+            <div className="p-4 rounded-lg bg-white border-2 border-primary/20 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-black">Rate</span>
+                <span className="font-medium text-black">
+                  1 {fromCurrency.toUpperCase()} = {quote.quoted_price} {toCurrency.toUpperCase()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-black">You'll Receive</span>
+                <span className="font-medium text-black">
+                  {quote.to_amount} {toCurrency.toUpperCase()}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-medium text-black">Quote expires in</span>
+                <span className="text-sm font-medium text-black">{quotationTimer}s</span>
+              </div>
+              {(() => {
+                const amount = parseFloat(quote.from_amount);
+                const serviceFee = amount * 0.02; // 2% service fee
+                const networkFee = amount * 0.01; // 1% network fee
+                const totalFee = serviceFee + networkFee;
+                
+                return (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span>Service Fee (2%)</span>
+                      <span>{serviceFee.toFixed(8)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span>Network Fee (1%)</span>
+                      <span>{networkFee.toFixed(8)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm font-medium">
+                      <span>Total Fee (3%)</span>
+                      <span>{totalFee.toFixed(8)}</span>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
           <div className="pt-4">
             <Button
-              className="w-full"
+              className="w-full h-12 text-lg font-semibold bg-green-600 hover:bg-green-100 hover:text-black"
               onClick={quote ? handleSwap : handleGetQuote}
               disabled={isLoading || !amount || parseFloat(amount) <= 0}
             >
-              {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {quote ? 'Confirm Swap' : 'Get Quote'}
+              {isLoading ? (
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {quote ? 'Processing...' : 'Getting Quote...'}
+                </span>
+              ) : quote ? (
+                <span className="flex items-center gap-2">
+                  Confirm Swap
+                  <ArrowDownUp className="h-5 w-5" />
+                </span>
+              ) : (
+                <span className="flex items-center gap-2">
+                  Get Quote
+                  <ArrowDownUp className="h-5 w-5" />
+                </span>
+              )}
             </Button>
           </div>
         </div>

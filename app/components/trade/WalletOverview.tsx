@@ -1,148 +1,145 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { useAuth } from '@/app/context/AuthContext';
-import { QuidaxWalletService } from '@/app/lib/services/quidax-wallet';
-import { Card, CardContent } from '@/app/components/ui/card';
-import { Skeleton } from '@/app/components/ui/skeleton';
-import { toast } from 'sonner';
-import { Alert, AlertDescription } from '@/app/components/ui/alert';
-import { AlertCircle, LinkIcon } from 'lucide-react';
-import Link from 'next/link';
+import { useState, useEffect } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-interface WalletBalance {
+interface Wallet {
   currency: string;
   balance: string;
   locked: string;
 }
 
-interface QuidaxWallet {
-  currency: string;
-  balance: number | string;
-  locked: number | string;
-}
-
-interface ErrorState {
-  message: string;
-  type: 'setup' | 'kyc' | 'general';
-  redirectTo?: string;
-}
-
-const SUPPORTED_CURRENCY_SYMBOLS = ['USDT', 'NGN'];
+const CORE_CURRENCIES = ['BTC', 'ETH', 'USDT', 'USDC', 'BNB', 'XRP'];
+const WALLETS_PER_PAGE = 4;
 
 export default function WalletOverview() {
-  const { user } = useAuth();
-  const supabase = createClientComponentClient();
-  const [balances, setBalances] = useState<WalletBalance[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<ErrorState | null>(null);
+  const [wallets, setWallets] = useState<Wallet[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [currentPage, setCurrentPage] = useState(0);
+
+  useEffect(() => {
+    fetchWallets();
+  }, []);
 
   const fetchWallets = async () => {
     try {
-      setIsLoading(true);
-      setError(null);
-
       const response = await fetch('/api/wallet/balances');
-      const data = await response.json();
-
       if (!response.ok) {
-        if (data.redirectTo === '/profile/verification') {
-          setError({
-            message: data.message || 'Please complete your identity verification to access your wallet.',
-            type: 'kyc'
-          });
-        } else {
-          throw new Error(data.message || 'Failed to fetch wallet balances');
-        }
-        return;
+        throw new Error('Failed to fetch wallets');
       }
-
-      if (data.status === 'success' && Array.isArray(data.data)) {
-        setBalances(data.data.map((wallet: any) => ({
-          currency: wallet.currency,
-          balance: (wallet.balance ?? 0).toString(),
-          locked: (wallet.locked ?? 0).toString()
-        })));
-      } else {
-        console.error('Invalid wallet data:', data);
-        throw new Error('Unable to load wallet information. Please try again.');
-      }
-    } catch (error: any) {
-      console.error('Wallet fetch error:', error);
-      setError({
-        message: error.message,
-        type: 'general'
-      });
-      toast.error(error.message);
-    } finally {
-      setIsLoading(false);
+      const data = await response.json();
+      
+      // Filter and sort wallets
+      const filteredWallets = data.data
+        .filter((wallet: Wallet) => 
+          CORE_CURRENCIES.includes(wallet.currency.toUpperCase()))
+        .sort((a: Wallet, b: Wallet) => 
+          CORE_CURRENCIES.indexOf(a.currency.toUpperCase()) - 
+          CORE_CURRENCIES.indexOf(b.currency.toUpperCase()));
+      
+      setWallets(filteredWallets);
+      setLoading(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch wallets');
+      setLoading(false);
     }
   };
 
-  useEffect(() => {
-    if (user) {
-      fetchWallets();
-    }
-  }, [user]);
+  const totalPages = Math.ceil(wallets.length / WALLETS_PER_PAGE);
+  const currentWallets = wallets.slice(
+    currentPage * WALLETS_PER_PAGE,
+    (currentPage + 1) * WALLETS_PER_PAGE
+  );
 
-  if (isLoading) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="space-y-4">
-            <Skeleton className="h-4 w-[250px]" />
-            <Skeleton className="h-4 w-[200px]" />
-          </div>
-        </CardContent>
-      </Card>
-    );
+  const nextPage = () => {
+    if (currentPage < totalPages - 1) {
+      setCurrentPage(prev => prev + 1);
+    }
+  };
+
+  const prevPage = () => {
+    if (currentPage > 0) {
+      setCurrentPage(prev => prev - 1);
+    }
+  };
+
+  if (loading) {
+    return <div className="text-center">Loading wallets...</div>;
   }
 
   if (error) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <Alert variant={error.type === 'general' ? 'destructive' : 'default'}>
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="space-y-2">
-              <p>{error.message}</p>
-              {error.redirectTo && (
-                <Link 
-                  href={error.redirectTo} 
-                  className="flex items-center text-primary hover:underline mt-2"
-                >
-                  <LinkIcon className="h-4 w-4 mr-1" />
-                  {error.type === 'kyc' ? 'Complete Identity Verification' : 'Complete Wallet Setup'}
-                </Link>
-              )}
-            </AlertDescription>
-          </Alert>
-        </CardContent>
-      </Card>
-    );
+    return <div className="text-red-500">Error: {error}</div>;
   }
 
   return (
-    <Card>
+    <Card className="w-full">
       <CardContent className="p-6">
-        <div className="space-y-4">
-          {balances.map((balance) => (
-            <div key={balance.currency} className="flex justify-between">
-              <span className="text-sm font-medium">{balance.currency}</span>
-              <span className="text-sm">
-                {parseFloat(balance.balance).toFixed(2)}
-                {parseFloat(balance.locked) > 0 && (
-                  <span className="text-gray-500 ml-1">
-                    ({parseFloat(balance.locked).toFixed(2)} locked)
-                  </span>
-                )}
-              </span>
-            </div>
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Your Wallets</h2>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={prevPage}
+              disabled={currentPage === 0}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={nextPage}
+              disabled={currentPage >= totalPages - 1}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+        
+        <div className="relative overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentPage}
+              initial={{ x: 300, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -300, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 300, damping: 30 }}
+              className="grid grid-cols-2 gap-4"
+            >
+              {currentWallets.map((wallet: Wallet) => (
+                <Card key={wallet.currency} className="bg-secondary/10">
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <span className="font-semibold">{wallet.currency.toUpperCase()}</span>
+                      <span className="text-sm text-muted-foreground">Available</span>
+                    </div>
+                    <div className="text-lg font-bold">
+                      {parseFloat(wallet.balance).toFixed(8)}
+                    </div>
+                    <div className="text-sm text-muted-foreground mt-2">
+                      Locked: {parseFloat(wallet.locked).toFixed(8)}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+
+        <div className="flex justify-center mt-4 gap-1">
+          {Array.from({ length: totalPages }).map((_, index) => (
+            <Button
+              key={index}
+              variant={currentPage === index ? "default" : "outline"}
+              size="icon"
+              className="w-2 h-2 rounded-full p-0"
+              onClick={() => setCurrentPage(index)}
+            />
           ))}
-          {balances.length === 0 && (
-            <div className="text-sm text-gray-500">No balances to display</div>
-          )}
         </div>
       </CardContent>
     </Card>

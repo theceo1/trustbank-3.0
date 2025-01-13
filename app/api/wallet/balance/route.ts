@@ -2,7 +2,8 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
-import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxClient } from '@/app/lib/services/quidax-client';
+import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
 import { APIError, handleApiError } from '@/app/lib/api-utils';
 
 export const dynamic = 'force-dynamic';
@@ -29,7 +30,7 @@ export async function GET() {
     // Get the user's Quidax ID from their profile
     const { data: userProfile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('quidax_id, kyc_status, kyc_level')
+      .select('quidax_id')
       .eq('user_id', session.user.id)
       .single();
 
@@ -38,65 +39,37 @@ export async function GET() {
       throw new APIError('Failed to fetch user profile', 500);
     }
 
-    if (!userProfile) {
-      throw new APIError('User profile not found', 404);
-    }
-
-    if (!userProfile.quidax_id) {
+    if (!userProfile?.quidax_id) {
       throw new APIError('Quidax account not linked', 400);
     }
 
-    // Check KYC status if needed
-    if (userProfile.kyc_status !== 'verified' || !userProfile.kyc_level) {
-      throw new APIError('KYC verification required', 403);
-    }
+    // Initialize Quidax client with increased timeout
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+    
+    try {
+      // Fetch all wallets for the user
+      const walletsResponse = await quidaxClient.fetchUserWallets(userProfile.quidax_id);
+      const wallets = walletsResponse.data;
 
-    // Get the wallet balance from Quidax using their ID
-    const walletService = getWalletService();
-    const walletResponse = await walletService.getWallet(
-      userProfile.quidax_id,
-      'ngn'
-    ).catch((error: Error & { status?: number }) => {
-      console.error('Quidax wallet error:', error);
-      throw new APIError(
-        error.message || 'Failed to fetch Quidax wallet data',
-        error.status || 500
-      );
-    });
+      // Calculate total balance across all wallets
+      const totalBalance = wallets.reduce((acc, wallet) => {
+        return acc + parseFloat(wallet.balance);
+      }, 0);
 
-    if (!walletResponse?.data) {
-      throw new APIError('Invalid wallet data received', 500);
-    }
-
-    // Find the NGN wallet from the response
-    const ngnWallet = Array.isArray(walletResponse.data) 
-      ? walletResponse.data.find((w: { currency: string }) => w.currency.toLowerCase() === 'ngn')
-      : walletResponse.data;
-
-    if (!ngnWallet) {
-      throw new APIError('NGN wallet not found', 404);
-    }
-
-    // Validate wallet data
-    const balance = parseFloat(ngnWallet.balance || '0');
-    const pending_balance = parseFloat(ngnWallet.pending_balance || '0');
-    const total_deposits = parseFloat(ngnWallet.total_deposits || '0');
-    const total_withdrawals = parseFloat(ngnWallet.total_withdrawals || '0');
-
-    if (isNaN(balance) || isNaN(pending_balance) || isNaN(total_deposits) || isNaN(total_withdrawals)) {
-      throw new APIError('Invalid wallet balance data', 500);
-    }
-
-    return NextResponse.json({
-      status: "success",
-      data: {
-        currency: 'NGN',
-        balance,
-        pending_balance,
-        total_deposits,
-        total_withdrawals
+      return NextResponse.json({
+        status: "success",
+        data: {
+          total_balance: totalBalance.toString(),
+          wallets: wallets
+        }
+      });
+    } catch (error: any) {
+      console.error('Quidax API error:', error);
+      if (error.name === 'AbortError' || error.cause?.name === 'ConnectTimeoutError') {
+        throw new APIError('Connection timeout while fetching wallet data', 504);
       }
-    });
+      throw new APIError(error.message || 'Failed to fetch wallet data', 500);
+    }
 
   } catch (error) {
     console.error('Error fetching wallet:', error);

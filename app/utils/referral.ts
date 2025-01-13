@@ -10,8 +10,10 @@ export const getReferralCode = () => {
 };
 
 export function generateReferralCode(): string {
-  // Format: TB + 6 alphanumeric characters
-  return `TB${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+  // Format: TB + timestamp (base36) + 8 random chars
+  const timestamp = Date.now().toString(36);
+  const random = Math.random().toString(36).substring(2, 10).toUpperCase();
+  return `TB${timestamp}${random}`;
 }
 
 export async function validateReferralCode(code: string): Promise<boolean> {

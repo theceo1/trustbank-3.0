@@ -1,100 +1,94 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/app/components/ui/card";
-import { TrendingUp, TrendingDown, Loader2 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency, formatNumber } from "@/lib/utils";
+import { ArrowDown, ArrowUp } from 'lucide-react';
 
-interface CryptoData {
-  current_price: number;
-  price_change_percentage_24h: number;
-  symbol: string;
+interface MarketData {
+  name: string;
+  last: string;
+  volume: string;
+  price_change_percent: number;
 }
 
 export function MarketStats() {
-  const [marketData, setMarketData] = useState<Record<string, CryptoData>>({});
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [marketData, setMarketData] = useState<MarketData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchMarketData = async () => {
       try {
-        const response = await fetch('/api/market/prices?market=btcngn');
-        
+        const response = await fetch('/api/market/tickers');
         if (!response.ok) throw new Error('Failed to fetch market data');
+        const data = await response.json();
         
-        const { status, data } = await response.json();
-        
-        if (status !== 'success' || !data) {
-          throw new Error('Invalid response format');
+        if (data.status === 'success' && data.data) {
+          const formattedData = Object.entries(data.data).map(([name, marketData]: [string, any]) => {
+            const ticker = marketData.ticker;
+            const open = parseFloat(ticker.open);
+            const last = parseFloat(ticker.last);
+            const priceChange = open > 0 ? ((last - open) / open) * 100 : 0;
+            
+            return {
+              name,
+              last: ticker.last,
+              volume: ticker.volume,
+              price_change_percent: priceChange
+            };
+          });
+          setMarketData(formattedData);
         }
-
-        const formattedData: Record<string, CryptoData> = {};
-        Object.entries(data).forEach(([symbol, rate]: [string, any]) => {
-          formattedData[symbol] = {
-            current_price: parseFloat(rate.last),
-            price_change_percentage_24h: 0,
-            symbol
-          };
-        });
-        
-        setMarketData(formattedData);
-        setError(null);
-      } catch (err) {
-        setError('Failed to load market data');
-        console.error('Failed to fetch market data:', err);
+      } catch (error) {
+        console.error('Error fetching market data:', error);
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     };
 
     fetchMarketData();
-    const interval = setInterval(fetchMarketData, 30000);
+    const interval = setInterval(fetchMarketData, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) {
-    return (
-      <Card>
-        <CardContent className="flex items-center justify-center p-6">
-          <Loader2 className="h-6 w-6 animate-spin" />
-        </CardContent>
-      </Card>
-    );
-  }
-
-  if (error) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <p className="text-red-500">{error}</p>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
-    <Card>
+    <Card className="bg-orange-100">
       <CardHeader>
-        <CardTitle>Market Overview</CardTitle>
+        <CardTitle className="text-black">Market Overview</CardTitle>
       </CardHeader>
-      <CardContent className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        {Object.entries(marketData).map(([symbol, data]) => (
-          <div key={symbol} className="p-4 rounded-lg border bg-card">
-            <div className="flex items-center justify-between">
-              <p className="text-sm text-muted-foreground">{symbol.toUpperCase()}</p>
-              {data.price_change_percentage_24h > 0 ? 
-                <TrendingUp className="h-4 w-4 text-green-500" /> : 
-                <TrendingDown className="h-4 w-4 text-red-500" />
-              }
-            </div>
-            <p className="text-2xl font-bold mt-2">{formatCurrency(data.current_price, 'ngn')}</p>
-            <p className={`text-sm ${data.price_change_percentage_24h > 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {data.price_change_percentage_24h > 0 ? '+' : ''}
-              {data.price_change_percentage_24h.toFixed(2)}%
-            </p>
-          </div>
-        ))}
+      <CardContent>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {isLoading ? (
+            Array(6).fill(0).map((_, i) => (
+              <div key={i} className="animate-pulse bg-background/50 rounded-lg p-4">
+                <div className="h-4 bg-muted rounded w-24 mb-2"></div>
+                <div className="h-6 bg-muted rounded w-32"></div>
+              </div>
+            ))
+          ) : (
+            marketData.slice(0, 6).map((market) => (
+              <div key={market.name} className="bg-background rounded-lg p-4">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">{market.name.toUpperCase()}</span>
+                  <span className={`text-sm font-medium flex items-center gap-1 ${
+                    market.price_change_percent >= 0 ? 'text-green-500' : 'text-red-500'
+                  }`}>
+                    {market.price_change_percent >= 0 ? (
+                      <ArrowUp className="h-4 w-4" />
+                    ) : (
+                      <ArrowDown className="h-4 w-4" />
+                    )}
+                    {Math.abs(market.price_change_percent).toFixed(2)}%
+                  </span>
+                </div>
+                <div className="text-lg font-bold">{formatNumber(parseFloat(market.last))}</div>
+                <div className="text-sm text-muted-foreground mt-1">
+                  Vol: {formatNumber(parseFloat(market.volume))}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </CardContent>
     </Card>
   );

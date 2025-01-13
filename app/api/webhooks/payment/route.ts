@@ -4,49 +4,40 @@ import { cookies } from 'next/headers';
 import { QuidaxService } from '@/app/lib/services/quidax';
 import { TradeTransaction } from '@/app/lib/services/tradeTransaction';
 import { PaymentProcessorFactory } from '@/app/lib/services/payment/PaymentProcessorFactory';
+import { handleApiError } from '@/app/lib/utils/errorHandling';
 
 export async function POST(request: NextRequest) {
   try {
+    const signature = request.headers.get('x-quidax-signature');
     const payload = await request.json();
-    const signature = request.headers.get('x-quidax-signature') || undefined;
+    const quidaxService = QuidaxService.getInstance();
 
-    if (!QuidaxService.verifyWebhookSignature(payload, signature)) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    // Verify webhook signature
+    if (!quidaxService.verifyWebhookSignature(payload, signature || undefined)) {
+      return NextResponse.json(
+        { error: 'Invalid webhook signature' },
+        { status: 401 }
+      );
     }
 
-    const supabase = createRouteHandlerClient({ cookies });
-    const { data: trade } = await supabase
-      .from('trades')
-      .select('*')
-      .eq('quidax_reference', payload.reference)
-      .single();
+    // Process the webhook payload
+    const { event, data } = payload;
+    console.log(`Processing ${event} webhook:`, data);
 
-    if (!trade) {
-      return NextResponse.json({ error: 'Trade not found' }, { status: 404 });
+    // Handle different webhook events
+    switch (event) {
+      case 'transfer.success':
+        // Handle successful transfer
+        break;
+      case 'transfer.failed':
+        // Handle failed transfer
+        break;
+      default:
+        console.log(`Unhandled webhook event: ${event}`);
     }
 
-    const processor = PaymentProcessorFactory.getProcessor(trade.paymentMethod);
-    const verificationResult = await processor.verifyPayment(payload.reference);
-
-    if (verificationResult.status === 'failed') {
-      await TradeTransaction.revertTradeOnFailure(trade.id);
-    }
-
-    await supabase.rpc('update_trade_status', {
-      p_trade_id: trade.id,
-      p_status: verificationResult.status,
-      p_metadata: {
-        ...payload,
-        verification_result: verificationResult.metadata
-      }
-    });
-
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ status: 'success' });
   } catch (error) {
-    console.error('Webhook processing error:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

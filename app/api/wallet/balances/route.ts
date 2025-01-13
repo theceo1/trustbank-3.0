@@ -1,8 +1,9 @@
-import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
+import { NextResponse } from 'next/server';
 import { QuidaxClient } from '@/app/lib/services/quidax-client';
 import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
+import { APIError, handleApiError } from '@/app/lib/api-utils';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'edge';
@@ -10,52 +11,64 @@ export const runtime = 'edge';
 export async function GET() {
   try {
     const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
+    const supabase = createRouteHandlerClient({ 
+      cookies: () => cookieStore 
+    });
     
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
     
-    if (sessionError || !session) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      );
+    if (sessionError) {
+      console.error('Session error:', sessionError);
+      throw new APIError('Authentication error', 401);
+    }
+    
+    if (!session) {
+      throw new APIError('Unauthorized', 401);
     }
 
-    // Get user's Quidax ID from Supabase
+    // Get the user's Quidax ID from their profile
     const { data: userProfile, error: profileError } = await supabase
       .from('user_profiles')
       .select('quidax_id')
       .eq('user_id', session.user.id)
       .single();
 
-    if (profileError || !userProfile?.quidax_id) {
-      return NextResponse.json(
-        { error: 'Quidax account not linked' },
-        { status: 400 }
-      );
+    if (profileError) {
+      console.error('Profile fetch error:', profileError);
+      throw new APIError('Failed to fetch user profile', 500);
     }
 
-    // Fetch wallets from Quidax
+    if (!userProfile?.quidax_id) {
+      throw new APIError('Quidax account not linked', 400);
+    }
+
+    // Initialize Quidax client with increased timeout
     const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
-    const wallets = await quidaxClient.fetchUserWallets(userProfile.quidax_id);
+    
+    try {
+      // Fetch all wallets for the user
+      const walletsResponse = await quidaxClient.fetchUserWallets(userProfile.quidax_id);
+      
+      if (!walletsResponse || !walletsResponse.data) {
+        throw new APIError('Invalid response from Quidax API', 500);
+      }
 
-    if (!wallets) {
-      return NextResponse.json(
-        { error: 'Failed to fetch Quidax wallets' },
-        { status: 500 }
-      );
+      // Return the wallets array directly as the data
+      return NextResponse.json({
+        status: "success",
+        message: "Wallets fetched successfully",
+        data: walletsResponse.data
+      });
+    } catch (error: any) {
+      console.error('Quidax API error:', error);
+      if (error.name === 'AbortError' || error.cause?.name === 'ConnectTimeoutError') {
+        throw new APIError('Connection timeout while fetching wallet data', 504);
+      }
+      throw new APIError(error.message || 'Failed to fetch wallet data', 500);
     }
-
-    return NextResponse.json({
-      status: 'success',
-      data: wallets
-    });
 
   } catch (error) {
-    console.error('Error fetching balances:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    console.error('Error fetching wallets:', error);
+    return handleApiError(error);
   }
 } 

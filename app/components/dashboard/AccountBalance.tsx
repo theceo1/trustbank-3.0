@@ -46,7 +46,13 @@ export function AccountBalance() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
-  const [showBalance, setShowBalance] = useState(false);
+  const [showBalance, setShowBalance] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('showBalance');
+      return saved ? JSON.parse(saved) : false;
+    }
+    return false;
+  });
 
   const fetchBalance = useCallback(async () => {
     try {
@@ -102,11 +108,15 @@ export function AccountBalance() {
   const ngnWallet = balances.find(w => w.currency === baseCurrency);
 
   const toggleBalance = () => {
-    setShowBalance(!showBalance);
+    const newValue = !showBalance;
+    setShowBalance(newValue);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('showBalance', JSON.stringify(newValue));
+    }
   };
 
   const maskBalance = (amount: string) => {
-    return '•'.repeat(amount.length);
+    return '••••••';
   };
 
   return (
@@ -172,19 +182,19 @@ export function AccountBalance() {
                   <div className="text-3xl font-bold tracking-tight">
                     {showBalance 
                       ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
-                      : (ngnWallet ? maskBalance(formatCurrency(parseFloat(ngnWallet.balance), baseCurrency)) : '₦0.00')
+                      : '₦••••••'
                     }
                   </div>
                   <div className="text-sm text-white/80">
                     Available: {showBalance 
                       ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
-                      : (ngnWallet ? maskBalance(formatCurrency(parseFloat(ngnWallet.balance), baseCurrency)) : '₦0.00')
+                      : '₦••••••'
                     }
                     {ngnWallet && parseFloat(ngnWallet.locked) > 0 && (
                       <span className="ml-2 text-yellow-200">
                         (Locked: {showBalance 
                           ? formatCurrency(parseFloat(ngnWallet.locked), baseCurrency)
-                          : maskBalance(formatCurrency(parseFloat(ngnWallet.locked), baseCurrency))
+                          : '₦••••••'
                         })
                       </span>
                     )}

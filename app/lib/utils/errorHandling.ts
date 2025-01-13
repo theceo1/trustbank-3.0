@@ -1,43 +1,35 @@
 "use client";
 
+import { NextResponse } from 'next/server';
+import { ZodError } from 'zod';
 import { QuidaxError } from '@/app/lib/services/quidax';
-import { type ToastProps } from '@/hooks/use-toast';
 
-type ToastFn = (props: Partial<ToastProps> & Pick<ToastProps, 'title'>) => void;
+export function handleApiError(error: unknown) {
+  console.error('API Error:', error);
 
-export const handleError = (error: unknown, defaultMessage: string, toast: ToastFn) => {
   if (error instanceof QuidaxError) {
-    toast({
-      variant: "destructive",
-      title: "Transaction Error",
-      description: error.message
-    });
-    
-    // Log specific error types
-    switch (error.code) {
-      case 'RATE_EXPIRED':
-        logError('Rate expired during transaction', error);
-        break;
-      case 'INSUFFICIENT_BALANCE':
-        logError('Insufficient balance for wallet payment', error);
-        break;
-      case 'FRAUD_DETECTED':
-        logError('Fraud detection triggered', error);
-        break;
-      default:
-        logError('Unknown transaction error', error);
-    }
-  } else {
-    toast({
-      variant: "destructive",
-      title: "Error",
-      description: defaultMessage
-    });
-    logError(defaultMessage, error);
+    return NextResponse.json(
+      { status: 'error', message: error.message, code: error.code },
+      { status: error.statusCode }
+    );
   }
-};
-  
-const logError = (message: string, error: unknown) => {
-  console.error(`${message}:`, error);
-  // Add your error logging service here
-};
+
+  if (error instanceof ZodError) {
+    return NextResponse.json(
+      { status: 'error', message: 'Validation error', errors: error.errors },
+      { status: 400 }
+    );
+  }
+
+  if (error instanceof Error) {
+    return NextResponse.json(
+      { status: 'error', message: error.message },
+      { status: 500 }
+    );
+  }
+
+  return NextResponse.json(
+    { status: 'error', message: 'An unexpected error occurred' },
+    { status: 500 }
+  );
+}

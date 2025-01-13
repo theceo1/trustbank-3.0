@@ -1,237 +1,130 @@
-import { useState, useEffect, useCallback } from "react";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatNumber } from "@/lib/utils";
-import { QUIDAX_WEBSOCKET_URL } from "@/app/lib/constants/api";
-import { toast } from "sonner";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+"use client";
+
+import { useEffect, useState } from 'react';
+import { formatCryptoAmount } from '@/app/lib/utils/format';
 
 interface Order {
   price: string;
-  amount: string;
-  total: string;
+  volume: string;
+  total?: string;
 }
 
 interface OrderBookProps {
-  currency: string;
+  market: string;
 }
 
-export function OrderBook({ currency }: OrderBookProps) {
-  const [orders, setOrders] = useState<{bids: Order[], asks: Order[]}>({ bids: [], asks: [] });
+export default function OrderBook({ market }: OrderBookProps) {
+  const [bids, setBids] = useState<Order[]>([]);
+  const [asks, setAsks] = useState<Order[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [retryCount, setRetryCount] = useState(0);
-  const [connectionState, setConnectionState] = useState<'connecting' | 'connected' | 'disconnected' | 'error'>('connecting');
-  const MAX_RETRIES = 3;
-  
-  const fetchOrderBookREST = useCallback(async () => {
+
+  // Get the base and quote currency from the market pair
+  const [baseCurrency, quoteCurrency] = [market.slice(0, -3), market.slice(-3)].map(c => c.toUpperCase());
+
+  const fetchOrderBook = async () => {
     try {
-      const response = await fetch(`/api/market/orderbook/${currency}ngn`);
+      const response = await fetch(`/api/market/orderbook/${market}`);
       if (!response.ok) {
         throw new Error('Failed to fetch order book');
       }
       const data = await response.json();
-      if (data.status === 'success') {
-        setOrders({
-          bids: data.data.bids || [],
-          asks: data.data.asks || []
-        });
-        setIsLoading(false);
+      
+      if (data.status === 'success' && data.data) {
+        if (data.data.bids) setBids(data.data.bids.map(transformOrder));
+        if (data.data.asks) setAsks(data.data.asks.map(transformOrder));
+        setError(null);
+      } else {
+        throw new Error('Invalid order book data received');
       }
     } catch (error) {
-      console.error('[OrderBook] REST API error:', error);
-      setConnectionState('error');
+      console.error('Error fetching order book:', error);
+      setError('Failed to fetch order book data');
+    } finally {
+      setIsLoading(false);
     }
-  }, [currency]);
+  };
+
+  const transformOrder = (order: any): Order => ({
+    price: order.price || '0',
+    volume: order.volume || '0',
+    total: order.total || '0'
+  });
 
   useEffect(() => {
-    let ws: WebSocket | null = null;
-    let reconnectTimeout: NodeJS.Timeout;
-    let pingInterval: NodeJS.Timeout;
-    let isConnecting = false;
+    fetchOrderBook();
     
-    const connect = () => {
-      if (isConnecting) return;
-      
-      try {
-        isConnecting = true;
-        setConnectionState('connecting');
-        ws = new WebSocket(QUIDAX_WEBSOCKET_URL);
-        
-        ws.onopen = () => {
-          isConnecting = false;
-          setConnectionState('connected');
-          
-          // Subscribe to order book data
-          const subscribeMessage = {
-            event: 'subscribe',
-            channels: ['orderbook'],
-            markets: [`${currency}ngn`]
-          };
-          ws?.send(JSON.stringify(subscribeMessage));
-          
-          // Set up ping interval to keep connection alive
-          pingInterval = setInterval(() => {
-            if (ws?.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ event: 'ping' }));
-            }
-          }, 30000);
-          
-          setRetryCount(0);
-        };
-        
-        ws.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            
-            if (data.event === 'pong') return;
-            
-            if (data.event === 'update' && data.channel === 'orderbook') {
-              // Transform the data to match our format
-              const transformedOrders = {
-                bids: data.data.bids.map(([price, amount]: [string, string]) => ({
-                  price,
-                  amount,
-                  total: (parseFloat(price) * parseFloat(amount)).toString()
-                })),
-                asks: data.data.asks.map(([price, amount]: [string, string]) => ({
-                  price,
-                  amount,
-                  total: (parseFloat(price) * parseFloat(amount)).toString()
-                }))
-              };
-              
-              setOrders(transformedOrders);
-              setIsLoading(false);
-            }
-          } catch (error) {
-            console.error('[OrderBook] Error parsing orderbook data:', error);
-          }
-        };
-        
-        ws.onclose = (event) => {
-          isConnecting = false;
-          clearInterval(pingInterval);
-          setConnectionState('disconnected');
-          
-          if (retryCount < MAX_RETRIES) {
-            const delay = Math.min(1000 * Math.pow(2, retryCount), 10000); // Cap at 10 seconds
-            reconnectTimeout = setTimeout(() => {
-              setRetryCount(prev => prev + 1);
-              connect();
-            }, delay);
-          } else {
-            fetchOrderBookREST();
-          }
-        };
-        
-        ws.onerror = () => {
-          isConnecting = false;
-          setConnectionState('error');
-          if (retryCount >= MAX_RETRIES) {
-            fetchOrderBookREST();
-          }
-        };
-      } catch (error) {
-        isConnecting = false;
-        setConnectionState('error');
-        if (retryCount >= MAX_RETRIES) {
-          fetchOrderBookREST();
-        }
-      }
-    };
+    // Poll every 5 seconds
+    const interval = setInterval(fetchOrderBook, 5000);
+    
+    return () => clearInterval(interval);
+  }, [market]);
 
-    connect();
-    
-    return () => {
-      clearTimeout(reconnectTimeout);
-      clearInterval(pingInterval);
-      if (ws?.readyState === WebSocket.OPEN) {
-        ws.close();
-      }
-    };
-  }, [currency, retryCount, setConnectionState, fetchOrderBookREST]);
-  
-  if (connectionState === 'error' && orders.bids.length === 0 && orders.asks.length === 0) {
-    return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          Unable to load order book. Please refresh the page to try again.
-        </AlertDescription>
-      </Alert>
-    );
+  if (error) {
+    return <div className="text-red-500 p-4">{error}</div>;
   }
 
-  if (isLoading || connectionState === 'connecting') {
-    return (
-      <div className="text-center py-4 text-gray-500">
-        {connectionState === 'connecting' ? 'Connecting to order book...' : 'Loading order book...'}
-      </div>
-    );
-  }
-
-  if (orders.bids.length === 0 && orders.asks.length === 0) {
-    return (
-      <div className="text-center py-4 text-gray-500">
-        No orders available
-      </div>
-    );
+  if (isLoading) {
+    return <div className="animate-pulse p-4">Loading order book...</div>;
   }
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-medium text-red-500 mb-2">Sell Orders</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Price (NGN)</TableHead>
-              <TableHead>Amount ({currency.toUpperCase()})</TableHead>
-              <TableHead>Total (NGN)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.asks.slice(0, 5).map((order, index) => (
-              <TableRow key={index}>
-                <TableCell className="text-red-500">{formatNumber(parseFloat(order.price))}</TableCell>
-                <TableCell>{formatNumber(parseFloat(order.amount))}</TableCell>
-                <TableCell>{formatNumber(parseFloat(order.total))}</TableCell>
-              </TableRow>
-            ))}
-            {orders.asks.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-gray-500">No sell orders</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+    <div className="grid grid-cols-2 gap-4 p-4">
+      <div className="space-y-2">
+        <h3 className="text-green-500 font-semibold flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-green-500"></div>
+          Buy Orders ({baseCurrency}-{quoteCurrency})
+        </h3>
+        <div className="space-y-1">
+          <div className="grid grid-cols-3 text-xs text-muted-foreground mb-2">
+            <span>Price ({quoteCurrency})</span>
+            <span>Amount ({baseCurrency})</span>
+            <span>Total ({quoteCurrency})</span>
+          </div>
+          {bids.map((bid, index) => (
+            <div 
+              key={index} 
+              className="grid grid-cols-3 text-sm relative overflow-hidden group"
+              title={`Buy ${bid.volume} ${baseCurrency} at ${bid.price} ${quoteCurrency}`}
+            >
+              <div 
+                className="absolute inset-0 bg-green-500/10 group-hover:bg-green-500/20 transition-colors"
+                style={{ width: `${(parseFloat(bid.total || '0') / Math.max(...bids.map(b => parseFloat(b.total || '0')))) * 100}%` }}
+              />
+              <span className="text-green-500 relative font-medium">{formatCryptoAmount(bid.price)}</span>
+              <span className="relative">{formatCryptoAmount(bid.volume)}</span>
+              <span className="relative">{formatCryptoAmount(bid.total)}</span>
+            </div>
+          ))}
+        </div>
       </div>
-
-      <div>
-        <h3 className="text-sm font-medium text-green-500 mb-2">Buy Orders</h3>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Price (NGN)</TableHead>
-              <TableHead>Amount ({currency.toUpperCase()})</TableHead>
-              <TableHead>Total (NGN)</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {orders.bids.slice(0, 5).map((order, index) => (
-              <TableRow key={index}>
-                <TableCell className="text-green-500">{formatNumber(parseFloat(order.price))}</TableCell>
-                <TableCell>{formatNumber(parseFloat(order.amount))}</TableCell>
-                <TableCell>{formatNumber(parseFloat(order.total))}</TableCell>
-              </TableRow>
-            ))}
-            {orders.bids.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-gray-500">No buy orders</TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+      <div className="space-y-2">
+        <h3 className="text-red-500 font-semibold flex items-center gap-2">
+          <div className="w-2 h-2 rounded-full bg-red-500"></div>
+          Sell Orders ({baseCurrency}-{quoteCurrency})
+        </h3>
+        <div className="space-y-1">
+          <div className="grid grid-cols-3 text-xs text-muted-foreground mb-2">
+            <span>Price ({quoteCurrency})</span>
+            <span>Amount ({baseCurrency})</span>
+            <span>Total ({quoteCurrency})</span>
+          </div>
+          {asks.map((ask, index) => (
+            <div 
+              key={index} 
+              className="grid grid-cols-3 text-sm relative overflow-hidden group"
+              title={`Sell ${ask.volume} ${baseCurrency} at ${ask.price} ${quoteCurrency}`}
+            >
+              <div 
+                className="absolute inset-0 bg-red-500/10 group-hover:bg-red-500/20 transition-colors"
+                style={{ width: `${(parseFloat(ask.total || '0') / Math.max(...asks.map(a => parseFloat(a.total || '0')))) * 100}%` }}
+              />
+              <span className="text-red-500 relative font-medium">{formatCryptoAmount(ask.price)}</span>
+              <span className="relative">{formatCryptoAmount(ask.volume)}</span>
+              <span className="relative">{formatCryptoAmount(ask.total)}</span>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

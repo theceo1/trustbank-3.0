@@ -21,6 +21,7 @@ import {
 import { generateReferralCode, validateReferralCode } from '@/app/utils/referral';
 import { getSupabaseClient } from '@/lib/supabase/client';
 import { useToast } from "@/hooks/use-toast";
+import { ProfileService } from '@/lib/services/profile';
 
 async function waitForUser(supabase: any, userId: string, maxAttempts = 5): Promise<boolean> {
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
@@ -43,60 +44,43 @@ async function createUserProfile(supabase: any, data: {
   name: string;
   email: string;
 }, maxAttempts = 3): Promise<any> {
-  let lastError;
-  
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      // Check if profile already exists
-      const { data: existingProfile } = await supabase
-        .from('user_profiles')
-        .select()
-        .eq('user_id', data.userId)
-        .single();
+  try {
+    // Check if profile already exists
+    const { data: existingProfile } = await supabase
+      .from('user_profiles')
+      .select()
+      .eq('user_id', data.userId)
+      .single();
 
-      if (existingProfile) {
-        return existingProfile;
-      }
-
-      // Create new profile
-      const { data: profile, error } = await supabase
-        .from('user_profiles')
-        .insert({
-          user_id: data.userId,
-          full_name: data.name,
-          email: data.email,
-          is_verified: false,
-          kyc_level: 0,
-          kyc_status: 'pending',
-          is_test: false,
-          daily_limit: 0,
-          monthly_limit: 0,
-          referral_code: generateReferralCode(),
-          referral_stats: {
-            totalReferrals: 0,
-            activeReferrals: 0,
-            totalEarnings: 0,
-            pendingEarnings: 0
-          }
-        })
-        .select()
-        .single();
-
-      if (error) {
-        lastError = error;
-        // Wait before retrying: 1s, 2s, 4s
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
-        continue;
-      }
-
-      return profile;
-    } catch (error) {
-      lastError = error;
-      await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+    if (existingProfile) {
+      return existingProfile;
     }
-  }
 
-  throw lastError;
+    // Create new profile using ProfileService
+    const profile = await ProfileService.createProfile(data.userId, data.email);
+    
+    // Update the profile with additional data
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('user_profiles')
+      .update({
+        full_name: data.name,
+        referral_stats: {
+          totalReferrals: 0,
+          activeReferrals: 0,
+          totalEarnings: 0,
+          pendingEarnings: 0
+        }
+      })
+      .eq('user_id', data.userId)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+    return updatedProfile;
+  } catch (error) {
+    console.error('Error creating user profile:', error);
+    throw error;
+  }
 }
 
 export default function SignUp() {
@@ -146,50 +130,29 @@ export default function SignUp() {
         throw new Error('Failed to create account');
       }
 
-      const userId = data.user.id;
-
-      // Wait for user record to be available
-      const userExists = await waitForUser(supabase, userId);
-      if (!userExists) {
-        throw new Error('Failed to create user record. Please try again.');
-      }
-
-      // Create user profile
-      try {
-        const profile = await createUserProfile(supabase, {
-          userId,
+      // Create profile using the API route
+      const response = await fetch('/api/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           name,
-          email
-        });
+          email,
+        }),
+      });
 
-        toast({
-          title: "Account created",
-          description: "Welcome! Complete your ID verification to start trading.",
-          variant: "default"
-        });
-
-        router.push('/dashboard');
-      } catch (profileError: any) {
-        // Check if profile was actually created despite error
-        const { data: existingProfile } = await supabase
-          .from('user_profiles')
-          .select()
-          .eq('user_id', userId)
-          .single();
-
-        if (existingProfile) {
-          // Profile exists, we can proceed
-          toast({
-            title: "Account created",
-            description: "Welcome! Complete your ID verification to start trading.",
-            variant: "default"
-          });
-          router.push('/dashboard');
-        } else {
-          // Real error, show to user
-          throw new Error('Failed to set up your profile. Please try again or contact support.');
-        }
+      if (!response.ok) {
+        throw new Error('Failed to create profile');
       }
+
+      toast({
+        title: "Account created",
+        description: "Welcome! Complete your ID verification to start trading.",
+        variant: "default"
+      });
+
+      router.push('/dashboard');
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
       setError(errorMessage);
