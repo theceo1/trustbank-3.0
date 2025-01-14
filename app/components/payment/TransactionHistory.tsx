@@ -8,6 +8,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { formatCurrency } from '@/app/lib/utils';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRouter } from 'next/navigation';
 
 interface Transaction {
   id: string;
@@ -29,6 +30,7 @@ export default function TransactionHistory({ limit = 10, type }: TransactionHist
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const fetchTransactions = async () => {
@@ -38,6 +40,17 @@ export default function TransactionHistory({ limit = 10, type }: TransactionHist
         setLoading(true);
         setError(null);
         
+        // First check if profile exists
+        const profileResponse = await fetch('/api/profile');
+        if (!profileResponse.ok) {
+          if (profileResponse.status === 404) {
+            // Profile doesn't exist, redirect to profile setup
+            router.push('/profile/setup');
+            return;
+          }
+          throw new Error('Failed to fetch profile');
+        }
+
         const queryParams = new URLSearchParams({
           limit: limit.toString(),
           ...(type && { type })

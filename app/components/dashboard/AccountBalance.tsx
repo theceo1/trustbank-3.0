@@ -58,7 +58,12 @@ export function AccountBalance() {
     try {
       setLoading(true);
       const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-      const response = await fetch(`${baseUrl}/api/wallet/balance`);
+      const response = await fetch(`${baseUrl}/api/wallet/balance`, {
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
       if (!response.ok) {
         throw new Error('Failed to fetch balance');
       }

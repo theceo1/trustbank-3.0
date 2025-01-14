@@ -1,10 +1,13 @@
 // /app/api/wallet/[userId]/route.ts
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
+import { getWalletService } from '@/app/lib/services/quidax-wallet';
 
-export async function GET(request: Request, { params }: { params: { userId: string } }) {
+export async function GET(
+  request: Request,
+  { params }: { params: { userId: string } }
+) {
   try {
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
@@ -23,15 +26,15 @@ export async function GET(request: Request, { params }: { params: { userId: stri
     // Get the user's profile to check if they have access
     const { data: profile } = await supabase
       .from('user_profiles')
-      .select('is_verified, quidax_id')
+      .select('is_verified, quidax_id, kyc_status')
       .eq('user_id', session.user.id)
       .single();
 
     if (!profile?.is_verified) {
       return NextResponse.json({
         error: 'KYC verification required',
-        message: 'Please complete KYC verification to access this feature',
-        redirectTo: '/kyc'
+        message: 'Please complete your identity verification to access your wallet.',
+        redirectTo: '/profile/verification'
       }, { status: 403 });
     }
 

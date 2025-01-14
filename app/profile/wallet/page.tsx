@@ -51,28 +51,31 @@ export default function WalletPage() {
         setError(null);
         setErrorType(null);
         
-        const response = await fetch('/api/wallet', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include'
-        });
+        // First check if user has completed KYC and has quidax_id
+        const profileResponse = await fetch('/api/profile');
+        if (!profileResponse.ok) {
+          const data = await profileResponse.json();
+          if (data.error === 'Profile not found') {
+            setErrorType('setup');
+            throw new Error('Please complete your profile setup.');
+          }
+          throw new Error(data.error || 'Failed to fetch profile');
+        }
         
+        const profileData = await profileResponse.json();
+        if (!profileData.is_verified || profileData.kyc_status !== 'verified') {
+          setErrorType('kyc');
+          throw new Error('Please complete your identity verification to access your wallet.');
+        }
+
+        if (!profileData.quidax_id) {
+          setErrorType('setup');
+          throw new Error('Please complete your wallet setup to continue.');
+        }
+        
+        const response = await fetch('/api/wallet');
         if (!response.ok) {
           const data = await response.json();
-          
-          if (data.redirectTo === '/profile/verification') {
-            setErrorType('kyc');
-            throw new Error(data.message || 'Please complete your identity verification to access your wallet.');
-          }
-          
-          if (data.setup_required) {
-            setErrorType('setup');
-            throw new Error(data.error || 'Please complete your wallet setup.');
-          }
-
-          setErrorType('general');
           throw new Error(data.error || 'Unable to fetch wallet information');
         }
         
@@ -81,7 +84,6 @@ export default function WalletPage() {
           throw new Error('Unable to load wallet information. Please try again later.');
         }
         
-        // Filter and sort wallets to show core currencies first
         const filteredWallets = data.data
           .filter((wallet: WalletData) => CORE_CURRENCIES.includes(wallet.currency.toLowerCase()))
           .sort((a: WalletData, b: WalletData) => {
@@ -92,19 +94,14 @@ export default function WalletPage() {
 
         setWallets(filteredWallets);
 
-        // Fetch transactions
-        const txResponse = await fetch('/api/transactions', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include'
-        });
-        
-        if (txResponse.ok) {
-          const txData = await txResponse.json();
-          if (txData.status === 'success' && Array.isArray(txData.data)) {
-            setTransactions(txData.data);
+        // Only fetch transactions if we have wallet data
+        if (filteredWallets.length > 0) {
+          const txResponse = await fetch('/api/transactions');
+          if (txResponse.ok) {
+            const txData = await txResponse.json();
+            if (txData.status === 'success' && Array.isArray(txData.data)) {
+              setTransactions(txData.data);
+            }
           }
         }
       } catch (err) {
@@ -115,7 +112,7 @@ export default function WalletPage() {
     };
 
     fetchWalletData();
-  }, [user]); // Removed auto-refresh interval
+  }, [user]);
 
   if (loading) {
     return (
@@ -138,13 +135,13 @@ export default function WalletPage() {
           <AlertDescription className="space-y-2">
             <p>{error}</p>
             {errorType === 'kyc' && (
-              <Link href="/profile/kyc" className="flex items-center text-primary hover:underline">
+              <Link href="/profile/verification" className="flex items-center text-primary hover:underline">
                 <LinkIcon className="h-4 w-4 mr-1" />
                 Complete Identity Verification
               </Link>
             )}
             {errorType === 'setup' && (
-              <Link href="/profile/setup" className="flex items-center text-primary hover:underline">
+              <Link href="/wallet/setup" className="flex items-center text-primary hover:underline">
                 <LinkIcon className="h-4 w-4 mr-1" />
                 Complete Wallet Setup
               </Link>

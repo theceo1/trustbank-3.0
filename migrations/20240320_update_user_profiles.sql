@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
   is_verified BOOLEAN DEFAULT false,
   daily_limit DECIMAL(20, 2) DEFAULT 50000,
   monthly_limit DECIMAL(20, 2) DEFAULT 1000000,
+  quidax_id TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(user_id)
@@ -49,6 +50,7 @@ ADD COLUMN IF NOT EXISTS referral_stats JSONB DEFAULT '{"totalReferrals": 0, "ac
 ADD COLUMN IF NOT EXISTS verification_status JSONB DEFAULT '{"tier1_verified": false, "tier2_verified": false, "tier3_verified": false}'::jsonb,
 ADD COLUMN IF NOT EXISTS two_factor_enabled BOOLEAN DEFAULT false,
 ADD COLUMN IF NOT EXISTS api_keys JSONB DEFAULT '[]'::jsonb,
+ADD COLUMN IF NOT EXISTS quidax_id TEXT,
 ADD COLUMN IF NOT EXISTS notification_settings JSONB DEFAULT '{
   "email": {"marketing": false, "security": true, "trading": true, "news": false},
   "push": {"trading": true, "security": true, "price_alerts": true},

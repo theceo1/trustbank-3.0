@@ -4,24 +4,33 @@
 import { useAuth } from '@/app/context/AuthContext';
 import { useEffect, useState } from 'react';
 import VerificationBadge from './VerificationBadge';
-import supabase from '@/lib/supabase/client';
 import { Button } from "@/components/ui/button";
-import { Copy, Share2, User } from "lucide-react";
+import { Copy, Share2, User, Shield, Wallet, Bell, Settings } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { validateReferralCode } from '@/utils/referral';
 import { Badge } from "@/components/ui/badge";
 import { ProfileService } from '@/app/lib/services/profile';
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
 
 interface Profile {
   user_id: string;
   full_name: string | null;
   email: string | null;
   is_verified: boolean;
+  kyc_level: number;
+  kyc_status: string;
   referral_code: string | null;
   referred_by: string | null;
-  referral_count: number;
+  referral_stats: {
+    totalReferrals: number;
+    activeReferrals: number;
+    totalEarnings: number;
+    pendingEarnings: number;
+  };
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -29,179 +38,157 @@ export default function ProfileHeader() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [referralCount, setReferralCount] = useState(0);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchProfile = async () => {
-      if (!user?.id) return;
-
+      if (!user) return;
       try {
-        const profile = await ProfileService.getProfile(user.id);
-        if (profile) {
-          setProfile(profile);
-          
-          if (profile.referral_code) {
-            const { count } = await supabase
-              .from('user_profiles')
-              .select('*', { count: 'exact', head: true })
-              .eq('referred_by', profile.referral_code);
-              
-            setReferralCount(count || 0);
-          }
-        }
+        const response = await fetch('/api/profile');
+        const data = await response.json();
+        setProfile(data.data);
       } catch (error) {
-        console.error('Error:', error);
-        toast({
-          id: "profile-load-error",
-          title: "Error",
-          description: "Failed to load profile data",
-          variant: "destructive",
-        });
+        console.error('Error fetching profile:', error);
       } finally {
-        setIsLoading(false);
+        setLoading(false);
       }
     };
 
     fetchProfile();
-  }, [user, toast]);
+  }, [user]);
 
-  const copyReferralCode = async () => {
-    if (!profile?.referral_code) return;
-    
-    try {
-      await navigator.clipboard.writeText(profile.referral_code);
+  const copyReferralCode = () => {
+    if (profile?.referral_code) {
+      navigator.clipboard.writeText(profile.referral_code);
       toast({
-        id: "referral-code-copied",
         title: "Copied!",
         description: "Referral code copied to clipboard",
       });
-    } catch (err) {
-      toast({
-        id: "referral-code-copy-error",
-        title: "Error",
-        description: "Failed to copy referral code",
-        variant: "destructive",
-      });
     }
   };
 
-  const shareReferralCode = async () => {
-    if (!profile?.referral_code) return;
-    
-    try {
-      await navigator.share({
-        title: 'Join trustBank',
-        text: `Use my referral code: ${profile.referral_code}`,
-        url: `${window.location.origin}/signup?ref=${profile.referral_code}`,
-      });
-    } catch (err) {
-      // Fall back to copying to clipboard if share is not supported
-      copyReferralCode();
-    }
-  };
-
-  if (isLoading) {
-    return <ProfileHeaderSkeleton />;
+  if (loading) {
+    return <ProfileSkeleton />;
   }
 
-  return (
-    <Card className="p-6 bg-white dark:bg-gray-800 shadow-md">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-full bg-green-100 dark:bg-green-900 flex items-center justify-center">
-              <User className="h-6 w-6 text-green-600 dark:text-green-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {profile?.full_name}
-              </h1>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-500 dark:text-gray-400">
-                  {profile?.email}
-                </span>
-                <VerificationBadge isVerified={profile?.is_verified || false} />
-              </div>
-            </div>
-          </div>
-        </div>
+  if (!profile) {
+    return null;
+  }
 
-        {profile?.referral_code && (
-          <div className="w-full md:w-auto space-y-2">
-            <div className="bg-gray-50 dark:bg-gray-900 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-              <div className="flex flex-col gap-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                    Referral Code
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={copyReferralCode}
-                      className="hover:bg-gray-100 dark:hover:bg-gray-800"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={shareReferralCode}
-                      className="hover:bg-gray-100 dark:hover:bg-gray-800"
-                    >
-                      <Share2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <code className="font-mono text-lg font-semibold text-green-600 dark:text-green-400">
-                  {profile.referral_code}
-                </code>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  Earn up to 40% commission on referral trades
-                </p>
-                <div className="mt-2 flex items-center gap-4">
-                  <div className="text-sm">
-                    <span className="text-gray-500">Total Referrals: </span>
-                    <span className="font-semibold">{profile?.referral_count || 0}</span>
-                  </div>
-                  {profile?.referred_by && (
-                    <div className="text-sm">
-                      <span className="text-gray-500">Referred By: </span>
-                      <span className="font-mono">{profile.referred_by}</span>
-                    </div>
-                  )}
-                </div>
-                {profile?.referral_count >= 50 && (
-                  <div className="mt-2">
-                    <Badge variant="default" className="text-xs">
-                      🎉 Elite Referrer
-                    </Badge>
-                  </div>
+  const getKycProgress = () => {
+    switch (profile.kyc_level) {
+      case 0: return 33;
+      case 1: return 66;
+      case 2: return 100;
+      default: return 0;
+    }
+  };
+
+  return (
+    <Card className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-gray-900 dark:to-gray-800">
+      <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
+        <Avatar className="w-24 h-24 border-4 border-white shadow-lg">
+          <AvatarImage src={profile.avatar_url || undefined} />
+          <AvatarFallback className="bg-primary text-2xl">
+            {profile.full_name?.charAt(0) || profile.email?.charAt(0) || 'U'}
+          </AvatarFallback>
+        </Avatar>
+
+        <div className="flex-1 space-y-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div>
+              <h1 className="text-2xl font-bold flex items-center gap-2">
+                {profile.full_name || 'User'}
+                {profile.is_verified && (
+                  <VerificationBadge className="w-5 h-5 text-blue-500" />
                 )}
-              </div>
+              </h1>
+              <p className="text-muted-foreground">{profile.email}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2 md:ml-auto">
+              <Button variant="outline" size="sm" className="gap-2">
+                <Shield className="w-4 h-4" />
+                KYC Level {profile.kyc_level}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Wallet className="w-4 h-4" />
+                Manage Wallet
+              </Button>
+              <Button variant="outline" size="sm" className="gap-2">
+                <Settings className="w-4 h-4" />
+                Settings
+              </Button>
             </div>
           </div>
-        )}
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">KYC Progress</span>
+              <span className="text-sm text-muted-foreground">{getKycProgress()}%</span>
+            </div>
+            <Progress value={getKycProgress()} className="h-2" />
+          </div>
+
+          {profile.referral_code && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold">Referral Program</h3>
+                <Badge variant="secondary" className="font-mono">
+                  {profile.referral_code}
+                </Badge>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                  <div className="text-lg font-bold">{profile.referral_stats.totalReferrals}</div>
+                  <div className="text-xs text-muted-foreground">Total Referrals</div>
+                </div>
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                  <div className="text-lg font-bold">{profile.referral_stats.activeReferrals}</div>
+                  <div className="text-xs text-muted-foreground">Active Referrals</div>
+                </div>
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                  <div className="text-lg font-bold">₦{profile.referral_stats.totalEarnings.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">Total Earnings</div>
+                </div>
+                <div className="text-center p-2 bg-gray-50 dark:bg-gray-900 rounded">
+                  <div className="text-lg font-bold">₦{profile.referral_stats.pendingEarnings.toLocaleString()}</div>
+                  <div className="text-xs text-muted-foreground">Pending Earnings</div>
+                </div>
+              </div>
+
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={copyReferralCode} className="gap-2">
+                  <Copy className="w-4 h-4" />
+                  Copy Code
+                </Button>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Share2 className="w-4 h-4" />
+                  Share
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </Card>
   );
 }
 
-function ProfileHeaderSkeleton() {
+function ProfileSkeleton() {
   return (
     <Card className="p-6">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-        <div className="space-y-2">
-          <div className="flex items-center gap-3">
-            <Skeleton className="h-12 w-12 rounded-full" />
-            <div>
-              <Skeleton className="h-8 w-48" />
-              <Skeleton className="h-4 w-32 mt-2" />
-            </div>
+      <div className="flex items-center gap-6">
+        <Skeleton className="w-24 h-24 rounded-full" />
+        <div className="flex-1 space-y-4">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-4 w-64" />
+          <div className="flex gap-2">
+            <Skeleton className="h-9 w-24" />
+            <Skeleton className="h-9 w-24" />
           </div>
         </div>
-        <Skeleton className="h-24 w-full md:w-72" />
       </div>
     </Card>
   );

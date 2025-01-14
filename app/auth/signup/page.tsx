@@ -130,20 +130,26 @@ export default function SignUp() {
         throw new Error('Failed to create account');
       }
 
-      // Create profile using the API route
-      const response = await fetch('/api/profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          name,
-          email,
-        }),
-      });
+      // Create profile using ProfileService directly
+      const profile = await ProfileService.createProfile(data.user.id, email);
 
-      if (!response.ok) {
-        throw new Error('Failed to create profile');
+      // Update additional profile data
+      const { error: updateError } = await supabase
+        .from('user_profiles')
+        .update({
+          full_name: name,
+          referred_by: referralCode || null,
+          referral_stats: {
+            totalReferrals: 0,
+            activeReferrals: 0,
+            totalEarnings: 0,
+            pendingEarnings: 0
+          }
+        })
+        .eq('user_id', data.user.id);
+
+      if (updateError) {
+        throw updateError;
       }
 
       toast({

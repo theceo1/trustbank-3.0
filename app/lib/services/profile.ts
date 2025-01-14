@@ -1,72 +1,149 @@
 //app/lib/services/profile.ts
 
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { generateReferralCode } from '@/utils/referral';
+import { createClient } from '@supabase/supabase-js';
+import { generateReferralCode } from '../../utils/referral';
 
-const supabase = createClientComponentClient();
+let supabase: ReturnType<typeof createClient>;
+
+function getClient() {
+  if (!supabase) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+  return supabase;
+}
 
 export class ProfileService {
   static async createProfile(userId: string, email: string) {
+    // Get user metadata from auth.users
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+    
+    const { data: { user }, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    if (userError) throw userError;
+
+    // Check if profile already exists
+    const { data: existingProfile } = await getClient()
+      .from('user_profiles')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
+
+    if (existingProfile) {
+      return existingProfile;
+    }
+
+    // Extract user metadata
+    const metadata = user?.user_metadata || {};
+    const fullName = metadata.full_name || metadata.name || email.split('@')[0];
+    const [firstName, ...lastNameParts] = fullName.split(' ');
+    const lastName = lastNameParts.join(' ');
+
+    // Create new profile
+    const { data: profile, error: createError } = await getClient()
+      .from('user_profiles')
+      .insert([
+        {
+          user_id: userId,
+          email,
+          full_name: fullName,
+          first_name: firstName,
+          last_name: lastName || null,
+          phone: metadata.phone || null,
+          kyc_status: 'pending',
+          kyc_level: 0,
+          is_verified: false,
+          daily_limit: 50000,
+          monthly_limit: 1000000,
+          avatar_url: metadata.avatar_url || null,
+          country: metadata.country || 'NG',
+          verification_status: {
+            email: !!user?.email_confirmed_at,
+            phone: !!metadata.phone_verified,
+            identity: false,
+            address: false
+          },
+          referral_stats: {
+            totalReferrals: 0,
+            activeReferrals: 0,
+            totalEarnings: 0,
+            pendingEarnings: 0
+          },
+          notification_settings: {
+            email: { marketing: false, security: true, trading: true, news: false },
+            push: { trading: true, security: true, price_alerts: true },
+            sms: { security: true, trading: true }
+          },
+          tier1_verified: false,
+          tier2_verified: false,
+          tier3_verified: false,
+          created_at: user?.created_at || new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }
+      ])
+      .select()
+      .single();
+
+    if (createError) throw createError;
+
+    // Generate and set a unique referral code
     let referralCode = generateReferralCode();
     let attempts = 0;
     const maxAttempts = 3;
 
     while (attempts < maxAttempts) {
       try {
-        // Try to create profile with current referral code
-        const { data, error } = await supabase
+        // Check if referral code already exists
+        const { data: existingCode } = await getClient()
           .from('user_profiles')
-          .insert([
-            {
-              user_id: userId,
-              email,
-              kyc_status: 'pending',
-              kyc_level: 0,
-              is_verified: false,
-              daily_limit: 50000,
-              monthly_limit: 1000000,
-              referral_code: referralCode,
-              referral_stats: {
-                totalReferrals: 0,
-                activeReferrals: 0,
-                totalEarnings: 0,
-                pendingEarnings: 0
-              },
-              notification_settings: {
-                email: { marketing: false, security: true, trading: true, news: false },
-                push: { trading: true, security: true, price_alerts: true },
-                sms: { security: true, trading: true }
-              }
-            }
-          ])
+          .select('referral_code')
+          .eq('referral_code', referralCode)
+          .single();
+
+        if (existingCode) {
+          // Generate a new code and try again
+          referralCode = generateReferralCode();
+          attempts++;
+          continue;
+        }
+
+        // Update the profile with the unique referral code
+        const { data: updatedProfile, error: updateError } = await getClient()
+          .from('user_profiles')
+          .update({ referral_code: referralCode })
+          .eq('user_id', userId)
           .select()
           .single();
 
-        if (error) {
-          if (error.code === '23505' && error.message.includes('referral_code')) {
+        if (updateError) {
+          if (updateError.code === '23505' && updateError.message.includes('referral_code')) {
             // Generate a new code and try again
             referralCode = generateReferralCode();
             attempts++;
             continue;
           }
-          throw error;
+          throw updateError;
         }
 
-        return data;
+        return updatedProfile;
       } catch (error) {
         if (attempts >= maxAttempts - 1) {
-          throw new Error('Failed to create profile with unique referral code after multiple attempts');
+          // Return the profile even if we couldn't set a referral code
+          return profile;
         }
         attempts++;
         referralCode = generateReferralCode();
       }
     }
 
-    throw new Error('Failed to create profile');
+    return profile;
   }
 
   static async getProfile(userId: string) {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('user_profiles')
       .select(`
         *,
@@ -79,12 +156,21 @@ export class ProfileService {
       .eq('user_id', userId)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      // If profile doesn't exist, create it
+      if (error.code === 'PGRST116') {
+        const { data: { user } } = await getClient().auth.admin.getUserById(userId);
+        if (user) {
+          return this.createProfile(userId, user.email!);
+        }
+      }
+      throw error;
+    }
     return data;
   }
 
   static async updateProfile(userId: string, updates: any) {
-    const { data, error } = await supabase
+    const { data, error } = await getClient()
       .from('user_profiles')
       .update(updates)
       .eq('user_id', userId)
@@ -94,4 +180,4 @@ export class ProfileService {
     if (error) throw error;
     return data;
   }
-} 
+}

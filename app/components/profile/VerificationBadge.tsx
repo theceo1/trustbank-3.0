@@ -1,22 +1,50 @@
-import { Shield, CheckCircle, XCircle } from "lucide-react";
+import { CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface VerificationBadgeProps {
-  isVerified: boolean;
+  className?: string;
+  status?: 'verified' | 'pending' | 'rejected';
+  showLabel?: boolean;
 }
 
-export default function VerificationBadge({ isVerified }: VerificationBadgeProps) {
+export default function VerificationBadge({ 
+  className, 
+  status = 'verified',
+  showLabel = false 
+}: VerificationBadgeProps) {
+  const getStatusConfig = () => {
+    switch (status) {
+      case 'verified':
+        return {
+          icon: CheckCircle2,
+          color: 'text-green-500',
+          label: 'Verified'
+        };
+      case 'pending':
+        return {
+          icon: Clock,
+          color: 'text-yellow-500',
+          label: 'Pending'
+        };
+      case 'rejected':
+        return {
+          icon: AlertCircle,
+          color: 'text-red-500',
+          label: 'Rejected'
+        };
+    }
+  };
+
+  const config = getStatusConfig();
+  const Icon = config.icon;
+
   return (
-    <div className={`flex items-center gap-2 ${isVerified ? 'text-green-600' : 'text-red-500'}`}>
-      {isVerified ? (
-        <>
-          <CheckCircle className="h-4 w-4" />
-          <span>Verified Account</span>
-        </>
-      ) : (
-        <>
-          <XCircle className="h-4 w-4" />
-          <span>Unverified Account</span>
-        </>
+    <div className={cn("flex items-center gap-1", className)}>
+      <Icon className={cn("w-4 h-4", config.color)} />
+      {showLabel && (
+        <span className={cn("text-sm font-medium", config.color)}>
+          {config.label}
+        </span>
       )}
     </div>
   );
