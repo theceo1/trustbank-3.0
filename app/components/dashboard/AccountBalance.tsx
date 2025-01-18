@@ -184,7 +184,7 @@ export function AccountBalance() {
                   exit={{ opacity: 0, y: 20 }}
                   transition={{ duration: 0.2 }}
                 >
-                  <div className="text-3xl font-bold tracking-tight">
+                  <div className="text-3xl font-bold tracking-tight" data-testid="wallet-balance">
                     {showBalance 
                       ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
                       : '₦••••••'

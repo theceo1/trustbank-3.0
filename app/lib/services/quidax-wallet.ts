@@ -57,6 +57,23 @@ export class WalletService {
         .update({ quidax_id: quidaxUser.id })
         .eq('user_id', userId);
 
+      // Generate wallet addresses for major cryptocurrencies
+      const currencies = ['btc', 'eth', 'usdt'];
+      for (const currency of currencies) {
+        try {
+          await fetch(`${this.quidaxBaseUrl}/users/${quidaxUser.id}/wallets/${currency}/address`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${this.quidaxSecretKey}`,
+              'Content-Type': 'application/json'
+            }
+          });
+        } catch (error) {
+          console.error(`Error generating ${currency} address:`, error);
+          // Continue with other currencies even if one fails
+        }
+      }
+
       return { success: true, quidax_id: quidaxUser.id };
     } catch (error) {
       console.error('Error setting up wallet:', error);
@@ -66,11 +83,17 @@ export class WalletService {
 
   async getAllWallets(quidaxId: string) {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
       const response = await fetch(`${this.quidaxBaseUrl}/users/${quidaxId}/wallets`, {
         headers: {
           'Authorization': `Bearer ${this.quidaxSecretKey}`
-        }
+        },
+        signal: controller.signal
       });
+
+      clearTimeout(timeout);
 
       if (!response.ok) {
         const error = await response.json();
@@ -78,8 +101,11 @@ export class WalletService {
       }
 
       return await response.json();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching wallets:', error);
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout while fetching wallets');
+      }
       throw error;
     }
   }

@@ -125,8 +125,8 @@ export default function Footer() {
             <div>
               <h3 className="font-bold text-2xl mb-2">trustBank</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                Your trusted partner in <span className="text-green-600 font-medium">Crypto | Simplified</span>. 
-                Making cryptocurrency trading accessible, secure, and efficient.
+                We are <span className="text-green-600 font-medium">Crypto | Simplified</span>. 
+                Making cryptocurrency trading accessible, secure, and efficient by simplifying crypto adoption in emerging markets.
               </p>
             </div>
             

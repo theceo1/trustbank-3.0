@@ -27,17 +27,6 @@ export async function GET() {
       return NextResponse.json({ error: 'Profile not found' }, { status: 404 });
     }
 
-    // Check KYC status
-    if (!profile.is_verified || profile.kyc_status !== 'verified') {
-      return NextResponse.json(
-        { 
-          error: 'KYC verification required',
-          redirectTo: '/profile/verification'
-        }, 
-        { status: 403 }
-      );
-    }
-
     // Check if Quidax account is linked
     if (!profile.quidax_id) {
       return NextResponse.json(

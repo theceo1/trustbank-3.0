@@ -111,7 +111,12 @@ export default function SignUp() {
     setError('');
     
     try {
-      // First create the auth user
+      toast({
+        title: "Creating Account",
+        description: "Please wait while we set up your account...",
+      });
+
+      // Create the auth user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
@@ -130,35 +135,30 @@ export default function SignUp() {
         throw new Error('Failed to create account');
       }
 
-      // Create profile using ProfileService directly
-      const profile = await ProfileService.createProfile(data.user.id, email);
-
-      // Update additional profile data
-      const { error: updateError } = await supabase
-        .from('user_profiles')
-        .update({
-          full_name: name,
-          referred_by: referralCode || null,
-          referral_stats: {
-            totalReferrals: 0,
-            activeReferrals: 0,
-            totalEarnings: 0,
-            pendingEarnings: 0
-          }
-        })
-        .eq('user_id', data.user.id);
-
-      if (updateError) {
-        throw updateError;
+      // Create profile using ProfileService
+      try {
+        await ProfileService.createProfile(data.user.id, email);
+      } catch (profileError) {
+        console.error('Profile creation error:', profileError);
       }
 
       toast({
-        title: "Account created",
-        description: "Welcome! Complete your ID verification to start trading.",
+        title: "✅ Account Created Successfully",
+        description: "Welcome to trustBank! Complete your KYC verification to start trading.",
         variant: "default"
       });
 
+      // Add a slight delay before showing the next step toast
+      setTimeout(() => {
+        toast({
+          title: "Next Steps",
+          description: "Head to your dashboard to complete KYC verification and start trading.",
+          variant: "default"
+        });
+      }, 1000);
+
       router.push('/dashboard');
+      
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';
       setError(errorMessage);
@@ -177,6 +177,11 @@ export default function SignUp() {
     setError('');
     
     try {
+      toast({
+        title: "Connecting to Google",
+        description: "Please complete the Google sign-in process...",
+      });
+
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
@@ -191,7 +196,7 @@ export default function SignUp() {
       const errorMessage = error instanceof Error ? error.message : 'Failed to sign in with Google';
       setError(errorMessage);
       toast({
-        title: "Error",
+        title: "Google Sign-in Failed",
         description: errorMessage,
         variant: "destructive"
       });

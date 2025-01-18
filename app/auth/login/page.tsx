@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,20 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { signIn, signInWithGoogle } = useAuth();
+
+  // Handle error from URL
+  useEffect(() => {
+    const searchParams = new URLSearchParams(window.location.search);
+    const errorMessage = searchParams.get('error');
+    if (errorMessage) {
+      setError(decodeURIComponent(errorMessage));
+      toast.error('Authentication Error', {
+        description: decodeURIComponent(errorMessage)
+      });
+      // Clear the error from URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,6 +254,7 @@ export default function Login() {
                         placeholder="you@example.com"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
+                        data-testid="email"
                       />
                     </div>
                   </motion.div>
@@ -273,6 +288,7 @@ export default function Login() {
                         placeholder="••••••••"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
+                        data-testid="password"
                       />
                     </div>
                   </motion.div>
@@ -287,6 +303,7 @@ export default function Login() {
                     type="submit"
                     className="w-full h-12 bg-green-600 hover:bg-green-500 text-white transition-all duration-200"
                     disabled={isLoading}
+                    data-testid="login-button"
                   >
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin mx-auto" />

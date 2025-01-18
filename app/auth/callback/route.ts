@@ -2,36 +2,31 @@
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { ProfileService } from '@/lib/services/profile'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get('code')
-  const redirectTo = requestUrl.searchParams.get('redirect') || '/dashboard'
 
-  if (!code) {
-    return NextResponse.redirect(new URL('/auth/login', requestUrl.origin))
-  }
-
-  try {
+  if (code) {
     const supabase = createRouteHandlerClient({ cookies })
     const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    if (error) {
-      console.error('Auth callback error:', error)
-      return NextResponse.redirect(new URL('/auth/login', requestUrl.origin))
+    if (!error && session?.user) {
+      // Create/update profile for OAuth users
+      try {
+        await ProfileService.createProfile(session.user.id, session.user.email!)
+      } catch (error) {
+        console.error('Error creating profile:', error)
+      }
     }
 
-    if (!session) {
-      console.error('No session after code exchange')
-      return NextResponse.redirect(new URL('/auth/login', requestUrl.origin))
-    }
-
-    // Redirect to the original destination or dashboard
-    return NextResponse.redirect(new URL(redirectTo, requestUrl.origin))
-  } catch (error) {
-    console.error('Auth callback error:', error)
-    return NextResponse.redirect(new URL('/auth/login', requestUrl.origin))
+    // URL to redirect to after sign in process completes
+    return NextResponse.redirect(requestUrl.origin + '/dashboard')
   }
+
+  // Return the user to an error page with some instructions
+  return NextResponse.redirect(requestUrl.origin + '/auth/auth-error')
 }

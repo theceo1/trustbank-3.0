@@ -15,7 +15,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         webhook: process.env.NODE_ENV === 'production' 
           ? 'https://www.trustbank.tech/api/webhooks/dojah'
-          : 'https://b524-102-67-1-6.ngrok-free.app/api/webhooks/dojah',
+          : 'https://6018-102-67-1-5.ngrok-free.app/api/webhooks/dojah',
         service: 'kyc_widget'
       })
     });

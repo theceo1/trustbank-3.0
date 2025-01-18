@@ -26,11 +26,15 @@ export class ProfileService {
     if (userError) throw userError;
 
     // Check if profile already exists
-    const { data: existingProfile } = await getClient()
+    const { data: existingProfile, error: existingError } = await getClient()
       .from('user_profiles')
       .select('*')
       .eq('user_id', userId)
       .single();
+
+    if (existingError && existingError.code !== 'PGRST116') { // Not found error is ok
+      throw existingError;
+    }
 
     if (existingProfile) {
       return existingProfile;
@@ -42,10 +46,13 @@ export class ProfileService {
     const [firstName, ...lastNameParts] = fullName.split(' ');
     const lastName = lastNameParts.join(' ');
 
-    // Create new profile
+    // Generate unique referral code
+    const referralCode = generateReferralCode();
+
+    // Create new profile with consistent schema
     const { data: profile, error: createError } = await getClient()
       .from('user_profiles')
-      .insert([
+      .upsert([
         {
           user_id: userId,
           email,
@@ -60,6 +67,7 @@ export class ProfileService {
           monthly_limit: 1000000,
           avatar_url: metadata.avatar_url || null,
           country: metadata.country || 'NG',
+          referral_code: referralCode,
           verification_status: {
             email: !!user?.email_confirmed_at,
             phone: !!metadata.phone_verified,
@@ -77,66 +85,18 @@ export class ProfileService {
             push: { trading: true, security: true, price_alerts: true },
             sms: { security: true, trading: true }
           },
-          tier1_verified: false,
-          tier2_verified: false,
-          tier3_verified: false,
           created_at: user?.created_at || new Date().toISOString(),
           updated_at: new Date().toISOString()
         }
-      ])
+      ], {
+        onConflict: 'user_id'
+      })
       .select()
       .single();
 
-    if (createError) throw createError;
-
-    // Generate and set a unique referral code
-    let referralCode = generateReferralCode();
-    let attempts = 0;
-    const maxAttempts = 3;
-
-    while (attempts < maxAttempts) {
-      try {
-        // Check if referral code already exists
-        const { data: existingCode } = await getClient()
-          .from('user_profiles')
-          .select('referral_code')
-          .eq('referral_code', referralCode)
-          .single();
-
-        if (existingCode) {
-          // Generate a new code and try again
-          referralCode = generateReferralCode();
-          attempts++;
-          continue;
-        }
-
-        // Update the profile with the unique referral code
-        const { data: updatedProfile, error: updateError } = await getClient()
-          .from('user_profiles')
-          .update({ referral_code: referralCode })
-          .eq('user_id', userId)
-          .select()
-          .single();
-
-        if (updateError) {
-          if (updateError.code === '23505' && updateError.message.includes('referral_code')) {
-            // Generate a new code and try again
-            referralCode = generateReferralCode();
-            attempts++;
-            continue;
-          }
-          throw updateError;
-        }
-
-        return updatedProfile;
-      } catch (error) {
-        if (attempts >= maxAttempts - 1) {
-          // Return the profile even if we couldn't set a referral code
-          return profile;
-        }
-        attempts++;
-        referralCode = generateReferralCode();
-      }
+    if (createError) {
+      console.error('Error creating profile:', createError);
+      throw createError;
     }
 
     return profile;

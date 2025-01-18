@@ -63,11 +63,6 @@ export default function WalletPage() {
         }
         
         const profileData = await profileResponse.json();
-        if (!profileData.is_verified || profileData.kyc_status !== 'verified') {
-          setErrorType('kyc');
-          throw new Error('Please complete your identity verification to access your wallet.');
-        }
-
         if (!profileData.quidax_id) {
           setErrorType('setup');
           throw new Error('Please complete your wallet setup to continue.');

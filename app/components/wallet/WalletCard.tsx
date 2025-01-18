@@ -36,7 +36,7 @@ export default function WalletCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <Card className="relative overflow-hidden">
+      <Card className="relative overflow-hidden" data-testid={`wallet-card-${currency.toLowerCase()}`}>
         <CardContent className="p-6">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
@@ -74,7 +74,7 @@ export default function WalletCard({
                 <span>Loading balance...</span>
               </div>
             ) : (
-              <div className="text-2xl font-bold">
+              <div className="text-2xl font-bold" data-testid="wallet-balance">
                 {isNGN ? `₦${balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 
                   `${formatCurrency(balance)} ${currency.toUpperCase()}`}
               </div>
@@ -102,6 +102,7 @@ export default function WalletCard({
                   variant="outline"
                   className="w-full hover:bg-green-50 col-span-2"
                   onClick={() => setShowModal('transfer')}
+                  data-testid="transfer-button"
                 >
                   <History className="mr-2 h-4 w-4" />
                   Transfer
@@ -143,6 +144,7 @@ export default function WalletCard({
         <TransferModal
           isOpen={showModal === 'transfer'}
           currency={currency}
+          balance={balance}
           onClose={() => setShowModal(null)}
         />
       )}

@@ -132,9 +132,9 @@ export class QuidaxService {
     return response;
   }
 
-  static async getWalletBalance(userId: string, currency: string): Promise<Response> {
+  static async getWalletBalance(userId: string, currency: string): Promise<{ data: { balance: string } }> {
     const response = await fetch(
-      `${QuidaxService.baseUrl}/users/${userId}/wallets/${currency}`,
+      `${QuidaxService.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}`,
       {
         headers: {
           'Authorization': `Bearer ${QuidaxService.apiKey}`,
@@ -142,7 +142,13 @@ export class QuidaxService {
         }
       }
     );
-    return response;
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to get wallet balance');
+    }
+
+    return response.json();
   }
 
   static async transfer(
@@ -150,25 +156,35 @@ export class QuidaxService {
     toUserId: string,
     amount: string,
     currency: string
-  ): Promise<Response> {
+  ): Promise<{ success: boolean; data: { id: string; status: string } }> {
     const response = await fetch(
-      `${QuidaxService.baseUrl}/transfers`,
+      `${QuidaxService.baseUrl}/users/${fromUserId}/withdraws`,
       {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${QuidaxService.apiKey}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          from_user_id: fromUserId,
-          to_user_id: toUserId,
+          currency: currency.toLowerCase(),
           amount,
-          currency
+          fund_uid: toUserId,
+          transaction_note: 'Internal transfer',
+          narration: 'Fund transfer'
         })
       }
     );
-    return response;
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Transfer failed');
+    }
+
+    const result = await response.json();
+    return {
+      success: result.status === 'success',
+      data: result.data
+    };
   }
 
   static verifyWebhookSignature(webhook: QuidaxWebhookEvent, signature?: string): boolean {
@@ -194,5 +210,27 @@ export class QuidaxService {
       'processing': 'processing'
     };
     return statusMap[status.toLowerCase()] || 'pending';
+  }
+
+  static async createSubAccount(params: {
+    email: string;
+    first_name: string;
+    last_name: string;
+  }): Promise<{ data: { id: string } }> {
+    const response = await fetch(`${QuidaxService.baseUrl}/users`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${QuidaxService.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(params)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create sub-account');
+    }
+
+    return response.json();
   }
 } 
