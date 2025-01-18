@@ -2,76 +2,83 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
+import { QuidaxService } from '@/lib/services/quidax';
 
 export async function POST() {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ 
-      cookies: () => cookieStore 
-    });
-    
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    const supabase = createRouteHandlerClient({ cookies });
+
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user data
-    const { data: userData, error: userError } = await supabase
-      .from('users')
-      .select('email, raw_user_meta_data')
-      .eq('id', session.user.id)
+    // Get user profile
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('quidax_id, email, full_name')
+      .eq('user_id', session.user.id)
       .single();
 
-    if (userError || !userData) {
-      console.error('Error fetching user data:', userError);
-      return NextResponse.json({ 
-        error: 'Unable to fetch user data' 
-      }, { status: 500 });
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
+      return NextResponse.json(
+        { error: 'Failed to fetch profile data' },
+        { status: 500 }
+      );
     }
 
-    // Check if user already has a Quidax ID
-    const { data: existingProfile } = await supabase
-      .from('profiles')
-      .select('quidax_id')
-      .eq('id', session.user.id)
-      .single();
-
-    if (existingProfile?.quidax_id) {
-      return NextResponse.json({ 
-        error: 'Wallet already set up' 
-      }, { status: 400 });
+    // If user already has a Quidax ID, return it
+    if (profile.quidax_id) {
+      return NextResponse.json({
+        status: 'success',
+        message: 'Wallet already setup',
+        data: {
+          quidax_id: profile.quidax_id
+        }
+      });
     }
 
-    // Get wallet service instance
-    const walletService = getWalletService();
+    // Handle name parsing with validation
+    const fullName = profile.full_name?.trim() || 'Unknown User';
+    const nameParts = fullName.split(' ').filter((part: string) => part.length > 0);
+    const firstName = nameParts[0] || 'Unknown';
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User';
 
-    // Create Quidax account
-    const fullName = userData.raw_user_meta_data?.full_name || userData.email.split('@')[0];
-    const quidaxResponse = await walletService.createSubAccount(
-      userData.email,
-      fullName
-    ).catch(error => {
-      console.error('Error creating Quidax account:', error);
-      throw new Error('Failed to create Quidax account');
+    // Ensure we have a valid email
+    const email = profile.email || session.user.email;
+    if (!email) {
+      return NextResponse.json(
+        { error: 'Valid email is required for wallet setup' },
+        { status: 400 }
+      );
+    }
+
+    // Create Quidax sub-account with validated data
+    const quidaxUser = await QuidaxService.createSubAccount({
+      email,
+      first_name: firstName,
+      last_name: lastName,
+      country: 'NG' // Default to Nigeria
     });
 
-    if (!quidaxResponse?.data?.id) {
-      throw new Error('Invalid response from Quidax');
+    if (!quidaxUser?.id) {
+      throw new Error('Failed to create Quidax account');
     }
 
     // Update user profile with Quidax ID
     const { error: updateError } = await supabase
-      .from('profiles')
+      .from('user_profiles')
       .update({ 
-        quidax_id: quidaxResponse.data.id,
+        quidax_id: quidaxUser.id,
         kyc_status: 'pending',
         kyc_level: 0,
         tier1_verified: false,
         tier2_verified: false,
         tier3_verified: false
       })
-      .eq('id', session.user.id);
+      .eq('user_id', session.user.id);
 
     if (updateError) {
       console.error('Error updating user profile:', updateError);
@@ -82,7 +89,7 @@ export async function POST() {
       status: 'success',
       message: 'Wallet setup completed',
       data: {
-        quidax_id: quidaxResponse.data.id
+        quidax_id: quidaxUser.id
       }
     });
 

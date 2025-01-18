@@ -8,7 +8,7 @@ import {
   KYCTier,
   KYC_LIMITS 
 } from '@/app/types/kyc';
-import supabase from "@/lib/supabase/client";
+import { toast } from '@/components/ui/use-toast';
 
 export class KYCService {
   private static supabase = createClientComponentClient();
@@ -34,8 +34,19 @@ export class KYCService {
 
       if (error) throw error;
 
+      // Show toast notification
+      toast({
+        title: "Verification Submitted",
+        description: "Your verification request has been submitted. Please wait while we process it.",
+      });
+
     } catch (error) {
       console.error(`${type} verification error:`, error);
+      toast({
+        title: "Verification Failed",
+        description: error instanceof Error ? error.message : "Failed to submit verification",
+        variant: "destructive"
+      });
       throw error;
     }
   }
@@ -77,6 +88,10 @@ export class KYCService {
         .single();
         
       if (existingProfile?.kyc_verified) {
+        toast({
+          title: "Already Verified",
+          description: "Your identity has already been verified.",
+        });
         return true;
       }
       
@@ -104,6 +119,13 @@ export class KYCService {
           error: data.message || 'NIN verification failed',
           attempt_at: new Date().toISOString()
         });
+
+        toast({
+          title: "Verification Failed",
+          description: data.message || "Failed to verify your identity. Please try again.",
+          variant: "destructive"
+        });
+
         throw new Error(data.message || 'NIN verification failed');
       }
 
@@ -124,6 +146,11 @@ export class KYCService {
 
       if (error) {
         console.error('Profile update error:', error);
+        toast({
+          title: "Update Failed",
+          description: "Failed to update verification status. Please contact support.",
+          variant: "destructive"
+        });
         throw new Error('Failed to update verification status');
       }
 
@@ -135,22 +162,9 @@ export class KYCService {
         verification_data: data.data
       });
 
-      // Send notification
-      await fetch('/api/notifications/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          type: 'kyc_update',
-          title: 'KYC Verification Update',
-          message: 'Your NIN verification has been submitted successfully. We will review it shortly.',
-          data: {
-            status: 'pending',
-            type: 'nin'
-          }
-        })
+      toast({
+        title: "Verification Submitted",
+        description: "Your identity verification has been submitted successfully. We will notify you once the verification is complete.",
       });
 
       return true;
@@ -164,19 +178,21 @@ export class KYCService {
     try {
       const { data: profileData, error: profileError } = await this.supabase
         .from('user_profiles')
-        .select('kyc_level, kyc_status, kyc_verified')
+        .select('kyc_level, kyc_status, is_verified, kyc_documents')
         .eq('user_id', userId)
         .single();
 
       if (profileError) {
         if (profileError.code === 'PGRST116') {
+          // Create new profile for user with unverified status
           const { data: newProfile, error: createError } = await this.supabase
             .from('user_profiles')
             .insert([{
               user_id: userId,
               kyc_level: KYCTier.NONE,
-              kyc_status: 'pending',
-              kyc_verified: false
+              kyc_status: 'unverified',
+              is_verified: false,
+              kyc_documents: null
             }])
             .select()
             .single();
@@ -185,6 +201,8 @@ export class KYCService {
           return { 
             isVerified: false, 
             tier: KYCTier.NONE,
+            status: 'unverified',
+            documents: null,
             limits: KYC_LIMITS[KYCTier.NONE]
           };
         }
@@ -194,8 +212,10 @@ export class KYCService {
       const tierLevel = profileData.kyc_level as KYCTier;
       
       return {
-        isVerified: profileData.kyc_verified,
+        isVerified: profileData.is_verified,
         tier: tierLevel,
+        status: profileData.kyc_status,
+        documents: profileData.kyc_documents,
         limits: KYC_LIMITS[tierLevel]
       };
     } catch (error) {
@@ -203,6 +223,8 @@ export class KYCService {
       return { 
         isVerified: false, 
         tier: KYCTier.NONE,
+        status: 'unverified',
+        documents: null,
         limits: KYC_LIMITS[KYCTier.NONE]
       };
     }
@@ -313,21 +335,39 @@ export class KYCService {
     }
   }
 
-  static async isEligibleForTrade(userId: string): Promise<KYCEligibility> {
+  static async isEligibleForTrade(userId: string, action: 'view' | 'receive' | 'trade' = 'trade'): Promise<KYCEligibility> {
     try {
-      const response = await fetch(`/api/kyc/eligibility/${userId}`);
-      const data = await response.json();
+      const status = await this.getKYCStatus(userId);
       
+      // Allow viewing and receiving crypto without KYC
+      if (!status.isVerified && ['view', 'receive'].includes(action)) {
+        return {
+          eligible: true,
+          status: status.status,
+          reason: 'Basic wallet functions available without KYC'
+        };
+      }
+
+      // Require at least BASIC tier for trading
+      if (status.tier === KYCTier.NONE) {
+        return {
+          eligible: false,
+          status: status.status,
+          reason: 'KYC verification required for trading'
+        };
+      }
+
       return {
-        eligible: data.eligible,
-        status: data.status as KYCStatus,
-        reason: data.reason
+        eligible: status.isVerified,
+        status: status.status,
+        reason: status.isVerified ? 'Verified' : 'Verification pending'
       };
     } catch (error) {
+      console.error('Error checking KYC eligibility:', error);
       return {
         eligible: false,
-        status: 'unverified',
-        reason: 'Failed to verify KYC status'
+        status: 'unverified' as KYCStatus,
+        reason: 'Failed to check eligibility'
       };
     }
   }

@@ -104,7 +104,7 @@ export function useTrade() {
       const { isVerified } = await KYCService.getKYCStatus(user.id);
       
       if (!isVerified) {
-        router.push('/profile/kyc');
+        router.push('/profile/verification');
         return null;
       }
 

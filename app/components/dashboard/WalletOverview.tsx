@@ -21,6 +21,7 @@ interface WalletBalance {
   is_crypto: boolean;
   blockchain_enabled: boolean;
   default_network: string | null;
+  address?: string;
   networks: {
     id: string;
     name: string;
@@ -120,7 +121,7 @@ export function WalletOverview() {
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+    <div data-testid="wallet-overview" className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
       {loading ? (
         // Loading skeletons
         Array(6).fill(0).map((_, i) => (
@@ -147,7 +148,12 @@ export function WalletOverview() {
       ) : (
         // Actual wallet cards
         wallets.map((wallet) => (
-          <Card key={wallet.currency} className="relative overflow-hidden">
+          <Card
+            key={wallet.currency}
+            data-testid={`wallet-card-${wallet.currency.toLowerCase()}`}
+            data-wallet-address={wallet.address}
+            className="relative overflow-hidden"
+          >
             <CardHeader className="space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 {wallet.name}

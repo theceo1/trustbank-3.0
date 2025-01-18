@@ -30,7 +30,7 @@ async function handleRequest(request: Request, method: string) {
       return new Response(JSON.stringify({
         error: 'KYC verification required',
         message: 'Please complete KYC verification to access this feature',
-        redirectTo: '/kyc'
+        redirectTo: '/profile/verification'
       }), {
         status: 403,
         headers: { 'Content-Type': 'application/json' }

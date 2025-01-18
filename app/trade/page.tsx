@@ -216,21 +216,6 @@ export default function TradePage() {
     );
   }
 
-  if (!isVerified) {
-    return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="text-sm text-gray-600">
-            To ensure a secure trading experience, please complete your identity verification.{' '}
-            <Link href="/profile/verification" className="text-primary hover:text-primary/90 underline">
-              Complete Verification
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   return (
     <div className="container mx-auto p-4 space-y-6">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

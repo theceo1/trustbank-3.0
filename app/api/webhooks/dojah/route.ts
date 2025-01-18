@@ -4,9 +4,11 @@ import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { logger } from '@/app/lib/logger';
 import { DojahKYCWebhookResponse } from '@/app/types/dojah';
+import { KYCTier } from '@/app/types/kyc';
 
 export async function POST(request: Request) {
-  const supabase = createRouteHandlerClient({ cookies });
+  const cookieStore = cookies();
+  const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
   const webhookLogger = {
     info: (message: string, data?: any) => logger.info(`[Dojah Webhook] ${message}`, data),
     error: (message: string, data?: any) => logger.error(`[Dojah Webhook] ${message}`, data),
@@ -24,6 +26,7 @@ export async function POST(request: Request) {
     // Extract user metadata if available
     const metadata = body.metadata || {};
     const userId = metadata.user_id;
+    const verificationType = metadata.verification_type || 'nin';
 
     if (!userId) {
       webhookLogger.error('No user ID found in webhook metadata');
@@ -33,58 +36,84 @@ export async function POST(request: Request) {
     // Process verification result
     if (body.verification_status === 'Completed') {
       const isVerified = body.status && 
-        body.data?.government_data?.data?.nin?.entity?.nin && 
-        body.data?.selfie?.status;
+        (verificationType === 'nin' ? 
+          body.data?.government_data?.data?.nin?.entity?.nin && body.data?.selfie?.status :
+          verificationType === 'bvn' ?
+          body.data?.government_data?.data?.bvn?.entity?.bvn :
+          body.data?.id?.status && body.data?.selfie?.status);
 
-      // Update user's KYC status
+      // Get current KYC level
+      const { data: profileData, error: profileError } = await supabase
+        .from('user_profiles')
+        .select('kyc_level')
+        .eq('user_id', userId)
+        .single();
+
+      if (profileError) {
+        webhookLogger.error('Error fetching user profile:', profileError);
+        return new NextResponse('Error fetching user profile', { status: 500 });
+      }
+
+      // Determine new KYC level based on verification type
+      let newKycLevel = profileData.kyc_level;
+      if (isVerified) {
+        switch (verificationType) {
+          case 'nin':
+            newKycLevel = KYCTier.BASIC;
+            break;
+          case 'bvn':
+            newKycLevel = KYCTier.INTERMEDIATE;
+            break;
+          case 'photo_id':
+            newKycLevel = KYCTier.ADVANCED;
+            break;
+        }
+      }
+
+      // Update user profile with verification result
       const { error: updateError } = await supabase
         .from('user_profiles')
         .update({
-          kyc_verified: isVerified,
-          kyc_level: isVerified ? 1 : 0,
-          kyc_status: isVerified ? 'verified' : 'failed',
-          verification_ref: body.reference_id,
+          kyc_level: newKycLevel,
+          kyc_status: isVerified ? 'approved' : 'rejected',
+          is_verified: isVerified,
           kyc_documents: {
-            nin: body.data?.government_data?.data?.nin?.entity?.nin,
-            selfie_url: body.selfie_url,
-            verification_data: {
-              nin_data: body.data?.government_data?.data?.nin?.entity,
-              selfie_verification: body.data?.selfie,
-              reference_id: body.reference_id,
-              verified_at: new Date().toISOString()
-            }
-          },
-          updated_at: new Date().toISOString()
+            ...body.data,
+            verification_type: verificationType,
+            updated_at: new Date().toISOString()
+          }
         })
         .eq('user_id', userId);
 
       if (updateError) {
-        webhookLogger.error('Error updating user KYC status:', updateError);
+        webhookLogger.error('Error updating user profile:', updateError);
         return new NextResponse('Error updating user profile', { status: 500 });
       }
 
-      webhookLogger.info('User KYC status updated:', {
+      // Create a verification log entry
+      const { error: logError } = await supabase
+        .from('verification_logs')
+        .insert({
+          user_id: userId,
+          verification_type: verificationType,
+          status: isVerified ? 'success' : 'failed',
+          reference: body.reference_id,
+          metadata: {
+            verification_data: body.data,
+            selfie_url: body.selfie_url,
+            kyc_level: newKycLevel
+          }
+        });
+
+      if (logError) {
+        webhookLogger.error('Error creating verification log:', logError);
+      }
+
+      webhookLogger.info('Verification status updated:', {
         userId,
         isVerified,
-        referenceId: body.reference_id
-      });
-
-      // Send notification to user
-      await fetch('/api/notifications/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId,
-          type: 'kyc_update',
-          title: 'Identity Verification Update',
-          message: isVerified 
-            ? 'Your identity has been verified successfully! You can now start trading.'
-            : 'Your identity verification was not successful. Please check your profile for details.',
-          data: {
-            status: isVerified ? 'verified' : 'failed',
-            reference_id: body.reference_id
-          }
-        })
+        newKycLevel,
+        verificationType
       });
     }
 

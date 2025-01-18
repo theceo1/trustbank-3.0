@@ -2,31 +2,18 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { generateReferralCode } from '../../utils/referral';
-
-let supabase: ReturnType<typeof createClient>;
-
-function getClient() {
-  if (!supabase) {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    supabase = createClient(supabaseUrl, supabaseKey);
-  }
-  return supabase;
-}
+import { QuidaxService } from './quidax';
+import { getAdminClient } from '../supabase/client';
 
 export class ProfileService {
   static async createProfile(userId: string, email: string) {
-    // Get user metadata from auth.users
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = getAdminClient();
     
-    const { data: { user }, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId);
+    const { data: { user }, error: userError } = await supabase.auth.admin.getUserById(userId);
     if (userError) throw userError;
 
     // Check if profile already exists
-    const { data: existingProfile, error: existingError } = await getClient()
+    const { data: existingProfile, error: existingError } = await supabase
       .from('user_profiles')
       .select('*')
       .eq('user_id', userId)
@@ -46,64 +33,51 @@ export class ProfileService {
     const [firstName, ...lastNameParts] = fullName.split(' ');
     const lastName = lastNameParts.join(' ');
 
+    // Create unique email for Quidax account
+    const uniqueEmail = `${email.split('@')[0]}.${Date.now()}@trustbank.tech`;
+
+    // Create Quidax sub-account with unique email
+    const quidaxUser = await QuidaxService.createSubAccount({
+      email: uniqueEmail,
+      first_name: firstName,
+      last_name: lastName || firstName,
+      phone: '+2348000000000' // Add default phone number
+    });
+
+    if (!quidaxUser?.id) {
+      throw new Error('Failed to create Quidax account');
+    }
+
     // Generate unique referral code
     const referralCode = generateReferralCode();
 
-    // Create new profile with consistent schema
-    const { data: profile, error: createError } = await getClient()
+    // Create profile
+    const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .upsert([
+      .insert([
         {
           user_id: userId,
           email,
           full_name: fullName,
-          first_name: firstName,
-          last_name: lastName || null,
-          phone: metadata.phone || null,
+          quidax_id: quidaxUser.id,
+          referral_code: referralCode,
           kyc_status: 'pending',
           kyc_level: 0,
-          is_verified: false,
-          daily_limit: 50000,
-          monthly_limit: 1000000,
-          avatar_url: metadata.avatar_url || null,
-          country: metadata.country || 'NG',
-          referral_code: referralCode,
-          verification_status: {
-            email: !!user?.email_confirmed_at,
-            phone: !!metadata.phone_verified,
-            identity: false,
-            address: false
-          },
-          referral_stats: {
-            totalReferrals: 0,
-            activeReferrals: 0,
-            totalEarnings: 0,
-            pendingEarnings: 0
-          },
-          notification_settings: {
-            email: { marketing: false, security: true, trading: true, news: false },
-            push: { trading: true, security: true, price_alerts: true },
-            sms: { security: true, trading: true }
-          },
-          created_at: user?.created_at || new Date().toISOString(),
-          updated_at: new Date().toISOString()
+          tier1_verified: false,
+          tier2_verified: false,
+          tier3_verified: false
         }
-      ], {
-        onConflict: 'user_id'
-      })
+      ])
       .select()
       .single();
 
-    if (createError) {
-      console.error('Error creating profile:', createError);
-      throw createError;
-    }
-
+    if (profileError) throw profileError;
     return profile;
   }
 
   static async getProfile(userId: string) {
-    const { data, error } = await getClient()
+    const supabase = getAdminClient();
+    const { data, error } = await supabase
       .from('user_profiles')
       .select(`
         *,
@@ -119,7 +93,7 @@ export class ProfileService {
     if (error) {
       // If profile doesn't exist, create it
       if (error.code === 'PGRST116') {
-        const { data: { user } } = await getClient().auth.admin.getUserById(userId);
+        const { data: { user } } = await supabase.auth.admin.getUserById(userId);
         if (user) {
           return this.createProfile(userId, user.email!);
         }
@@ -130,7 +104,8 @@ export class ProfileService {
   }
 
   static async updateProfile(userId: string, updates: any) {
-    const { data, error } = await getClient()
+    const supabase = getAdminClient();
+    const { data, error } = await supabase
       .from('user_profiles')
       .update(updates)
       .eq('user_id', userId)

@@ -1,26 +1,26 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { getSupabaseClient } from '@/lib/supabase/client';
-import { Session, User, AuthChangeEvent } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { Session, User } from '@supabase/supabase-js';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: any }>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   session: null,
   loading: true,
-  signIn: async () => ({ error: new Error('Not implemented') }),
-  signInWithGoogle: async () => {},
   signOut: async () => {},
+  signIn: async () => {},
+  signInWithGoogle: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -37,47 +37,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } else {
       setSession(null);
       setUser(null);
+      router.push('/auth/login');
     }
     setLoading(false);
-  }, []);
-
-  const handleAuthChange = useCallback(async (event: AuthChangeEvent, session: Session | null) => {
-    console.log('Auth state changed:', event, session?.user?.email);
-    
-    if (event === 'SIGNED_OUT') {
-      await updateAuthState(null);
-      router.replace('/auth/login');
-    } else if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-      await updateAuthState(session);
-    } else if (event === 'USER_UPDATED') {
-      await updateAuthState(session);
-    }
-  }, [updateAuthState, router]);
+  }, [router]);
 
   useEffect(() => {
-    let subscription: { unsubscribe: () => void } | null = null;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      updateAuthState(session);
+    });
 
-    const initializeAuth = async () => {
-      try {
-        const { data: { session: initialSession } } = await supabase.auth.getSession();
-        await updateAuthState(initialSession);
-
-        const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(handleAuthChange);
-        subscription = sub;
-      } catch (error) {
-        console.error('Error initializing auth:', error);
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      updateAuthState(session);
+    });
 
     return () => {
-      if (subscription) {
-        subscription.unsubscribe();
-      }
+      subscription.unsubscribe();
     };
-  }, [supabase, updateAuthState, handleAuthChange]);
+  }, [updateAuthState]);
+
+  const signOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      router.push('/auth/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -85,82 +73,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         email,
         password,
       });
-
-      if (error) {
-        return { error };
-      }
-
+      if (error) throw error;
       if (data.session) {
         await updateAuthState(data.session);
+        router.push('/dashboard');
       }
-
-      return { error: null };
     } catch (error) {
-      return { error };
+      console.error('Error signing in:', error);
+      throw error;
     }
   };
 
   const signInWithGoogle = async () => {
     try {
-      console.log('Starting Google sign in...');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.hostname === 'localhost' 
-            ? `${window.location.origin}/auth/callback`
-            : `https://xkxihvafbyegowhryojd.supabase.co/auth/v1/callback`,
-          queryParams: {
-            access_type: 'offline',
-            prompt: 'consent'
-          }
-        }
+          redirectTo: `${window.location.origin}/auth/callback`,
+        },
       });
-
-      if (error) {
-        console.error('Google sign in error:', error);
-        throw error;
-      }
-
-      if (!data.url) {
-        console.error('No OAuth URL returned');
-        throw new Error('Failed to initiate Google sign in');
-      }
-
-      // Let Supabase handle the redirect
-      window.location.href = data.url;
+      if (error) throw error;
     } catch (error) {
-      console.error('Unexpected Google sign in error:', error);
+      console.error('Error signing in with Google:', error);
       throw error;
     }
   };
 
-  const signOut = async () => {
-    try {
-      const { error } = await supabase.auth.signOut();
-      
-      if (error) {
-        console.error('Sign out error:', error);
-        return;
-      }
-
-      await updateAuthState(null);
-      router.replace('/auth/login');
-    } catch (error) {
-      console.error('Unexpected sign out error:', error);
-    }
-  };
-
-  const contextValue = {
-    user,
-    session,
-    loading,
-    signIn,
-    signInWithGoogle,
-    signOut,
-  };
-
   return (
-    <AuthContext.Provider value={contextValue}>
+    <AuthContext.Provider value={{ user, session, loading, signOut, signIn, signInWithGoogle }}>
       {children}
     </AuthContext.Provider>
   );

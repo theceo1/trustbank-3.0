@@ -9,8 +9,16 @@ import { APIError, handleApiError } from '@/app/lib/api-utils';
 export const dynamic = 'force-dynamic';
 export const runtime = 'edge';
 
+type UserProfileResponse = {
+  quidax_id: string;
+}
+
 export async function GET() {
   try {
+    if (!QUIDAX_CONFIG.apiKey) {
+      throw new APIError('Quidax API key not configured', 500);
+    }
+
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ 
       cookies: () => cookieStore 
@@ -32,7 +40,7 @@ export async function GET() {
       .from('user_profiles')
       .select('quidax_id')
       .eq('user_id', session.user.id)
-      .single();
+      .single<UserProfileResponse>();
 
     if (profileError) {
       console.error('Profile fetch error:', profileError);
@@ -40,33 +48,52 @@ export async function GET() {
     }
 
     if (!userProfile?.quidax_id) {
-      throw new APIError('Quidax account not linked', 400);
+      console.error('No Quidax ID found for user');
+      throw new APIError('Account setup incomplete', 500);
     }
 
-    // Initialize Quidax client with increased timeout
+    // Initialize Quidax client
     const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
     
     try {
-      // Fetch all wallets for the user
+      // Fetch all wallets for the user's sub-account
       const walletsResponse = await quidaxClient.fetchUserWallets(userProfile.quidax_id);
-      const wallets = walletsResponse.data;
+      
+      if (!walletsResponse?.data) {
+        throw new APIError('Invalid response from Quidax API', 500);
+      }
+
+      const wallets = Array.isArray(walletsResponse.data) ? walletsResponse.data : [walletsResponse.data];
 
       // Calculate total balance across all wallets
       const totalBalance = wallets.reduce((acc, wallet) => {
-        return acc + parseFloat(wallet.balance);
+        const balance = parseFloat(wallet.balance || '0');
+        return isNaN(balance) ? acc : acc + balance;
       }, 0);
 
       return NextResponse.json({
         status: "success",
         data: {
-          total_balance: totalBalance.toString(),
-          wallets: wallets
+          total_balance: totalBalance.toFixed(8),
+          wallets: wallets.map(wallet => ({
+            ...wallet,
+            balance: wallet.balance || '0',
+            locked: wallet.locked || '0',
+            total: wallet.total || '0'
+          }))
         }
       });
     } catch (error: any) {
       console.error('Quidax API error:', error);
       if (error.name === 'AbortError' || error.cause?.name === 'ConnectTimeoutError') {
         throw new APIError('Connection timeout while fetching wallet data', 504);
+      }
+      // Check for specific Quidax API errors
+      if (error.response?.status === 404) {
+        throw new APIError('Wallet not found', 404);
+      }
+      if (error.response?.status === 400) {
+        throw new APIError('Invalid wallet request', 400);
       }
       throw new APIError(error.message || 'Failed to fetch wallet data', 500);
     }

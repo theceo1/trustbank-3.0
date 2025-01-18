@@ -1,24 +1,27 @@
+import { createClient } from '@supabase/supabase-js';
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { Database } from '@/app/types/database';
+import type { Database } from '@/app/types/database';
 
-let supabaseInstance: any = null;
+let adminClient: ReturnType<typeof createClient<Database>>;
+let browserClient: ReturnType<typeof createClientComponentClient<Database>>;
 
-export function getSupabaseClient() {
-  if (!supabaseInstance) {
-    supabaseInstance = createClientComponentClient({
-      options: {
-        db: {
-          schema: 'public'
-        },
-        global: {
-          headers: {
-            'x-application-name': 'trustbank'
-          }
-        }
-      }
-    });
+// For server-side operations (admin access)
+export function getAdminClient() {
+  if (!adminClient) {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    adminClient = createClient<Database>(supabaseUrl, supabaseKey);
   }
-  return supabaseInstance;
+  return adminClient;
 }
 
-export default getSupabaseClient(); 
+// For client-side operations (browser)
+export function getSupabaseClient() {
+  if (!browserClient) {
+    browserClient = createClientComponentClient<Database>();
+  }
+  return browserClient;
+}
+
+// Alias for backward compatibility
+export const getClient = getAdminClient; 

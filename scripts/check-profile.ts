@@ -1,12 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
-import * as dotenvLib from 'dotenv';
-import type { User } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import { resolve } from 'path';
+import { QuidaxService } from '../app/lib/services/quidax';
 
-dotenvLib.config({ path: '.env.local' });
+// Load environment variables
+dotenv.config({ path: resolve(process.cwd(), '.env.local') });
 
+// Validate required environment variables
+if (!process.env.QUIDAX_SECRET_KEY) {
+  throw new Error('QUIDAX_SECRET_KEY is required');
+}
+
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  throw new Error('Supabase environment variables are required');
+}
+
+// Set Quidax API key
+QuidaxService.setApiKey(process.env.QUIDAX_SECRET_KEY);
+
+// Initialize Supabase client
 const supabaseClient = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 async function checkProfile() {
@@ -18,7 +33,7 @@ async function checkProfile() {
       return;
     }
 
-    const user = users.find((u: User) => u.email === 'test1735848851306@trustbank.tech');
+    const user = users.find((u) => u.email === 'tony@trustbank.tech');
     if (!user) {
       console.error('User not found in auth.users');
       return;
@@ -58,34 +73,40 @@ async function checkProfile() {
       created_at: profile.created_at
     });
 
-    // Check if user has a wallet
-    if (profile.quidax_id) {
-      const { data: wallet, error: walletError } = await supabaseClient
-        .from('wallets')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
+    // If no Quidax ID, create one
+    if (!profile.quidax_id) {
+      console.log('Creating Quidax account...');
+      
+      // Create sub-account with minimal required fields
+      const uniqueEmail = `${(user.email as string).split('@')[0]}.${Date.now()}@trustbank.tech`;
+      const quidaxUser = await QuidaxService.createSubAccount({
+        email: uniqueEmail,
+        first_name: profile.full_name?.split(' ')[0] || 'Anthony',
+        last_name: profile.full_name?.split(' ').slice(1).join(' ') || 'O',
+        phone: '+2348000000000'
+      });
 
-      if (walletError) {
-        console.error('Failed to fetch wallet:', walletError);
-      } else {
-        console.log('\nWallet Data:', wallet);
+      if (!quidaxUser?.id) {
+        throw new Error('Failed to create Quidax account');
       }
-    } else {
-      console.log('\nNo quidax_id found - wallet not set up');
-    }
 
-    // Check verification status
-    const { data: verification, error: verificationError } = await supabaseClient
-      .from('verification_status')
-      .select('*')
-      .eq('user_id', user.id)
-      .single();
+      // Update user profile with Quidax ID
+      const { error: updateError } = await supabaseClient
+        .from('user_profiles')
+        .update({ 
+          quidax_id: quidaxUser.id,
+          kyc_status: 'pending',
+          kyc_level: 0,
+          is_verified: false
+        })
+        .eq('user_id', user.id);
 
-    if (verificationError) {
-      console.log('\nNo verification status found');
-    } else {
-      console.log('\nVerification Status:', verification);
+      if (updateError) {
+        console.error('Failed to update profile:', updateError);
+        return;
+      }
+
+      console.log('Updated profile with Quidax ID:', quidaxUser.id);
     }
 
   } catch (error) {

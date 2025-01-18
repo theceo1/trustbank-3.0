@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxService } from '@/lib/services/quidax';
 
 export async function POST() {
   try {
@@ -16,7 +16,7 @@ export async function POST() {
     // Get user profile
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('quidax_id, email')
+      .select('quidax_id, email, full_name')
       .eq('user_id', user.id)
       .single();
 
@@ -36,12 +36,15 @@ export async function POST() {
       });
     }
 
+    // Split full name into first and last name
+    const [firstName, ...lastNameParts] = (profile.full_name || '').split(' ');
+    const lastName = lastNameParts.join(' ') || firstName;
+
     // Create Quidax account
-    const quidaxUser = await QuidaxService.createUser({
+    const quidaxUser = await QuidaxService.createSubAccount({
       email: profile.email || user.email,
-      first_name: user.user_metadata?.first_name || 'User',
-      last_name: user.user_metadata?.last_name || String(user.id).slice(-4),
-      phone: user.user_metadata?.phone || '',
+      first_name: firstName,
+      last_name: lastName,
       country: 'NG'
     });
 

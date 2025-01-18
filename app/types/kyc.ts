@@ -1,4 +1,5 @@
 // app/types/kyc.ts
+
 export enum KYCTier {
   NONE = 0,
   BASIC = 1,    // NIN verification
@@ -6,7 +7,7 @@ export enum KYCTier {
   ADVANCED = 3   // Photo ID + Selfie verification
 }
 
-export type KYCStatus = 'pending' | 'approved' | 'rejected' | 'unverified';
+export type KYCStatus = 'pending' | 'approved' | 'rejected' | 'unverified' | 'verified';
 export type BadgeVariant = 'default' | 'destructive' | 'outline' | 'secondary';
 
 export interface KYCVerification {

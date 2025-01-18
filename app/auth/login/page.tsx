@@ -42,9 +42,8 @@ export default function Login() {
     setError('');
 
     try {
-      const { error: signInError } = await signIn(email, password);
-      if (signInError) throw signInError;
-
+      await signIn(email, password);
+      
       toast.success('Welcome back!', {
         description: 'Successfully logged in.'
       });

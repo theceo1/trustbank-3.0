@@ -41,7 +41,7 @@ export function KYCVerificationDialog({ isOpen, onClose }: KYCVerificationDialog
           <Button variant="outline" onClick={onClose}>
             Later
           </Button>
-          <Button onClick={() => router.push('/kyc')}>
+          <Button onClick={() => router.push('/profile/verification')}>
             Verify Now
           </Button>
         </DialogFooter>

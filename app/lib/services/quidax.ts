@@ -1,35 +1,73 @@
 import { QUIDAX_CONFIG } from '../config/quidax';
 import { createHmac } from 'crypto';
-import { QuidaxUser, QuidaxWebhookEvent } from '@/app/types/quidax';
 
-export class QuidaxError extends Error {
-  constructor(
-    message: string,
-    public code: string,
-    public statusCode: number
-  ) {
-    super(message);
-    this.name = 'QuidaxError';
-  }
-}
-
-interface WalletAddress {
+export interface QuidaxWebhookEvent {
   id: string;
-  address: string;
-  network: string;
-  currency: string;
+  event: string;
+  data: any;
 }
 
-interface QuidaxResponse<T> {
+export interface CreateSubAccountParams {
+  email: string;
+  first_name: string;
+  last_name: string;
+  phone?: string;
+  country?: string;
+}
+
+export interface QuidaxUser {
+  id: string;
+  email: string;
+  first_name: string;
+  last_name: string;
   status: string;
-  message: string;
-  data: T;
+}
+
+export interface WalletBalance {
+  id: string;
+  name: string;
+  currency: string;
+  balance: string;
+  locked: string;
+  staked: string;
+  converted_balance: string;
+  reference_currency: string;
+  is_crypto: boolean;
+  blockchain_enabled: boolean;
+  default_network: string | null;
+  address?: string;
+  networks: {
+    id: string;
+    name: string;
+    deposits_enabled: boolean;
+    withdraws_enabled: boolean;
+  }[];
+}
+
+export interface QuidaxWallet {
+  currency: string;
+  balance: string;
+  address?: string;
+  tag?: string;
+}
+
+export interface QuidaxTransfer {
+  id: string;
+  status: string;
+  amount: string;
+  currency: string;
+  from_user_id: string;
+  to_user_id: string;
 }
 
 export class QuidaxService {
   private static readonly baseUrl = QUIDAX_CONFIG.apiUrl;
-  private static readonly apiKey = QUIDAX_CONFIG.apiKey;
+  private static apiKey = QUIDAX_CONFIG.apiKey;
   private static readonly webhookSecret = QUIDAX_CONFIG.webhookSecret;
+
+  static setApiKey(key: string) {
+    QuidaxService.apiKey = key;
+  }
 
   private static async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     if (!QuidaxService.apiKey) {
@@ -40,7 +78,10 @@ export class QuidaxService {
       ...options,
       headers: {
         'Authorization': `Bearer ${QuidaxService.apiKey}`,
+        'Content-Type': 'application/json',
         'Accept': 'application/json',
+        'User-Agent': 'TrustBank/1.0',
+        'X-Quidax-Version': 'v1',
         ...options.headers,
       },
     });
@@ -51,12 +92,53 @@ export class QuidaxService {
     }
 
     const data = await response.json();
-    return data;
+    return data.data;
   }
 
-  static async fetchWalletAddress(userId: string, currency: string): Promise<{ data: { address: string; tag?: string } }> {
+  static async createSubAccount(params: CreateSubAccountParams): Promise<QuidaxUser> {
     try {
-      const response = await QuidaxService.makeRequest<{ data: { address: string; tag?: string } }>(
+      const requestBody = {
+        email: params.email,
+        first_name: params.first_name,
+        last_name: params.last_name,
+        ...(params.phone ? { phone: params.phone } : {}),
+        ...(params.country ? { country: params.country } : {})
+      };
+
+      const response = await QuidaxService.makeRequest<QuidaxUser>('/users', {
+        method: 'POST',
+        body: JSON.stringify(requestBody)
+      });
+      return response;
+    } catch (error) {
+      console.error('Error creating Quidax sub-account:', error);
+      throw error;
+    }
+  }
+
+  static async getSubAccount(userId: string): Promise<QuidaxUser> {
+    try {
+      return await QuidaxService.makeRequest<QuidaxUser>(`/users/${userId}`);
+    } catch (error) {
+      console.error('Error fetching Quidax sub-account:', error);
+      throw error;
+    }
+  }
+
+  static async getWalletBalance(userId: string, currency: string): Promise<{ balance: string }> {
+    try {
+      return await QuidaxService.makeRequest<{ balance: string }>(
+        `/users/${userId}/wallets/${currency.toLowerCase()}`
+      );
+    } catch (error) {
+      console.error('Error fetching wallet balance:', error);
+      throw error;
+    }
+  }
+
+  static async fetchWalletAddress(userId: string, currency: string): Promise<{ address: string; tag?: string }> {
+    try {
+      const response = await QuidaxService.makeRequest<{ address: string; tag?: string }>(
         `/users/${userId}/wallets/${currency.toLowerCase()}/address`
       );
       return response;
@@ -66,89 +148,18 @@ export class QuidaxService {
     }
   }
 
-  static async fetchWalletAddresses(userId: string): Promise<{ data: Array<{ currency: string; address: string; tag?: string }> }> {
+  static async createWalletAddress(userId: string, currency: string): Promise<{ address: string; tag?: string }> {
     try {
-      const response = await QuidaxService.makeRequest<{ data: Array<{ currency: string; address: string; tag?: string }> }>(
-        `/users/${userId}/wallets`
-      );
-      return response;
-    } catch (error) {
-      console.error('Error fetching wallet addresses:', error);
-      throw error;
-    }
-  }
-
-  static async createWalletAddress(userId: string, currency: string): Promise<{ data: { address: string; tag?: string } }> {
-    try {
-      const response = await QuidaxService.makeRequest<{ data: { address: string; tag?: string } }>(
+      return await QuidaxService.makeRequest<{ address: string; tag?: string }>(
         `/users/${userId}/wallets/${currency.toLowerCase()}/address`,
         {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          method: 'POST'
         }
       );
-      return response;
     } catch (error) {
       console.error('Error creating wallet address:', error);
       throw error;
     }
-  }
-
-  static async fetchOrderBook(market: string): Promise<Response> {
-    const url = `${QuidaxService.baseUrl}/markets/${market}/order_book`;
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${QuidaxService.apiKey}`
-      }
-    });
-    return response;
-  }
-
-  static async createSwapQuotation(params: any): Promise<Response> {
-    const response = await fetch(`${QuidaxService.baseUrl}/instant_orders/quote`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${QuidaxService.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(params)
-    });
-    return response;
-  }
-
-  static async confirmSwap(params: any): Promise<Response> {
-    const response = await fetch(`${QuidaxService.baseUrl}/instant_orders`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${QuidaxService.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(params)
-    });
-    return response;
-  }
-
-  static async getWalletBalance(userId: string, currency: string): Promise<{ data: { balance: string } }> {
-    const response = await fetch(
-      `${QuidaxService.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${QuidaxService.apiKey}`,
-          'Accept': 'application/json'
-        }
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to get wallet balance');
-    }
-
-    return response.json();
   }
 
   static async transfer(
@@ -156,15 +167,10 @@ export class QuidaxService {
     toUserId: string,
     amount: string,
     currency: string
-  ): Promise<{ success: boolean; data: { id: string; status: string } }> {
-    const response = await fetch(
-      `${QuidaxService.baseUrl}/users/${fromUserId}/withdraws`,
-      {
+  ): Promise<QuidaxTransfer> {
+    try {
+      return await QuidaxService.makeRequest<QuidaxTransfer>(`/users/${fromUserId}/withdraws`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${QuidaxService.apiKey}`,
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           currency: currency.toLowerCase(),
           amount,
@@ -172,19 +178,20 @@ export class QuidaxService {
           transaction_note: 'Internal transfer',
           narration: 'Fund transfer'
         })
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Transfer failed');
+      });
+    } catch (error) {
+      console.error('Error performing transfer:', error);
+      throw error;
     }
+  }
 
-    const result = await response.json();
-    return {
-      success: result.status === 'success',
-      data: result.data
-    };
+  static async getTransactionStatus(transactionId: string): Promise<{ status: string }> {
+    try {
+      return await QuidaxService.makeRequest<{ status: string }>(`/transactions/${transactionId}`);
+    } catch (error) {
+      console.error('Error fetching transaction status:', error);
+      throw error;
+    }
   }
 
   static verifyWebhookSignature(webhook: QuidaxWebhookEvent, signature?: string): boolean {
@@ -200,7 +207,6 @@ export class QuidaxService {
     return signature === calculatedSignature;
   }
 
-  // Helper method to map status
   static mapQuidaxStatus(status: string): string {
     const statusMap: Record<string, string> = {
       'done': 'completed',
@@ -212,25 +218,15 @@ export class QuidaxService {
     return statusMap[status.toLowerCase()] || 'pending';
   }
 
-  static async createSubAccount(params: {
-    email: string;
-    first_name: string;
-    last_name: string;
-  }): Promise<{ data: { id: string } }> {
-    const response = await fetch(`${QuidaxService.baseUrl}/users`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${QuidaxService.apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(params)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create sub-account');
+  static async fetchWalletBalances(userId: string): Promise<WalletBalance[]> {
+    try {
+      const response = await QuidaxService.makeRequest<WalletBalance[]>(
+        `/users/${userId}/wallets`
+      );
+      return response;
+    } catch (error) {
+      console.error('Error fetching wallet balances:', error);
+      throw error;
     }
-
-    return response.json();
   }
 } 

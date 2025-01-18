@@ -54,13 +54,8 @@ export default function DashboardPage() {
 
         setProfile(profileData);
 
-        // Check if user is verified
-        if (!profileData.is_verified) {
-          toast.error('Please complete your KYC verification');
-          router.replace('/kyc');
-          return;
-        }
-
+        // Remove the strict verification check that was redirecting users
+        // Users can now access dashboard without verification
         setIsInitialized(true);
         setIsLoading(false);
       } catch (error) {
