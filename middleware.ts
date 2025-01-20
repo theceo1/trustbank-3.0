@@ -61,6 +61,24 @@ export async function middleware(request: NextRequest) {
 
     // If no session and not on a public path, redirect to login
     if (!session) {
+      // Check if this is a redirect from signup
+      const isSignupRedirect = request.nextUrl.pathname === '/dashboard' && 
+        request.headers.get('referer')?.includes('/auth/signup');
+      
+      if (isSignupRedirect) {
+        // For signup redirects, try to get the session one more time
+        const { data: { session: retrySession } } = await supabase.auth.getSession();
+        if (retrySession) {
+          return response;
+        }
+        // If still no session, wait a bit and try one final time
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const { data: { session: finalTry } } = await supabase.auth.getSession();
+        if (finalTry) {
+          return response;
+        }
+      }
+
       const redirectUrl = new URL('/auth/login', request.url);
       redirectUrl.searchParams.set('redirect', request.url);
       return NextResponse.redirect(redirectUrl);
@@ -74,9 +92,15 @@ export async function middleware(request: NextRequest) {
 
     // Update session if needed
     const { data: { session: refreshedSession } } = await supabase.auth.getSession();
-    if (refreshedSession?.access_token !== session.access_token) {
+    if (refreshedSession?.access_token !== session.access_token && refreshedSession?.refresh_token) {
       // Session was refreshed, update the response
-      return response;
+      const { data: { session: newSession } } = await supabase.auth.setSession({
+        access_token: refreshedSession.access_token,
+        refresh_token: refreshedSession.refresh_token
+      });
+      if (newSession) {
+        return response;
+      }
     }
 
     return response;

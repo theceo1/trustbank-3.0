@@ -15,9 +15,6 @@ if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_
   throw new Error('Supabase environment variables are required');
 }
 
-// Set Quidax API key
-QuidaxService.setApiKey(process.env.QUIDAX_SECRET_KEY);
-
 // Initialize Supabase client
 const supabaseClient = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
@@ -83,35 +80,37 @@ async function checkProfile() {
         email: uniqueEmail,
         first_name: profile.full_name?.split(' ')[0] || 'Anthony',
         last_name: profile.full_name?.split(' ').slice(1).join(' ') || 'O',
-        phone: '+2348000000000'
+        country: 'NG'
       });
 
       if (!quidaxUser?.id) {
         throw new Error('Failed to create Quidax account');
       }
 
-      // Update user profile with Quidax ID
+      // Update profile with Quidax ID
       const { error: updateError } = await supabaseClient
         .from('user_profiles')
-        .update({ 
-          quidax_id: quidaxUser.id,
-          kyc_status: 'pending',
-          kyc_level: 0,
-          is_verified: false
-        })
+        .update({ quidax_id: quidaxUser.id })
         .eq('user_id', user.id);
 
       if (updateError) {
-        console.error('Failed to update profile:', updateError);
+        console.error('Failed to update profile with Quidax ID:', updateError);
         return;
       }
 
-      console.log('Updated profile with Quidax ID:', quidaxUser.id);
-    }
+      console.log('Successfully created Quidax account:', quidaxUser.id);
+    } else {
+      // Verify existing Quidax account
+      const quidaxUser = await QuidaxService.getUser(profile.quidax_id);
+      console.log('\nQuidax Account:', quidaxUser);
 
+      // Get wallet balances
+      const wallets = await QuidaxService.getWallets(profile.quidax_id);
+      console.log('\nWallet Balances:', wallets);
+    }
   } catch (error) {
     console.error('Error:', error);
   }
 }
 
-checkProfile().catch(console.error); 
+checkProfile(); 

@@ -2,7 +2,9 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/lib/services/quidax';
+import { QuidaxService } from '@/app/lib/services/quidax';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST() {
   try {
@@ -17,7 +19,7 @@ export async function POST() {
     // Get user profile
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('quidax_id, email, full_name')
+      .select('quidax_id')
       .eq('user_id', session.user.id)
       .single();
 
@@ -29,74 +31,74 @@ export async function POST() {
       );
     }
 
-    // If user already has a Quidax ID, return it
+    // If user has a Quidax ID, verify account exists
     if (profile.quidax_id) {
+      const quidaxUser = await QuidaxService.getSubAccount(profile.quidax_id);
+      
       return NextResponse.json({
         status: 'success',
-        message: 'Wallet already setup',
-        data: {
-          quidax_id: profile.quidax_id
-        }
+        message: 'Quidax account verified',
+        data: { quidax_id: profile.quidax_id }
       });
     }
 
-    // Handle name parsing with validation
-    const fullName = profile.full_name?.trim() || 'Unknown User';
-    const nameParts = fullName.split(' ').filter((part: string) => part.length > 0);
-    const firstName = nameParts[0] || 'Unknown';
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : 'User';
+    return NextResponse.json(
+      { error: 'Quidax account not found' },
+      { status: 400 }
+    );
+  } catch (error) {
+    console.error('Error in wallet setup:', error);
+    return NextResponse.json(
+      { error: 'Failed to verify Quidax account' },
+      { status: 500 }
+    );
+  }
+}
 
-    // Ensure we have a valid email
-    const email = profile.email || session.user.email;
-    if (!email) {
+export async function GET() {
+  try {
+    const supabase = createRouteHandlerClient({ cookies });
+
+    // Get current user session
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user profile
+    const { data: profile, error: profileError } = await supabase
+      .from('user_profiles')
+      .select('quidax_id')
+      .eq('user_id', session.user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching profile:', profileError);
       return NextResponse.json(
-        { error: 'Valid email is required for wallet setup' },
+        { error: 'Failed to fetch profile data' },
+        { status: 500 }
+      );
+    }
+
+    if (!profile.quidax_id) {
+      return NextResponse.json(
+        { error: 'Quidax account not found' },
         { status: 400 }
       );
     }
 
-    // Create Quidax sub-account with validated data
-    const quidaxUser = await QuidaxService.createSubAccount({
-      email,
-      first_name: firstName,
-      last_name: lastName,
-      country: 'NG' // Default to Nigeria
-    });
-
-    if (!quidaxUser?.id) {
-      throw new Error('Failed to create Quidax account');
-    }
-
-    // Update user profile with Quidax ID
-    const { error: updateError } = await supabase
-      .from('user_profiles')
-      .update({ 
-        quidax_id: quidaxUser.id,
-        kyc_status: 'pending',
-        kyc_level: 0,
-        tier1_verified: false,
-        tier2_verified: false,
-        tier3_verified: false
-      })
-      .eq('user_id', session.user.id);
-
-    if (updateError) {
-      console.error('Error updating user profile:', updateError);
-      throw new Error('Failed to update user profile');
-    }
+    // Verify Quidax account exists
+    const quidaxUser = await QuidaxService.getSubAccount(profile.quidax_id);
 
     return NextResponse.json({
       status: 'success',
-      message: 'Wallet setup completed',
-      data: {
-        quidax_id: quidaxUser.id
-      }
+      message: 'Quidax account verified',
+      data: { quidax_id: profile.quidax_id }
     });
-
-  } catch (error: any) {
-    console.error('Wallet setup error:', error);
+  } catch (error) {
+    console.error('Error checking Quidax account:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to setup wallet' },
+      { error: 'Failed to verify Quidax account' },
       { status: 500 }
     );
   }

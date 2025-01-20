@@ -39,11 +39,19 @@ export default function DashboardPage() {
           return;
         }
 
+        // Get current session to ensure we have the latest user data
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        if (!currentSession) {
+          console.log('No current session found, redirecting to login');
+          router.replace('/auth/login?redirect=/dashboard');
+          return;
+        }
+
         // Check user profile - only query existing columns
         const { data: profileData, error: profileError } = await supabase
           .from('user_profiles')
           .select('kyc_status, kyc_level, is_verified')
-          .eq('user_id', user.id)
+          .eq('user_id', currentSession.user.id)
           .single();
 
         if (profileError) {
@@ -98,7 +106,7 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="container relative mx-auto px-4 py-8">
+    <div className="container relative mx-auto px-4 py-8" data-testid="dashboard-content">
       <div className="grid gap-8">
         {/* Dashboard Header with Welcome Message */}
         <DashboardHeader 

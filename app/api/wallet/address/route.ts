@@ -1,19 +1,9 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
-import { QuidaxClient } from '@/lib/services/quidax-client';
+import { QuidaxService } from '@/app/lib/services/quidax';
 
-async function getOrCreateWalletAddress(client: QuidaxClient, userId: string, currency: string) {
-  const response = await client.getDepositAddress(userId, currency);
-  
-  if (!response.data.address) {
-    // If no address exists, try to create one by calling getDepositAddress again
-    const newAddress = await client.getDepositAddress(userId, currency);
-    return newAddress;
-  }
-
-  return response;
-}
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
   try {
@@ -43,15 +33,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
-    // Initialize Quidax client
-    const quidaxClient = new QuidaxClient(process.env.QUIDAX_SECRET_KEY!);
-
-    // Fetch or create wallet address
-    const address = await getOrCreateWalletAddress(quidaxClient, profile.quidax_id, currency);
+    // Get or create wallet address
+    const address = await QuidaxService.getDepositAddress(profile.quidax_id, currency);
 
     return NextResponse.json({
       status: 'success',
-      data: address.data
+      data: address
     });
 
   } catch (error) {

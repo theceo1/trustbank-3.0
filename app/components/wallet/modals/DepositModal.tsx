@@ -11,6 +11,13 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Info, Copy, Check, Loader2 } from "lucide-react";
 import { useToast } from "@/app/hooks/use-toast";
 import QRCode from "react-qr-code";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface DepositModalProps {
   isOpen: boolean;
@@ -18,12 +25,24 @@ interface DepositModalProps {
   onClose: () => void;
 }
 
+type NetworkOptions = {
+  [key: string]: string[];
+};
+
+const NETWORK_OPTIONS: NetworkOptions = {
+  usdt: ['trc20', 'erc20', 'bep20'],
+  btc: ['bitcoin'],
+  eth: ['ethereum'],
+  // Add more networks as needed
+};
+
 export default function DepositModal({ isOpen, currency, onClose }: DepositModalProps) {
   const { toast } = useToast();
   const [address, setAddress] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
 
   // Mock bank account details - replace with actual account details from your backend
   const bankDetails = {
@@ -39,10 +58,27 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
         return;
       }
 
+      const currencyKey = currency.toLowerCase();
+      const networks = NETWORK_OPTIONS[currencyKey];
+
+      if (networks && !selectedNetwork) {
+        setSelectedNetwork(networks[0]);
+        return;
+      }
+
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetch(`/api/wallet/address?currency=${currency.toLowerCase()}`);
+        const response = await fetch('/api/wallet/deposit-address', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            currency: currencyKey,
+            network: selectedNetwork
+          })
+        });
         const data = await response.json();
 
         if (!response.ok) {
@@ -65,7 +101,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
     if (isOpen) {
       fetchWalletAddress();
     }
-  }, [currency, isOpen]);
+  }, [currency, isOpen, selectedNetwork]);
 
   const handleCopy = async (text: string) => {
     try {
@@ -84,6 +120,13 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
         description: "Failed to copy to clipboard",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleCopyAll = async () => {
+    if (currency.toLowerCase() === 'ngn') {
+      const allDetails = `Bank Name: ${bankDetails.bankName}\nAccount Number: ${bankDetails.accountNumber}\nAccount Name: ${bankDetails.accountName}`;
+      await handleCopy(allDetails);
     }
   };
 
@@ -117,7 +160,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-2 text-green-600 hover:text-green-700"
+                      className="h-8 px-2 text-[#00A651] hover:text-[#00A651]/80"
                       onClick={() => handleCopy(bankDetails.bankName)}
                     >
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -132,7 +175,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-2 text-green-600 hover:text-green-700"
+                      className="h-8 px-2 text-[#00A651] hover:text-[#00A651]/80"
                       onClick={() => handleCopy(bankDetails.accountNumber)}
                     >
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -147,7 +190,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-8 px-2 text-green-600 hover:text-green-700"
+                      className="h-8 px-2 text-[#00A651] hover:text-[#00A651]/80"
                       onClick={() => handleCopy(bankDetails.accountName)}
                     >
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
@@ -155,6 +198,14 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                   </div>
                   <div className="text-sm">{bankDetails.accountName}</div>
                 </div>
+
+                <Button
+                  variant="outline"
+                  className="w-full hover:bg-[#00A651] hover:text-white dark:hover:bg-[#00A651]/80 dark:hover:text-white"
+                  onClick={handleCopyAll}
+                >
+                  Copy All Details
+                </Button>
               </div>
             </>
           ) : (
@@ -167,9 +218,30 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                 </AlertDescription>
               </Alert>
 
+              {NETWORK_OPTIONS[currency.toLowerCase()] && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Select Network</label>
+                  <Select
+                    value={selectedNetwork || ''}
+                    onValueChange={(value: string) => setSelectedNetwork(value)}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select network" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NETWORK_OPTIONS[currency.toLowerCase()].map((network: string) => (
+                        <SelectItem key={network} value={network}>
+                          {network.toUpperCase()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="flex items-center justify-center py-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-green-600" />
+                  <Loader2 className="h-6 w-6 animate-spin text-[#00A651]" />
                 </div>
               ) : error ? (
                 <Alert variant="destructive">
@@ -189,7 +261,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-8 px-2 text-green-600 hover:text-green-700"
+                        className="h-8 px-2 text-[#00A651] hover:text-[#00A651]/80"
                         onClick={() => handleCopy(address)}
                       >
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}

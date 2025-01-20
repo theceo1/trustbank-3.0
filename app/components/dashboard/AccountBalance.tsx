@@ -19,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { WalletCardSkeleton } from "@/app/components/wallet/WalletCardSkeleton";
 
 interface WalletBalance {
   currency: string;
@@ -31,93 +32,74 @@ interface WalletBalance {
 }
 
 interface ApiResponse {
-  status: string;
-  message: string;
-  data: WalletBalance;
-  error?: string;
-  redirectTo?: string;
+  success: boolean;
+  data: WalletBalance[];
+  message?: string;
 }
 
 export function AccountBalance() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [balances, setBalances] = useState<WalletBalance[]>([]);
-  const [baseCurrency, setBaseCurrency] = useState<string>('NGN');
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showBalance, setShowBalance] = useState(false);
+  const [balanceData, setBalanceData] = useState<WalletBalance[]>([]);
   const [showDepositModal, setShowDepositModal] = useState(false);
-  const [showBalance, setShowBalance] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('showBalance');
-      return saved ? JSON.parse(saved) : false;
-    }
-    return false;
-  });
 
-  const fetchBalance = useCallback(async () => {
+  const fetchBalance = async () => {
     try {
-      setLoading(true);
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin;
-      const response = await fetch(`${baseUrl}/api/wallet/balance`, {
-        credentials: 'include',
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch("/api/wallet/balance", {
+        credentials: "include",
         headers: {
-          'Content-Type': 'application/json',
-        }
+          "Content-Type": "application/json",
+        },
       });
+
       if (!response.ok) {
-        throw new Error('Failed to fetch balance');
+        throw new Error("Failed to fetch balance");
       }
+
       const data: ApiResponse = await response.json();
-      if (data.status === 'success') {
-        setBalances([data.data]);
-        setBaseCurrency(data.data.reference_currency || 'NGN');
-        setError(null);
-      } else {
-        throw new Error(data.error || 'Failed to fetch balance');
+      if (!data.success || !data.data) {
+        throw new Error(data.message || "Failed to fetch balance");
       }
+
+      setBalanceData(data.data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch balance');
+      console.error("Error fetching balance:", err);
+      setError("Unable to fetch balance");
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
-    if (user?.id) {
+    if (user) {
       fetchBalance();
-      const interval = setInterval(fetchBalance, 30000);
-
-      const handleBalanceUpdate = () => {
-        fetchBalance();
-      };
-      window.addEventListener('balanceUpdate', handleBalanceUpdate);
-
-      return () => {
-        clearInterval(interval);
-        window.removeEventListener('balanceUpdate', handleBalanceUpdate);
-      };
     }
-  }, [user?.id, fetchBalance]);
+  }, [user]);
+
+  if (isLoading) {
+    return <WalletCardSkeleton />;
+  }
 
   if (error) {
     return (
-      <Alert variant="destructive">
-        <ExclamationTriangleIcon className="h-4 w-4" />
-        <AlertTitle>Error</AlertTitle>
-        <AlertDescription>{error}</AlertDescription>
-      </Alert>
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-red-500">{error}</div>
+        </CardContent>
+      </Card>
     );
   }
 
-  // Get NGN balance
-  const ngnWallet = balances.find(w => w.currency === baseCurrency);
+  const ngnWallet = balanceData.find(wallet => wallet.currency.toLowerCase() === 'ngn');
+  const balance = ngnWallet?.balance || '0.00';
 
   const toggleBalance = () => {
-    const newValue = !showBalance;
-    setShowBalance(newValue);
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('showBalance', JSON.stringify(newValue));
-    }
+    setShowBalance(!showBalance);
   };
 
   const maskBalance = (amount: string) => {
@@ -164,50 +146,34 @@ export function AccountBalance() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-12 w-[200px] bg-white/20" />
-              <Skeleton className="h-4 w-[100px] bg-white/20" />
-            </div>
-          ) : (
-            <motion.div 
-              className="space-y-1"
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.2 }}
-            >
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={showBalance ? 'visible' : 'hidden'}
-                  initial={{ opacity: 0, y: -20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: 20 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="text-3xl font-bold tracking-tight" data-testid="wallet-balance">
-                    {showBalance 
-                      ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
-                      : '₦••••••'
-                    }
-                  </div>
-                  <div className="text-sm text-white/80">
-                    Available: {showBalance 
-                      ? (ngnWallet ? formatCurrency(parseFloat(ngnWallet.balance), baseCurrency) : '₦0.00')
-                      : '₦••••••'
-                    }
-                    {ngnWallet && parseFloat(ngnWallet.locked) > 0 && (
-                      <span className="ml-2 text-yellow-200">
-                        (Locked: {showBalance 
-                          ? formatCurrency(parseFloat(ngnWallet.locked), baseCurrency)
-                          : '₦••••••'
-                        })
-                      </span>
-                    )}
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            </motion.div>
-          )}
+          <motion.div 
+            className="space-y-1"
+            initial={{ scale: 0.95 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.2 }}
+          >
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={showBalance ? 'visible' : 'hidden'}
+                initial={{ opacity: 0, y: -20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="text-3xl font-bold tracking-tight" data-testid="wallet-balance">
+                  {showBalance ? `₦${balance}` : '₦••••••'}
+                </div>
+                <div className="text-sm text-white/80">
+                  Available: {showBalance ? `₦${balance}` : '₦••••••'}
+                  {ngnWallet && parseFloat(ngnWallet.locked) > 0 && (
+                    <span className="ml-2 text-yellow-200">
+                      (Locked: {showBalance ? formatCurrency(parseFloat(ngnWallet.locked), 'NGN') : '₦••••••'})
+                    </span>
+                  )}
+                </div>
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
         </CardContent>
       </Card>
 

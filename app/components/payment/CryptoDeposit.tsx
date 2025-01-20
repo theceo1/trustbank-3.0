@@ -37,12 +37,23 @@ export default function CryptoDeposit({ currency, onSuccess }: CryptoDepositProp
     const fetchNetworks = async () => {
       try {
         setIsLoading(true);
-        const quidaxClient = new QuidaxClient(process.env.NEXT_PUBLIC_QUIDAX_API_KEY || '');
-        const networksData = await quidaxClient.getNetworks(currency);
-        setNetworks(networksData);
+        const response = await fetch('/api/wallet/networks', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ currency })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch networks');
+        }
+
+        const data = await response.json();
+        setNetworks(data);
         
-        if (networksData.length > 0) {
-          setSelectedNetwork(networksData[0].code);
+        if (data.length > 0) {
+          setSelectedNetwork(data[0].code);
         }
       } catch (error) {
         console.error('Error fetching networks:', error);
@@ -61,12 +72,22 @@ export default function CryptoDeposit({ currency, onSuccess }: CryptoDepositProp
 
       try {
         setIsLoading(true);
-        const quidaxClient = new QuidaxClient(process.env.NEXT_PUBLIC_QUIDAX_API_KEY || '');
-        const response = await quidaxClient.getDepositAddress(currency, selectedNetwork);
-        const addressData = response.data;
-        setDepositAddress(addressData.address);
-        if (addressData.tag) {
-          setTag(addressData.tag);
+        const response = await fetch('/api/wallet/deposit-address', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ currency, network: selectedNetwork })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to get deposit address');
+        }
+
+        const data = await response.json();
+        setDepositAddress(data.address);
+        if (data.tag) {
+          setTag(data.tag);
         }
       } catch (error) {
         console.error('Error getting deposit address:', error);

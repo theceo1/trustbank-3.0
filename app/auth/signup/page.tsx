@@ -39,49 +39,28 @@ async function waitForUser(supabase: any, userId: string, maxAttempts = 5): Prom
   return false;
 }
 
-async function createUserProfile(supabase: any, data: {
-  userId: string;
-  name: string;
-  email: string;
-}, maxAttempts = 3): Promise<any> {
+const createUserProfile = async (userId: string, name: string, email: string) => {
   try {
-    // Check if profile already exists
-    const { data: existingProfile } = await supabase
-      .from('user_profiles')
-      .select()
-      .eq('user_id', data.userId)
-      .single();
+    const response = await fetch('/api/profile/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name, email }),
+    });
 
-    if (existingProfile) {
-      return existingProfile;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to create profile');
     }
 
-    // Create new profile using ProfileService
-    const profile = await ProfileService.createProfile(data.userId, data.email);
-    
-    // Update the profile with additional data
-    const { data: updatedProfile, error: updateError } = await supabase
-      .from('user_profiles')
-      .update({
-        full_name: data.name,
-        referral_stats: {
-          totalReferrals: 0,
-          activeReferrals: 0,
-          totalEarnings: 0,
-          pendingEarnings: 0
-        }
-      })
-      .eq('user_id', data.userId)
-      .select()
-      .single();
-
-    if (updateError) throw updateError;
-    return updatedProfile;
+    const { profile } = await response.json();
+    return profile;
   } catch (error) {
-    console.error('Error creating user profile:', error);
+    console.error('Error creating profile:', error);
     throw error;
   }
-}
+};
 
 export default function SignUp() {
   const [name, setName] = useState('');
@@ -116,30 +95,40 @@ export default function SignUp() {
         description: "Please wait while we set up your account...",
       });
 
-      // Create the auth user
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: name
-          }
-        }
+      // Create the auth user and profile through the API route
+      const response = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, password, name }),
       });
 
-      if (signUpError) {
-        throw new Error(signUpError.message);
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to create account');
       }
 
-      if (!data.user) {
-        throw new Error('Failed to create account');
+      const { user, profile, session } = await response.json();
+      console.log('Created user and profile:', { user, profile });
+
+      // Set the session in Supabase client
+      await supabase.auth.setSession(session);
+      
+      // Wait for the session to be properly set with retries
+      let currentSession = null;
+      for (let i = 0; i < 5; i++) {
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        if (sess) {
+          currentSession = sess;
+          break;
+        }
+        // Wait 500ms between retries
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
-      // Create profile using ProfileService
-      try {
-        await ProfileService.createProfile(data.user.id, email);
-      } catch (profileError) {
-        console.error('Profile creation error:', profileError);
+      if (!currentSession) {
+        throw new Error('Failed to establish session');
       }
 
       toast({
@@ -157,7 +146,8 @@ export default function SignUp() {
         });
       }, 1000);
 
-      router.push('/dashboard');
+      // Use replace and wait for navigation to complete
+      await router.replace('/dashboard');
       
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to create account';

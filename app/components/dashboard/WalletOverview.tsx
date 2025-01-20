@@ -32,6 +32,7 @@ interface WalletBalance {
 
 interface ApiResponse {
   status: string;
+  success: boolean;
   message: string;
   data: WalletBalance[];
 }
@@ -52,7 +53,7 @@ export function WalletOverview() {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/wallet/balances');
+      const response = await fetch('/api/wallet/balance');
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch wallets' }));
@@ -61,7 +62,7 @@ export function WalletOverview() {
       }
 
       const data: ApiResponse = await response.json();
-      if (!data.status || !data.data || !Array.isArray(data.data)) {
+      if (!data.success || !data.data || !Array.isArray(data.data)) {
         console.error('Invalid wallet data:', data);
         throw new Error('Invalid wallet data received');
       }

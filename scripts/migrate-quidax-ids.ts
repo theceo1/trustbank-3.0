@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import debug from 'debug';
 import dotenv from 'dotenv';
 import { resolve } from 'path';
+import { QuidaxService } from '@/app/lib/services/quidax';
 
 const log = debug('migrate:quidax');
 debug.enable('migrate:*');
@@ -16,6 +17,7 @@ class TestQuidaxService {
     email: string;
     first_name: string;
     last_name: string;
+    country: string;
   }) {
     try {
       const response = await fetch(
@@ -30,7 +32,8 @@ class TestQuidaxService {
           body: JSON.stringify({
             email: params.email,
             first_name: params.first_name,
-            last_name: params.last_name
+            last_name: params.last_name,
+            country: params.country
           })
         }
       );
@@ -81,10 +84,11 @@ async function migrateQuidaxIds() {
 
         // Create Quidax sub-account
         log(`🔄 Creating Quidax account for: ${authUser.email}`);
-        const quidaxUser = await TestQuidaxService.createSubAccount({
+        const quidaxUser = await QuidaxService.createSubAccount({
           email: authUser.email,
           first_name: authUser.first_name || 'User',
-          last_name: authUser.last_name || 'Name'
+          last_name: authUser.last_name || 'User',
+          country: 'ng'
         });
 
         // Update user profile with Quidax ID

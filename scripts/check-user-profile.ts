@@ -18,7 +18,7 @@ async function checkUserProfile() {
       return;
     }
 
-    const user = users.find(u => u.email === 'test1735848851306@trustbank.tech');
+    const user = users.find(u => u.email === 'test1737329235710@trustbank.tech');
     if (!user) {
       console.error('User not found');
       return;

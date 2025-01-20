@@ -11,14 +11,31 @@ export interface QuidaxUser {
 
 export interface QuidaxWallet {
   id: string;
+  name?: string;
   currency: string;
   balance: string;
   locked: string;
   pending_debit: string;
   pending_credit: string;
   total: string;
+  staked?: string;
+  converted_balance?: string;
   address?: string;
   tag?: string;
+  blockchain_enabled?: boolean;
+  deposit_address?: string | null;
+  destination_tag?: string | null;
+  reference_currency?: string;
+  is_crypto?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  default_network?: string | null;
+  networks?: {
+    id: string;
+    name: string;
+    deposits_enabled: boolean;
+    withdraws_enabled: boolean;
+  }[];
 }
 
 export interface SwapQuotation {
@@ -87,6 +104,7 @@ export interface CreateSubAccountParams {
   email: string;
   first_name?: string;
   last_name?: string;
+  country: string;
 }
 
 export interface QuidaxResponse<T> {
@@ -102,6 +120,9 @@ export class QuidaxClient {
   private maxRetries: number;
 
   constructor(apiKey: string, baseUrl = 'https://www.quidax.com/api/v1') {
+    if (!apiKey) {
+      throw new Error('Quidax API key is required');
+    }
     this.apiKey = apiKey;
     this.baseUrl = baseUrl;
     this.timeout = 30000; // 30 seconds
@@ -118,6 +139,7 @@ export class QuidaxClient {
         headers: {
           'Authorization': `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
+          'Accept': 'application/json',
           ...options.headers,
         },
         signal: controller.signal,
@@ -125,27 +147,49 @@ export class QuidaxClient {
 
       clearTimeout(timeoutId);
 
+      // Handle rate limiting
+      if (response.status === 429) {
+        const retryAfter = response.headers.get('Retry-After');
+        if (retryAfter && retries < this.maxRetries) {
+          const waitTime = parseInt(retryAfter) * 1000;
+          await new Promise(resolve => setTimeout(resolve, waitTime));
+          return this.fetchWithRetry(url, options, retries + 1);
+        }
+      }
+
+      // Handle other retryable errors
       if (!response.ok && retries < this.maxRetries) {
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
-        return this.fetchWithRetry(url, options, retries + 1);
+        const retryableStatuses = [408, 500, 502, 503, 504];
+        if (retryableStatuses.includes(response.status)) {
+          // Exponential backoff
+          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
+          return this.fetchWithRetry(url, options, retries + 1);
+        }
       }
 
       return response;
     } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
-        throw new Error('Request timeout');
+      if (error instanceof Error) {
+        if (error.name === 'AbortError') {
+          throw new Error('Request timeout');
+        }
+        throw error;
       }
-      throw error;
+      throw new Error('Unknown error occurred');
     }
   }
 
   static async post(endpoint: string, data: any) {
+    const apiKey = process.env.QUIDAX_SECRET_KEY;
+    if (!apiKey) {
+      throw new Error('Quidax API key not configured');
+    }
+
     const response = await fetch(`https://www.quidax.com/api/v1${endpoint}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`
+        'Authorization': `Bearer ${apiKey}`
       },
       body: JSON.stringify(data)
     });
@@ -200,46 +244,98 @@ export class QuidaxClient {
     }
   }
 
-  async createSubAccount(data: { email: string; first_name?: string; last_name?: string }) {
+  async createSubAccount(data: CreateSubAccountParams) {
+    console.log('Creating Quidax sub-account with data:', JSON.stringify(data, null, 2));
     const response = await this.fetchWithRetry(`${this.baseUrl}/users`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
       body: JSON.stringify(data)
     });
-    return response.json();
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error('Failed to create Quidax sub-account:', error);
+      throw new Error(error.message || 'Failed to create Quidax sub-account');
+    }
+
+    const result = await response.json();
+    console.log('Quidax sub-account created:', JSON.stringify(result, null, 2));
+    
+    if (!result.data || !result.data.id) {
+      throw new Error('Invalid response from Quidax API');
+    }
+
+    return result.data as QuidaxUser;
+  }
+
+  async getUser(userId: string): Promise<QuidaxResponse<QuidaxUser>> {
+    if (!userId) {
+      throw new Error('User ID is required');
+    }
+
+    try {
+      const response = await this.fetchWithRetry(`${this.baseUrl}/users/${userId}`);
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        const errorMessage = errorData?.message || response.statusText;
+        
+        switch (response.status) {
+          case 401:
+            throw new Error(`Authentication failed: ${errorMessage}`);
+          case 403:
+            throw new Error(`Access denied: ${errorMessage}`);
+          case 404:
+            throw new Error(`User not found: ${errorMessage}`);
+          case 429:
+            throw new Error(`Rate limit exceeded: ${errorMessage}`);
+          default:
+            throw new Error(`Failed to fetch user: ${errorMessage}`);
+        }
+      }
+
+      return response.json();
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      throw error;
+    }
   }
 
   async fetchUserWallets(userId: string): Promise<QuidaxResponse<QuidaxWallet[]>> {
     try {
+      console.log('Fetching wallets for user:', userId);
       const response = await this.fetchWithRetry(`${this.baseUrl}/users/${userId}/wallets`);
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch wallets: ${response.statusText}`);
+        const errorData = await response.json();
+        console.error('Error response from Quidax:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch user wallets');
       }
+      
       const data = await response.json();
-      if (!data || !data.data || !Array.isArray(data.data)) {
-        throw new Error('Invalid response format from Quidax API');
-      }
+      console.log('Wallet data received:', data);
       return data;
     } catch (error) {
-      console.error('Error fetching user wallets:', error);
+      console.error('Error in fetchUserWallets:', error);
       throw error;
     }
   }
 
   async getWallet(userId: string, currency: string): Promise<QuidaxResponse<QuidaxWallet[]>> {
     try {
-      const response = await this.fetchWithRetry(
-        `${this.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}`
-      );
+      console.log('Fetching wallet for user:', userId, 'currency:', currency);
+      const response = await this.fetchWithRetry(`${this.baseUrl}/users/${userId}/wallets/${currency}`);
+      
       if (!response.ok) {
-        throw new Error(`Failed to fetch wallet: ${response.statusText}`);
+        const errorData = await response.json();
+        console.error('Error response from Quidax:', errorData);
+        throw new Error(errorData.message || 'Failed to fetch wallet');
       }
-      return response.json();
+      
+      const data = await response.json();
+      console.log('Wallet data received:', data);
+      return data;
     } catch (error) {
-      console.error('Error fetching wallet:', error);
+      console.error('Error in getWallet:', error);
       throw error;
     }
   }
