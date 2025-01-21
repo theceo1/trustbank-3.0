@@ -4,7 +4,26 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
   images: {
-    domains: ['localhost'],
+    domains: [
+      'localhost',
+      'coin-images.coingecko.com',
+      'raw.githubusercontent.com',
+      'cryptologos.cc'
+    ],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'coin-images.coingecko.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'raw.githubusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cryptologos.cc',
+      }
+    ]
   },
 }
 

@@ -12,6 +12,10 @@ import WalletCard from "@/components/wallet/WalletCard";
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 import { WalletCardSkeleton } from "@/app/components/wallet/WalletCardSkeleton";
+import { useSession } from "next-auth/react";
+import { toast } from "sonner";
+import WalletGrid from "@/components/wallet/WalletGrid";
+import { Header } from "@/components/Header";
 
 // Core currencies we want to display
 const CORE_CURRENCIES = ['ngn', 'btc', 'eth', 'usdt', 'usdc', 'bnb'];
@@ -30,7 +34,10 @@ interface WalletData {
   currency: string;
   balance: string;
   locked: string;
-  percentageChange: number;
+  staked: string;
+  converted_balance: string;
+  reference_currency: string;
+  is_crypto: boolean;
   blockchain_enabled?: boolean;
   deposit_address?: string;
   destination_tag?: string;
@@ -53,11 +60,20 @@ interface WalletCardProps {
 export default function WalletPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { data: session } = useSession();
   const [wallets, setWallets] = useState<WalletData[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<'setup' | 'kyc' | null>(null);
+  const [favoriteWallets, setFavoriteWallets] = useState<string[]>(() => {
+    // Initialize from localStorage if available
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('favoriteWallets');
+      return saved ? JSON.parse(saved) : [];
+    }
+    return [];
+  });
 
   useEffect(() => {
     fetchWalletData();
@@ -130,6 +146,31 @@ export default function WalletPage() {
     }
   };
 
+  const handleToggleFavorite = (currency: string) => {
+    setFavoriteWallets(prev => {
+      const newFavorites = prev.includes(currency.toLowerCase())
+        ? prev.filter(c => c !== currency.toLowerCase())
+        : [...prev, currency.toLowerCase()];
+      
+      // Save to localStorage
+      localStorage.setItem('favoriteWallets', JSON.stringify(newFavorites));
+      return newFavorites;
+    });
+  };
+
+  // Calculate total balance
+  const totalBalance = wallets.reduce((total, wallet) => {
+    return total + parseFloat(wallet.converted_balance || '0');
+  }, 0);
+
+  if (!session?.user) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <p className="text-muted-foreground">Please sign in to view your wallets</p>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="container mx-auto p-6 space-y-6">
@@ -168,111 +209,33 @@ export default function WalletPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-8">
-      {/* Start Trading Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card className="bg-gradient-to-br from-purple-500 to-indigo-600 text-white">
-          <CardHeader>
-            <CardTitle>Start Trading Today</CardTitle>
-            <CardDescription className="text-white/90">
-              Buy, sell, and swap your favorite cryptocurrencies instantly.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              variant="secondary" 
-              className="bg-white text-indigo-600 hover:bg-white/90"
-              onClick={() => router.push('/trade')}
-            >
-              Trade Now
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
+    <div className="min-h-screen bg-background">
+      <main className="container mx-auto px-4 py-8">
+        <div className="space-y-8">
+          <Card className="bg-green-600/5">
+            <CardHeader>
+              <CardTitle>Total Portfolio Value</CardTitle>
+              <CardDescription>Your total assets across all currencies</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <h2 className="text-4xl font-bold">₦{formatCurrency(totalBalance, 'ngn')}</h2>
+            </CardContent>
+          </Card>
 
-        <Card className="bg-gradient-to-br from-blue-400 to-indigo-600 text-white">
-          <CardHeader>
-            <CardTitle>Refer & Earn</CardTitle>
-            <CardDescription className="text-white/90">
-              Invite friends and earn up to $50 USDT for each referral.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button 
-              variant="secondary" 
-              className="bg-white text-indigo-600 hover:bg-white/90"
-              onClick={() => router.push('/profile#referral')}
-            >
-              Get Code
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Wallets Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {wallets.map((wallet) => (
-          <WalletCard
-            key={wallet.currency}
-            wallet={wallet}
-            onAction={(action) => {
-              switch (action) {
-                case 'deposit':
-                  // Handle deposit
-                  break;
-                case 'withdraw':
-                  // Handle withdraw
-                  break;
-                case 'trade':
-                  router.push('/trade');
-                  break;
-              }
-            }}
-          />
-        ))}
-      </div>
-
-      {/* Recent Transactions */}
-      {transactions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Recent Transactions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {transactions.map((tx) => (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between py-2 border-b last:border-0"
-                >
-                  <div className="flex items-center space-x-3">
-                    {tx.type === 'withdrawal' ? (
-                      <ArrowUpRight className="h-4 w-4 text-red-500" />
-                    ) : (
-                      <ArrowDownLeft className="h-4 w-4 text-green-500" />
-                    )}
-                    <div>
-                      <div className="font-medium">{tx.type}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {new Date(tx.created_at).toLocaleDateString()}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-medium">
-                      {formatCurrency(parseFloat(tx.amount), tx.currency)}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {tx.status}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {wallets.map((wallet) => (
+              <WalletCard
+                key={wallet.id}
+                currency={wallet.currency}
+                balance={parseFloat(wallet.balance)}
+                locked={parseFloat(wallet.locked)}
+                isFavorite={favoriteWallets.includes(wallet.currency.toLowerCase())}
+                onToggleFavorite={handleToggleFavorite}
+              />
+            ))}
+          </div>
+        </div>
+      </main>
     </div>
   );
 }

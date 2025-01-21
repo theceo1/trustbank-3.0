@@ -39,6 +39,9 @@ export function Header() {
               <Link href="/dashboard" className="text-sm font-medium transition-colors hover:text-primary">
                 Dashboard
               </Link>
+              <Link href="/market" className="text-sm font-medium transition-colors hover:text-primary">
+                Market
+              </Link>
               <Link href="/trade" className="text-sm font-medium transition-colors hover:text-primary">
                 Trade
               </Link>

@@ -1,226 +1,216 @@
 "use client";
 
-import { History, Loader2, AlertCircle, LinkIcon, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft, ArrowRightLeft, Star, StarOff, Eye, EyeOff, Info } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, cn } from "@/lib/utils";
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import WithdrawModal from "./modals/WithdrawModal";
+import { Star, Bell } from "lucide-react";
+import { formatCurrency } from "@/lib/utils";
 import DepositModal from "./modals/DepositModal";
+import WithdrawModal from "./modals/WithdrawModal";
 import TransferModal from "./modals/TransferModal";
-import Image from "next/image";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { LineChart, Line } from "recharts";
-
-export type WalletAction = 'deposit' | 'withdraw' | 'trade' | 'transfer';
-
-interface WalletData {
-  currency: string;
-  balance: string;
-  locked: string;
-  percentageChange: number;
-  priceHistory?: { price: number; timestamp: string }[];
-}
+import PriceAlertModal from "./modals/PriceAlertModal";
+import PriceChart from "./PriceChart";
+import { createPortal } from "react-dom";
 
 interface WalletCardProps {
-  wallet: WalletData;
-  onAction?: (action: WalletAction) => void;
-  onToggleFavorite?: () => void;
+  currency: string;
+  balance: number;
+  locked: number;
   isFavorite?: boolean;
+  onToggleFavorite?: (currency: string) => void;
 }
 
-type SupportedCurrency = 'btc' | 'eth' | 'usdt' | 'usdc' | 'bnb' | 'ngn';
+interface ChartDataPoint {
+  time: string;
+  value: number;
+}
 
-const getCurrencyIconUrl = (currency: string) => {
-  const currencyMap: { [key: string]: string } = {
-    btc: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png',
-    eth: 'https://cryptologos.cc/logos/ethereum-eth-logo.png',
-    usdt: 'https://cryptologos.cc/logos/tether-usdt-logo.png',
-    usdc: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png',
-    bnb: 'https://cryptologos.cc/logos/bnb-bnb-logo.png',
-  };
-  return currencyMap[currency.toLowerCase()] || 'https://cryptologos.cc/logos/question-mark.png';
-};
-
-export default function WalletCard({ wallet, onAction, onToggleFavorite, isFavorite = false }: WalletCardProps) {
-  const { currency, balance, locked, percentageChange, priceHistory = [] } = wallet;
-  const formattedBalance = formatCurrency(parseFloat(balance), currency);
-  const formattedLocked = parseFloat(locked) > 0 ? formatCurrency(parseFloat(locked), currency) : null;
-  const router = useRouter();
-  
+export default function WalletCard({
+  currency,
+  balance,
+  locked,
+  isFavorite = false,
+  onToggleFavorite,
+}: WalletCardProps) {
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
+  const [showPriceAlertModal, setShowPriceAlertModal] = useState(false);
+  const [chartData, setChartData] = useState<ChartDataPoint[]>([]);
+  const [currentPrice, setCurrentPrice] = useState<number>(0); // Initialize with 0
+  const [isLoadingChart, setIsLoadingChart] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  const handleAction = (action: WalletAction) => {
-    if (onAction) {
-      onAction(action);
-      return;
-    }
+  useEffect(() => {
+    setMounted(true);
+    return () => setMounted(false);
+  }, []);
 
-    switch (action) {
-      case 'deposit':
-        setShowDepositModal(true);
-        break;
-      case 'withdraw':
-        setShowWithdrawModal(true);
-        break;
-      case 'transfer':
-        setShowTransferModal(true);
-        break;
-      case 'trade':
-        router.push(`/trade/${currency.toLowerCase()}`);
-        break;
+  useEffect(() => {
+    const fetchChartData = async () => {
+      if (currency.toLowerCase() === 'ngn') return;
+      
+      try {
+        setIsLoadingChart(true);
+        const response = await fetch(`/api/market/history?market=${currency.toLowerCase()}ngn&period=24h`);
+        if (!response.ok) throw new Error('Failed to fetch chart data');
+        const data = await response.json();
+        
+        if (data.status === 'success' && Array.isArray(data.data)) {
+          setChartData(data.data);
+          // Set current price from the last data point
+          if (data.data.length > 0) {
+            setCurrentPrice(data.data[data.data.length - 1].value);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching chart data:', error);
+      } finally {
+        setIsLoadingChart(false);
+      }
+    };
+
+    fetchChartData();
+    // Set up polling interval
+    const interval = setInterval(fetchChartData, 60000); // Update every minute
+    return () => clearInterval(interval);
+  }, [currency]);
+
+  const handleFavoriteClick = () => {
+    if (onToggleFavorite) {
+      onToggleFavorite(currency);
     }
   };
 
   return (
-    <TooltipProvider>
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        <Card 
-          className={cn(
-            "relative overflow-hidden hover:shadow-lg transition-all duration-300",
-            currency.toLowerCase() === 'ngn' 
-              ? "bg-orange-100 dark:bg-orange-900/20" 
-              : "bg-[#00A651]/5 dark:bg-[#00A651]/10"
-          )} 
-          data-testid={`wallet-card-${currency.toLowerCase()}`}
-        >
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  {currency.toLowerCase() !== 'ngn' && (
-                    <div className="relative w-8 h-8">
-                      <Image
-                        src={getCurrencyIconUrl(currency)}
-                        alt={currency}
-                        width={32}
-                        height={32}
-                        className="rounded-full"
-                        unoptimized
-                      />
-                    </div>
-                  )}
-                  <div className="text-2xl font-bold dark:text-white">{currency}</div>
-                  {percentageChange !== 0 && (
-                    <span className={`text-sm ${percentageChange > 0 ? 'text-green-500 dark:text-green-400' : 'text-red-500 dark:text-red-400'}`}>
-                      {percentageChange > 0 ? '+' : ''}{percentageChange}%
-                    </span>
-                  )}
-                </div>
-                {onToggleFavorite && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={onToggleFavorite}
-                    className={cn(
-                      "hover:text-[#00A651]/80",
-                      currency.toLowerCase() === 'ngn' ? "text-orange-500" : "text-[#00A651]"
-                    )}
-                  >
-                    {isFavorite ? <Star className="h-5 w-5 fill-current" /> : <StarOff className="h-5 w-5" />}
-                  </Button>
-                )}
+    <>
+      <Card className={`relative overflow-hidden ${
+        currency.toLowerCase() === 'ngn' 
+          ? 'bg-orange-50 dark:bg-orange-900/50 dark:text-white' 
+          : 'bg-green-600/5'
+      }`}>
+        <div className="p-6">
+          {/* Favorite and Alert Buttons */}
+          <div className="absolute top-2 right-2 flex gap-2">
+            {currency.toLowerCase() !== 'ngn' && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-transparent"
+                onClick={() => setShowPriceAlertModal(true)}
+              >
+                <Bell className="h-5 w-5 text-muted-foreground hover:text-green-600" />
+              </Button>
+            )}
+            {onToggleFavorite && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="hover:bg-transparent"
+                onClick={handleFavoriteClick}
+              >
+                <Star className={`h-5 w-5 ${isFavorite ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground'}`} />
+              </Button>
+            )}
+          </div>
+
+          {/* Currency Info */}
+          <div className="flex items-center space-x-3 mb-4">
+            {currency.toLowerCase() !== 'ngn' && (
+              <div className="relative w-8 h-8">
+                <img
+                  src={`/images/crypto/${currency.toLowerCase()}.svg`}
+                  alt={currency}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.currentTarget.src = `/images/crypto/generic.svg`;
+                  }}
+                />
               </div>
-
-              <div className="text-3xl font-bold tracking-tight dark:text-white">
-                {formattedBalance}
-              </div>
-
-              {formattedLocked && (
-                <div className="text-sm text-muted-foreground dark:text-muted-foreground/80">
-                  Locked: {formattedLocked}
-                </div>
-              )}
-
-              {priceHistory && priceHistory.length > 0 && (
-                <div className="h-12 w-full">
-                  <LineChart width={200} height={48} data={priceHistory}>
-                    <Line
-                      type="monotone"
-                      dataKey="price"
-                      stroke={currency.toLowerCase() === 'ngn' ? "#f97316" : "#00A651"}
-                      strokeWidth={1}
-                      dot={false}
-                    />
-                  </LineChart>
-                </div>
-              )}
-
-              <div className="flex items-center space-x-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "flex-1 transition-colors",
-                    currency.toLowerCase() === 'ngn'
-                      ? "hover:bg-orange-500 hover:text-white dark:hover:bg-orange-500/80"
-                      : "hover:bg-[#00A651] hover:text-white dark:hover:bg-[#00A651]/80"
-                  )}
-                  onClick={() => handleAction('deposit')}
-                >
-                  <ArrowDownLeft className="h-4 w-4 mr-1" />
-                  Deposit
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className={cn(
-                    "flex-1 transition-colors",
-                    currency.toLowerCase() === 'ngn'
-                      ? "hover:bg-orange-500 hover:text-white dark:hover:bg-orange-500/80"
-                      : "hover:bg-[#00A651] hover:text-white dark:hover:bg-[#00A651]/80"
-                  )}
-                  onClick={() => handleAction('withdraw')}
-                >
-                  <ArrowUpRight className="h-4 w-4 mr-1" />
-                  Withdraw
-                </Button>
-                {currency.toLowerCase() !== 'ngn' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 hover:bg-[#00A651] hover:text-white dark:hover:bg-[#00A651]/80 dark:hover:text-white transition-colors"
-                    onClick={() => handleAction('transfer')}
-                  >
-                    <ArrowRightLeft className="h-4 w-4 mr-1" />
-                    Transfer
-                  </Button>
-                )}
-              </div>
+            )}
+            <div>
+              <h3 className="text-lg font-semibold dark:text-white">{currency.toUpperCase()}</h3>
+              <p className="text-sm text-muted-foreground dark:text-gray-300">Available Balance</p>
             </div>
-          </CardContent>
-        </Card>
-      </motion.div>
+          </div>
 
-      <DepositModal
-        isOpen={showDepositModal}
-        onClose={() => setShowDepositModal(false)}
-        currency={currency}
-      />
-      
-      <WithdrawModal
-        isOpen={showWithdrawModal}
-        onClose={() => setShowWithdrawModal(false)}
-        currency={currency}
-        balance={parseFloat(balance)}
-      />
+          {/* Balance */}
+          <div className="space-y-1">
+            <div className="text-2xl font-bold dark:text-white">
+              {formatCurrency(balance, currency)}
+            </div>
+            {locked > 0 && (
+              <div className="text-sm text-muted-foreground dark:text-gray-300">
+                {formatCurrency(locked, currency)} locked
+              </div>
+            )}
+          </div>
 
-      {currency.toLowerCase() !== 'ngn' && (
-        <TransferModal
-          isOpen={showTransferModal}
-          onClose={() => setShowTransferModal(false)}
-          currency={currency}
-          balance={parseFloat(balance)}
-        />
+          {/* Price Chart */}
+          {currency.toLowerCase() !== 'ngn' && chartData.length > 0 && (
+            <div className="mt-4 -mx-6">
+              <PriceChart data={chartData} containerClassName="w-full" />
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="grid grid-cols-3 gap-2 mt-6">
+            <Button
+              variant="outline"
+              onClick={() => setShowDepositModal(true)}
+              className="hover:bg-green-50 dark:hover:bg-green-900 hover:text-green-600 dark:text-white dark:hover:text-green-400 transition-colors"
+            >
+              Deposit
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowWithdrawModal(true)}
+              className="hover:bg-green-50 dark:hover:bg-green-900 hover:text-green-600 dark:text-white dark:hover:text-green-400 transition-colors"
+            >
+              Withdraw
+            </Button>
+            {currency.toLowerCase() !== 'ngn' && (
+              <Button
+                variant="outline"
+                onClick={() => setShowTransferModal(true)}
+                className="hover:bg-green-50 dark:hover:bg-green-900 hover:text-green-600 dark:text-white dark:hover:text-green-400 transition-colors"
+              >
+                Transfer
+              </Button>
+            )}
+          </div>
+        </div>
+      </Card>
+
+      {/* Render modals in a portal */}
+      {mounted && createPortal(
+        <div className="relative z-50">
+          <DepositModal
+            isOpen={showDepositModal}
+            onClose={() => setShowDepositModal(false)}
+            currency={currency}
+          />
+          <WithdrawModal
+            isOpen={showWithdrawModal}
+            onClose={() => setShowWithdrawModal(false)}
+            currency={currency}
+            balance={balance}
+          />
+          <TransferModal
+            isOpen={showTransferModal}
+            onClose={() => setShowTransferModal(false)}
+            currency={currency}
+            balance={balance}
+          />
+          <PriceAlertModal
+            isOpen={showPriceAlertModal}
+            onClose={() => setShowPriceAlertModal(false)}
+            currency={currency}
+            currentPrice={currentPrice} // Now currentPrice is always a number
+          />
+        </div>,
+        document.body
       )}
-    </TooltipProvider>
+    </>
   );
-} 
+}

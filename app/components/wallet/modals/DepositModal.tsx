@@ -79,7 +79,9 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
             network: selectedNetwork
           })
         });
+
         const data = await response.json();
+        console.log('Deposit address response:', data); // Debug log
 
         if (!response.ok) {
           throw new Error(data.error || "Failed to fetch wallet address");

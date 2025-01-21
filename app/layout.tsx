@@ -1,15 +1,14 @@
 // app/layout.tsx
 
 import { Inter } from 'next/font/google';
-import ClientLayout from './client-layout';
 import './globals.css';
+import { metadata } from './metadata';
+import { Providers } from './providers';
+import ClientLayout from './client-layout';
 
 const inter = Inter({ subsets: ['latin'] });
 
-export const metadata = {
-  title: 'trustBank - Crypto | Simplified',
-  description: 'A modern cryptocurrency exchange platform for emerging markets',
-};
+export { metadata };
 
 export default function RootLayout({
   children,
@@ -19,7 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={inter.className}>
-        <ClientLayout>{children}</ClientLayout>
+        <Providers>
+          <ClientLayout>{children}</ClientLayout>
+        </Providers>
       </body>
     </html>
   );

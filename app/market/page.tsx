@@ -116,21 +116,27 @@ export default function MarketPage() {
             title="Total Market Cap"
             value={marketStats.totalMarketCap ? `$${(marketStats.totalMarketCap / 1e12).toFixed(2)}T` : 'Loading...'}
             icon={<Activity className="h-4 w-4" />}
+            colorScheme="orange"
+            lastUpdated={lastUpdated}
           />
           <MarketStatCard
             title="24h Trading Volume"
             value={marketStats.totalVolume ? `$${(marketStats.totalVolume / 1e9).toFixed(2)}B` : 'Loading...'}
             icon={<BarChart2 className="h-4 w-4" />}
+            colorScheme="blue"
+            lastUpdated={lastUpdated}
           />
           <MarketStatCard
             title="Active Markets"
             value="500+"
             icon={<Coins className="h-4 w-4" />}
+            colorScheme="green"
+            lastUpdated={lastUpdated}
           />
         </div>
       </section>
 
-      <section>
+      <section className="bg-white dark:bg-gray-800/50 rounded-xl p-6 shadow-lg">
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Price Tracker</h2>
           <p className="text-muted-foreground">Monitor real-time cryptocurrency prices</p>
@@ -155,21 +161,25 @@ export default function MarketPage() {
             </div>
           </div>
 
-          <Card className="p-6 lg:col-span-3">
+          <Card className="p-6 lg:col-span-3 bg-gradient-to-br from-purple-100 to-purple-50 dark:from-purple-900/50 dark:to-purple-800/30 border-none shadow-lg">
             <div className="flex flex-col items-center justify-center space-y-4">
               <div className="flex items-center gap-2">
-                <h2 className="text-2xl font-bold">{selectedCrypto}/USDT</h2>
-                <span className={`px-2 py-1 rounded-full text-sm ${isConnected ? 'bg-green-500/10 text-green-600' : 'bg-yellow-500/10 text-yellow-600'}`}>
+                <h2 className="text-2xl font-bold text-purple-900 dark:text-purple-100">{selectedCrypto}/USDT</h2>
+                <span className={`px-2 py-1 rounded-full text-sm ${
+                  isConnected 
+                    ? 'bg-green-500/20 text-green-700 dark:text-green-300' 
+                    : 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-300'
+                }`}>
                   {isConnected ? 'Live' : 'Connecting...'}
                 </span>
               </div>
-              <p className="text-5xl font-bold tracking-tight">
+              <p className="text-5xl font-bold tracking-tight text-purple-950 dark:text-purple-50">
                 {isLoading ? 'Loading...' : `$${currentPrice.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2
                 })}`}
               </p>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-sm text-purple-600 dark:text-purple-300">
                 {lastUpdated ? `Last updated: ${lastUpdated}` : 'Not available'}
               </p>
             </div>
@@ -177,7 +187,7 @@ export default function MarketPage() {
         </div>
       </section>
 
-      <section>
+      <section className="bg-white dark:bg-gray-800/50 rounded-xl p-6 shadow-lg">
         <div className="mb-6">
           <h2 className="text-2xl font-bold mb-2">Top Cryptocurrencies</h2>
           <p className="text-muted-foreground">Live prices and market cap rankings of major cryptocurrencies</p>

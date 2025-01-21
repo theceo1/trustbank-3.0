@@ -48,7 +48,10 @@ export class QuidaxService {
   }
 
   static async getDepositAddress(userId: string, currency: string) {
-    return this.walletService.getDepositAddress(userId, currency);
+    console.log('Getting deposit address for user:', userId, 'currency:', currency);
+    const response = await this.walletService.getDepositAddress(userId, currency);
+    console.log('Deposit address response:', response);
+    return response;
   }
 
   static async createSwapQuotation(params: any) {

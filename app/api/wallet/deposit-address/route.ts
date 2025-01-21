@@ -1,59 +1,58 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
+import { createServerComponentClient } from '@supabase/auth-helpers-nextjs';
 import { QuidaxService } from '@/app/lib/services/quidax';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const supabase = createServerComponentClient({ cookies });
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
-    const cookieStore = cookies();
-    const token = cookieStore.get('sb-access-token')?.value;
-
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
-    if (userError || !user) {
+    if (sessionError || !session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { currency, network } = await request.json();
-    if (!currency || !network) {
-      return NextResponse.json(
-        { error: 'Currency and network are required' },
-        { status: 400 }
-      );
+    if (!currency) {
+      return NextResponse.json({ error: 'Currency is required' }, { status: 400 });
     }
 
-    // Get user profile
+    // Get user's Quidax ID from the database
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('quidax_id')
-      .eq('user_id', user.id)
+      .eq('user_id', session.user.id)
       .single();
 
-    if (profileError || !profile) {
-      return NextResponse.json(
-        { error: 'Profile not found' },
-        { status: 404 }
-      );
+    if (profileError || !profile?.quidax_id) {
+      return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
-    // Get deposit address from Quidax
-    const address = await QuidaxService.getDepositAddress(profile.quidax_id, currency, network);
+    console.log('Fetching deposit address for user:', profile.quidax_id, 'currency:', currency);
+    
+    // Get or create wallet address
+    const response = await QuidaxService.getDepositAddress(profile.quidax_id, currency);
+    console.log('Quidax response:', response);
+    
+    // Check if the response has the expected structure
+    if (!response?.data?.address) {
+      console.error('Invalid response structure:', response);
+      return NextResponse.json({ error: 'Failed to get deposit address' }, { status: 500 });
+    }
 
-    return NextResponse.json(address);
+    return NextResponse.json({
+      data: {
+        address: response.data.address,
+        tag: response.data.tag
+      }
+    });
+
   } catch (error) {
-    console.error('Error getting deposit address:', error);
+    console.error('Error fetching wallet address:', error);
     return NextResponse.json(
-      { error: 'Failed to get deposit address' },
+      { error: error instanceof Error ? error.message : 'Failed to fetch wallet address' },
       { status: 500 }
     );
   }

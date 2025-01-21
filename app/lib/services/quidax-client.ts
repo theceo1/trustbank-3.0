@@ -342,15 +342,22 @@ export class QuidaxClient {
 
   async getDepositAddress(userId: string, currency: string): Promise<QuidaxResponse<{ address: string; tag?: string }>> {
     try {
+      console.log('Fetching deposit address for user:', userId, 'currency:', currency);
       const response = await this.fetchWithRetry(
         `${this.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}/address`
       );
+
       if (!response.ok) {
-        throw new Error(`Failed to get deposit address: ${response.statusText}`);
+        const errorData = await response.json();
+        console.error('Error response from Quidax:', errorData);
+        throw new Error(errorData.message || 'Failed to get deposit address');
       }
-      return response.json();
+
+      const data = await response.json();
+      console.log('Deposit address data:', data);
+      return data;
     } catch (error) {
-      console.error('Error getting deposit address:', error);
+      console.error('Error in getDepositAddress:', error);
       throw error;
     }
   }
