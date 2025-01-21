@@ -1,131 +1,137 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { formatCryptoAmount } from '@/app/lib/utils/format';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { formatCurrency, formatNumber } from "@/lib/utils";
 
-interface Order {
+interface OrderBookEntry {
   price: string;
   volume: string;
-  total?: string;
+  total: number;
 }
 
-interface OrderBookProps {
-  market: string;
+interface OrderBookData {
+  asks: OrderBookEntry[];
+  bids: OrderBookEntry[];
 }
 
-export default function OrderBook({ market }: OrderBookProps) {
-  const [bids, setBids] = useState<Order[]>([]);
-  const [asks, setAsks] = useState<Order[]>([]);
-  const [error, setError] = useState<string | null>(null);
+export default function OrderBook() {
+  const [orderBook, setOrderBook] = useState<OrderBookData>({ asks: [], bids: [] });
   const [isLoading, setIsLoading] = useState(true);
-
-  // Get the base and quote currency from the market pair
-  const [baseCurrency, quoteCurrency] = [market.slice(0, -3), market.slice(-3)].map(c => c.toUpperCase());
-
-  const fetchOrderBook = async () => {
-    try {
-      const response = await fetch(`/api/market/orderbook/${market}`);
-      if (!response.ok) {
-        throw new Error('Failed to fetch order book');
-      }
-      const data = await response.json();
-      
-      if (data.status === 'success' && data.data) {
-        if (data.data.bids) setBids(data.data.bids.map(transformOrder));
-        if (data.data.asks) setAsks(data.data.asks.map(transformOrder));
-        setError(null);
-      } else {
-        throw new Error('Invalid order book data received');
-      }
-    } catch (error) {
-      console.error('Error fetching order book:', error);
-      setError('Failed to fetch order book data');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const transformOrder = (order: any): Order => ({
-    price: order.price || '0',
-    volume: order.volume || '0',
-    total: order.total || '0'
-  });
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const fetchOrderBook = async () => {
+      try {
+        const response = await fetch('https://www.quidax.com/api/v1/markets/btcngn/order_book');
+        if (!response.ok) {
+          throw new Error('Failed to fetch order book');
+        }
+        const data = await response.json();
+        
+        if (data.status === 'success' && data.data) {
+          // Transform the data to match our interface
+          const transformedData = {
+            asks: data.data.asks.map((ask: any) => ({
+              price: ask.price,
+              volume: ask.volume,
+              total: parseFloat(ask.price) * parseFloat(ask.volume)
+            })),
+            bids: data.data.bids.map((bid: any) => ({
+              price: bid.price,
+              volume: bid.volume,
+              total: parseFloat(bid.price) * parseFloat(bid.volume)
+            }))
+          };
+          setOrderBook(transformedData);
+        }
+      } catch (err) {
+        console.error('Error fetching order book:', err);
+        setError(err instanceof Error ? err.message : 'Failed to fetch order book');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchOrderBook();
-    
-    // Poll every 5 seconds
     const interval = setInterval(fetchOrderBook, 5000);
-    
     return () => clearInterval(interval);
-  }, [market]);
+  }, []);
 
   if (error) {
-    return <div className="text-red-500 p-4">{error}</div>;
-  }
-
-  if (isLoading) {
-    return <div className="animate-pulse p-4">Loading order book...</div>;
+    return (
+      <Card>
+        <CardContent className="p-6">
+          <div className="text-red-500">{error}</div>
+        </CardContent>
+      </Card>
+    );
   }
 
   return (
-    <div className="grid grid-cols-2 gap-4 p-4">
-      <div className="space-y-2">
-        <h3 className="text-green-500 font-semibold flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-green-500"></div>
-          Buy Orders ({baseCurrency}-{quoteCurrency})
-        </h3>
-        <div className="space-y-1">
-          <div className="grid grid-cols-3 text-xs text-muted-foreground mb-2">
-            <span>Price ({quoteCurrency})</span>
-            <span>Amount ({baseCurrency})</span>
-            <span>Total ({quoteCurrency})</span>
+    <Card className="bg-white dark:bg-gray-800/50 border-none shadow-lg">
+      <CardHeader>
+        <CardTitle className="text-lg font-semibold">Order Book</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
+          {/* Asks (Sell Orders) */}
+          <div className="space-y-1">
+            {isLoading ? (
+              Array(5).fill(0).map((_, i) => (
+                <div key={`ask-loading-${i}`} className="animate-pulse h-8 bg-gray-100 dark:bg-gray-700 rounded" />
+              ))
+            ) : (
+              orderBook.asks.map((ask, i) => (
+                <div
+                  key={`ask-${i}`}
+                  className="grid grid-cols-3 text-sm py-1 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                  style={{
+                    background: `linear-gradient(to left, rgba(239, 68, 68, 0.1) ${Math.min((parseFloat(ask.volume) / 5) * 100, 100)}%, transparent 0%)`
+                  }}
+                >
+                  <span className="text-red-600 dark:text-red-400 font-medium">{formatCurrency(parseFloat(ask.price), 'NGN')}</span>
+                  <span className="text-right text-gray-600 dark:text-gray-400">{formatNumber(parseFloat(ask.volume))}</span>
+                  <span className="text-right text-gray-600 dark:text-gray-400">{formatCurrency(ask.total, 'NGN')}</span>
+                </div>
+              ))
+            )}
           </div>
-          {bids.map((bid, index) => (
-            <div 
-              key={index} 
-              className="grid grid-cols-3 text-sm relative overflow-hidden group"
-              title={`Buy ${bid.volume} ${baseCurrency} at ${bid.price} ${quoteCurrency}`}
-            >
-              <div 
-                className="absolute inset-0 bg-green-500/10 group-hover:bg-green-500/20 transition-colors"
-                style={{ width: `${(parseFloat(bid.total || '0') / Math.max(...bids.map(b => parseFloat(b.total || '0')))) * 100}%` }}
-              />
-              <span className="text-green-500 relative font-medium">{formatCryptoAmount(bid.price)}</span>
-              <span className="relative">{formatCryptoAmount(bid.volume)}</span>
-              <span className="relative">{formatCryptoAmount(bid.total)}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      <div className="space-y-2">
-        <h3 className="text-red-500 font-semibold flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-red-500"></div>
-          Sell Orders ({baseCurrency}-{quoteCurrency})
-        </h3>
-        <div className="space-y-1">
-          <div className="grid grid-cols-3 text-xs text-muted-foreground mb-2">
-            <span>Price ({quoteCurrency})</span>
-            <span>Amount ({baseCurrency})</span>
-            <span>Total ({quoteCurrency})</span>
+
+          {/* Spread */}
+          <div className="text-center py-2 text-sm text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/50 rounded">
+            Spread: {formatCurrency(
+              orderBook.asks[0] && orderBook.bids[0]
+                ? parseFloat(orderBook.asks[0].price) - parseFloat(orderBook.bids[0].price)
+                : 0,
+              'NGN'
+            )}
           </div>
-          {asks.map((ask, index) => (
-            <div 
-              key={index} 
-              className="grid grid-cols-3 text-sm relative overflow-hidden group"
-              title={`Sell ${ask.volume} ${baseCurrency} at ${ask.price} ${quoteCurrency}`}
-            >
-              <div 
-                className="absolute inset-0 bg-red-500/10 group-hover:bg-red-500/20 transition-colors"
-                style={{ width: `${(parseFloat(ask.total || '0') / Math.max(...asks.map(a => parseFloat(a.total || '0')))) * 100}%` }}
-              />
-              <span className="text-red-500 relative font-medium">{formatCryptoAmount(ask.price)}</span>
-              <span className="relative">{formatCryptoAmount(ask.volume)}</span>
-              <span className="relative">{formatCryptoAmount(ask.total)}</span>
-            </div>
-          ))}
+
+          {/* Bids (Buy Orders) */}
+          <div className="space-y-1">
+            {isLoading ? (
+              Array(5).fill(0).map((_, i) => (
+                <div key={`bid-loading-${i}`} className="animate-pulse h-8 bg-gray-100 dark:bg-gray-700 rounded" />
+              ))
+            ) : (
+              orderBook.bids.map((bid, i) => (
+                <div
+                  key={`bid-${i}`}
+                  className="grid grid-cols-3 text-sm py-1 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                  style={{
+                    background: `linear-gradient(to left, rgba(34, 197, 94, 0.1) ${Math.min((parseFloat(bid.volume) / 5) * 100, 100)}%, transparent 0%)`
+                  }}
+                >
+                  <span className="text-green-600 dark:text-green-400 font-medium">{formatCurrency(parseFloat(bid.price), 'NGN')}</span>
+                  <span className="text-right text-gray-600 dark:text-gray-400">{formatNumber(parseFloat(bid.volume))}</span>
+                  <span className="text-right text-gray-600 dark:text-gray-400">{formatCurrency(bid.total, 'NGN')}</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 } 

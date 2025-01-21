@@ -2,141 +2,130 @@
 "use client";
 
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Card } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { TradeMetrics } from './TradeMetrics';
-import { TradeChart } from './TradeChart';
-import { formatCurrency, formatDate } from "@/lib/utils";
-import { ArrowUpRight, ArrowDownRight, ChevronRight } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatCurrency, formatDate } from '@/app/lib/utils';
 import { TradeDetails } from '@/app/types/trade';
 
 interface TradeHistoryProps {
   trades: TradeDetails[];
+  onTradeSelect?: (trade: TradeDetails) => void;
 }
 
-export function TradeHistory({ trades }: TradeHistoryProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState<'day' | 'week' | 'month'>('week');
-  const [expandedTradeId, setExpandedTradeId] = useState<string | null>(null);
+export function TradeHistory({ trades, onTradeSelect }: TradeHistoryProps) {
+  const [sortConfig, setSortConfig] = useState<{
+    key: keyof TradeDetails;
+    direction: 'asc' | 'desc';
+  }>({ key: 'timestamp', direction: 'desc' });
 
-  const periods = [
-    { value: 'all', label: 'All Time' },
-    { value: 'week', label: 'This Week' },
-    { value: 'month', label: 'This Month' },
-  ];
-
-  const handleTradeClick = (tradeId: string | undefined) => {
-    if (!tradeId) return;
-    setExpandedTradeId(expandedTradeId === tradeId ? null : tradeId);
+  const handleSort = (key: keyof TradeDetails) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
   };
 
+  const sortedTrades = [...trades].sort((a, b) => {
+    if (sortConfig.key === 'timestamp') {
+      return sortConfig.direction === 'asc'
+        ? new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+        : new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    }
+    
+    const aValue = a[sortConfig.key];
+    const bValue = b[sortConfig.key];
+    
+    if (typeof aValue === 'number' && typeof bValue === 'number') {
+      return sortConfig.direction === 'asc' ? aValue - bValue : bValue - aValue;
+    }
+    
+    return sortConfig.direction === 'asc'
+      ? String(aValue).localeCompare(String(bValue))
+      : String(bValue).localeCompare(String(aValue));
+  });
+
   return (
-    <div className="space-y-6">
-      {/* Metrics Overview */}
-      <TradeMetrics trades={trades} />
-
-      {/* Trade History & Analytics */}
-      <Card className="overflow-hidden">
-        <Tabs defaultValue="list" className="w-full">
-          <div className="px-4 pt-4 flex justify-between items-center">
-            <TabsList className="grid w-[200px] grid-cols-2">
-              <TabsTrigger value="list">History</TabsTrigger>
-              <TabsTrigger value="chart">Analytics</TabsTrigger>
-            </TabsList>
-            
-            <select
-              value={selectedPeriod}
-              onChange={(e) => setSelectedPeriod(e.target.value as 'day' | 'week' | 'month')}
-              className="text-sm bg-transparent border rounded-md px-2 py-1"
+    <div className="w-full overflow-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort('timestamp')}
             >
-              {periods.map((period) => (
-                <option key={period.value} value={period.value}>
-                  {period.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <TabsContent value="list" className="mt-4">
-            <div className="space-y-2">
-              <AnimatePresence>
-                {trades.map((trade) => (
-                  <motion.div
+              Time
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort('pair')}
+            >
+              Pair
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort('type')}
+            >
+              Type
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer text-right"
+              onClick={() => handleSort('price')}
+            >
+              Price
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer text-right"
+              onClick={() => handleSort('amount')}
+            >
+              Amount
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer text-right"
+              onClick={() => handleSort('total')}
+            >
+              Total
+            </TableHead>
+            <TableHead 
+              className="cursor-pointer"
+              onClick={() => handleSort('status')}
+            >
+              Status
+            </TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedTrades.map((trade) => (
+            <TableRow
                     key={trade.id}
-                    layout
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    className="px-4 py-3 hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => handleTradeClick(trade.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {trade.type === 'buy' ? (
-                          <ArrowDownRight className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <ArrowUpRight className="h-5 w-5 text-red-500" />
-                        )}
-                        <div>
-                          <p className="font-medium">
-                            {trade.type === 'buy' ? 'Bought' : 'Sold'} {trade.currency.toUpperCase()}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            {formatDate(trade.created_at!)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="font-medium">
-                          {formatCurrency(trade.amount)}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          Rate: {formatCurrency(trade.rate)}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Expanded Details */}
-                    <AnimatePresence>
-                      {expandedTradeId === trade.id && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="mt-4 pt-4 border-t"
-                        >
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <p className="text-muted-foreground">Status</p>
-                              <p className="font-medium capitalize">{trade.status}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Payment Method</p>
-                              <p className="font-medium capitalize">{trade.payment_method}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Service Fee</p>
-                              <p className="font-medium">{formatCurrency(trade.fees.total)}</p>
-                            </div>
-                            <div>
-                              <p className="text-muted-foreground">Network Fee</p>
-                              <p className="font-medium">{formatCurrency(trade.fees.platform)}</p>
-                            </div>
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
-            </div>
-          </TabsContent>
-
-          <TabsContent value="chart" className="mt-4">
-            <TradeChart trades={trades} period={selectedPeriod} />
-          </TabsContent>
-        </Tabs>
-      </Card>
+              className={`cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800/50 ${
+                onTradeSelect ? 'cursor-pointer' : ''
+              }`}
+              onClick={() => onTradeSelect?.(trade)}
+            >
+              <TableCell>{formatDate(trade.timestamp)}</TableCell>
+              <TableCell>{trade.pair}</TableCell>
+              <TableCell>
+                <span className={trade.type === 'buy' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}>
+                  {trade.type.toUpperCase()}
+                </span>
+              </TableCell>
+              <TableCell className="text-right">{formatCurrency(trade.price, 'ngn')}</TableCell>
+              <TableCell className="text-right">{trade.amount}</TableCell>
+              <TableCell className="text-right">{formatCurrency(trade.total, 'ngn')}</TableCell>
+              <TableCell>
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                  trade.status === 'completed'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/20 dark:text-green-400'
+                    : trade.status === 'pending'
+                    ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+                    : 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+                }`}>
+                  {trade.status.toUpperCase()}
+                </span>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

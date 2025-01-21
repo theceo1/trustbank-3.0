@@ -1,154 +1,154 @@
-import { QuidaxService } from './quidax';
+import { EventEmitter } from 'events';
 
-interface WebSocketMessage {
-  event: string;
-  topic: string;
-  payload: any;
-  ref?: string;
+export enum WebSocketEvent {
+  MARKET_UPDATE = 'MARKET_UPDATE',
+  TRADE_UPDATE = 'TRADE_UPDATE',
+  ORDER_UPDATE = 'ORDER_UPDATE',
+  CONNECTION_STATE = 'CONNECTION_STATE',
 }
 
-export class WebSocketService {
-  private static ws: WebSocket | null = null;
-  private static subscribers: Map<string, (data: any) => void> = new Map();
-  private static reconnectAttempts = 0;
-  private static maxReconnectAttempts = 5;
-  private static reconnectDelay = 1000;
-  private static heartbeatInterval: NodeJS.Timeout | null = null;
+interface WebSocketMessage {
+  type: string;
+  data: any;
+}
 
-  static connect() {
-    if (this.ws?.readyState === WebSocket.OPEN) return;
+class WebSocketService {
+  private static instance: WebSocketService;
+  private ws: WebSocket | null = null;
+  private reconnectAttempts = 0;
+  private maxReconnectAttempts = 5;
+  private reconnectTimeout = 1000;
+  private eventEmitter = new EventEmitter();
+  private isConnected = false;
+  private pendingSubscriptions: Set<string> = new Set();
 
-    this.ws = new WebSocket(process.env.NEXT_PUBLIC_QUIDAX_WS_URL!);
+  private constructor() {
+    // Private constructor for singleton pattern
+  }
+
+  public static getInstance(): WebSocketService {
+    if (!WebSocketService.instance) {
+      WebSocketService.instance = new WebSocketService();
+    }
+    return WebSocketService.instance;
+  }
+
+  public connect(url: string): void {
+    if (this.ws) {
+      return;
+    }
+
+    try {
+      this.ws = new WebSocket(url);
+      this.setupEventListeners();
+    } catch (error) {
+      console.error('WebSocket connection error:', error);
+      this.handleReconnect();
+    }
+  }
+
+  private setupEventListeners(): void {
+    if (!this.ws) return;
 
     this.ws.onopen = () => {
-      console.log('[WebSocketService] Connected');
+      console.log('WebSocket connected');
+      this.isConnected = true;
       this.reconnectAttempts = 0;
-      this.setupHeartbeat();
-      this.subscribeToAllPairs();
+      this.eventEmitter.emit(WebSocketEvent.CONNECTION_STATE, true);
+      
+      // Resubscribe to pending subscriptions
+      this.pendingSubscriptions.forEach(subscription => {
+        this.send({ type: 'SUBSCRIBE', channel: subscription });
+      });
+    };
+
+    this.ws.onclose = () => {
+      console.log('WebSocket disconnected');
+      this.isConnected = false;
+      this.eventEmitter.emit(WebSocketEvent.CONNECTION_STATE, false);
+      this.handleReconnect();
+    };
+
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error:', error);
+      this.eventEmitter.emit(WebSocketEvent.CONNECTION_STATE, false);
     };
 
     this.ws.onmessage = (event) => {
       try {
         const message: WebSocketMessage = JSON.parse(event.data);
-        
-        switch (message.event) {
-          case 'phx_reply':
-            if (message.payload.status === 'error') {
-              console.error('[WebSocketService] Channel error:', message.payload);
-              this.handleReconnect();
-            }
-            break;
-            
-          case 'update':
-            const subscribers = this.subscribers.get(message.topic);
-            if (subscribers) {
-              subscribers(message.payload);
-            }
-            break;
-            
-          default:
-            break;
-        }
+        this.handleMessage(message);
       } catch (error) {
-        console.error('[WebSocketService] Message parsing error:', error);
+        console.error('Error parsing WebSocket message:', error);
       }
-    };
-
-    this.ws.onclose = () => {
-      console.log('[WebSocketService] Connection closed');
-      this.clearHeartbeat();
-      this.handleReconnect();
-    };
-
-    this.ws.onerror = (error) => {
-      console.error('[WebSocketService] Error:', error);
-      this.clearHeartbeat();
     };
   }
 
-  private static setupHeartbeat() {
-    this.clearHeartbeat();
-    this.heartbeatInterval = setInterval(() => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({
-          topic: "phoenix",
-          event: "heartbeat",
-          payload: {},
-          ref: "1"
-        }));
-      }
-    }, 30000);
-  }
-
-  private static clearHeartbeat() {
-    if (this.heartbeatInterval) {
-      clearInterval(this.heartbeatInterval);
-      this.heartbeatInterval = null;
+  private handleMessage(message: WebSocketMessage): void {
+    switch (message.type) {
+      case 'MARKET_UPDATE':
+        this.eventEmitter.emit(WebSocketEvent.MARKET_UPDATE, message.data);
+        break;
+      case 'TRADE_UPDATE':
+        this.eventEmitter.emit(WebSocketEvent.TRADE_UPDATE, message.data);
+        break;
+      case 'ORDER_UPDATE':
+        this.eventEmitter.emit(WebSocketEvent.ORDER_UPDATE, message.data);
+        break;
+      default:
+        console.warn('Unknown message type:', message.type);
     }
   }
 
-  static subscribe(channel: string, callback: (data: any) => void) {
-    if (!this.ws) this.connect();
-
-    const topic = `${channel}`;
-    this.subscribers.set(topic, callback);
-    
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        topic,
-        event: 'phx_join',
-        payload: {},
-        ref: "1"
-      }));
-    }
-
-    return () => this.unsubscribe(channel);
-  }
-
-  private static handleReconnect() {
+  private handleReconnect(): void {
     if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      console.error('[WebSocketService] Max reconnection attempts reached');
+      console.error('Max reconnection attempts reached');
       return;
     }
 
-    this.reconnectAttempts++;
     setTimeout(() => {
-      this.connect();
-    }, this.reconnectDelay * this.reconnectAttempts);
+      this.reconnectAttempts++;
+      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+      this.connect(this.ws?.url || '');
+    }, this.reconnectTimeout * Math.pow(2, this.reconnectAttempts));
   }
 
-  private static subscribeToAllPairs() {
-    this.subscribers.forEach((_, topic) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(JSON.stringify({
-          topic,
-          event: 'phx_join',
-          payload: {},
-          ref: "1"
-        }));
-      }
-    });
+  public subscribe(channel: string): void {
+    this.pendingSubscriptions.add(channel);
+    if (this.isConnected) {
+      this.send({ type: 'SUBSCRIBE', channel });
+    }
   }
 
-  static disconnect() {
-    this.clearHeartbeat();
+  public unsubscribe(channel: string): void {
+    this.pendingSubscriptions.delete(channel);
+    if (this.isConnected) {
+      this.send({ type: 'UNSUBSCRIBE', channel });
+    }
+  }
+
+  public send(data: any): void {
+    if (this.ws && this.isConnected) {
+      this.ws.send(JSON.stringify(data));
+    }
+  }
+
+  public on(event: WebSocketEvent, callback: (data: any) => void): void {
+    this.eventEmitter.on(event, callback);
+  }
+
+  public off(event: WebSocketEvent, callback: (data: any) => void): void {
+    this.eventEmitter.off(event, callback);
+  }
+
+  public disconnect(): void {
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
-    this.subscribers.clear();
-  }
-
-  static unsubscribe(channel: string) {
-    const topic = `${channel}`;
-    this.subscribers.delete(topic);
-    if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({
-        topic,
-        event: 'phx_leave',
-        payload: {},
-        ref: "1"
-      }));
-    }
+    this.pendingSubscriptions.clear();
+    this.isConnected = false;
   }
 }
+
+export default WebSocketService;
