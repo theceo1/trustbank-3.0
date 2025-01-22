@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { TradeDetails, TradeStatus } from '@/app/types/trade';
 import { PaymentMethodType } from '@/app/types/payment';
+import Image from "next/image";
 
 interface QuickTradeProps {
   onTradePreview?: (trade: TradeDetails) => void;
@@ -361,9 +362,11 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                             {SUPPORTED_CURRENCIES.map((currency) => (
                               <SelectItem key={currency.value} value={currency.value}>
                                 <div className="flex items-center space-x-2">
-                                  <img 
+                                  <Image 
                                     src={`https://assets.coingecko.com/coins/images/1/${currency.value}.png`}
                                     alt={currency.label}
+                                    width={20}
+                                    height={20}
                                     className="w-5 h-5"
                                     onError={(e) => {
                                       const target = e.target as HTMLImageElement;
@@ -402,9 +405,11 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                             {SUPPORTED_CURRENCIES.map((currency) => (
                               <SelectItem key={currency.value} value={currency.value}>
                                 <div className="flex items-center space-x-2">
-                                  <img 
+                                  <Image 
                                     src={`https://assets.coingecko.com/coins/images/1/${currency.value}.png`}
                                     alt={currency.label}
+                                    width={20}
+                                    height={20}
                                     className="w-5 h-5"
                                     onError={(e) => {
                                       const target = e.target as HTMLImageElement;

@@ -17,6 +17,7 @@ export async function GET(request: Request) {
     // Get currency from query params
     const { searchParams } = new URL(request.url);
     const currency = searchParams.get('currency')?.toLowerCase();
+    const network = searchParams.get('network')?.toLowerCase();
 
     if (!currency) {
       return NextResponse.json({ error: 'Currency is required' }, { status: 400 });
@@ -33,18 +34,39 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
-    // Get or create wallet address
-    const address = await QuidaxService.getDepositAddress(profile.quidax_id, currency);
+    try {
+      // Get or create wallet address
+      const response = await QuidaxService.getDepositAddress(profile.quidax_id, currency);
+      
+      // If no address is available, return a specific error
+      if (!response?.data?.address) {
+        return NextResponse.json({
+          status: 'error',
+          error: 'No deposit address available for this currency. Please try again later or contact support.'
+        }, { status: 404 });
+      }
 
-    return NextResponse.json({
-      status: 'success',
-      data: address
-    });
-
+      return NextResponse.json({
+        status: 'success',
+        data: response.data
+      });
+    } catch (error: any) {
+      // If the error is about no deposit address, return a specific error
+      if (error.message?.includes('No deposit address')) {
+        return NextResponse.json({
+          status: 'error',
+          error: 'No deposit address available for this currency. Please try again later or contact support.'
+        }, { status: 404 });
+      }
+      throw error;
+    }
   } catch (error) {
     console.error('Error fetching wallet address:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch wallet address' },
+      { 
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Failed to fetch wallet address'
+      },
       { status: 500 }
     );
   }

@@ -11,6 +11,7 @@ import TransferModal from "./modals/TransferModal";
 import PriceAlertModal from "./modals/PriceAlertModal";
 import PriceChart from "./PriceChart";
 import { createPortal } from "react-dom";
+import { CryptoIcons } from "@/app/components/icons/CryptoIcons";
 
 interface WalletCardProps {
   currency: string;
@@ -138,14 +139,15 @@ export default function WalletCard({
           <div className="flex items-center space-x-3 mb-4">
             {currency.toLowerCase() !== 'ngn' && (
               <div className="relative w-8 h-8">
-                <img
-                  src={`https://assets.coingecko.com/coins/images/1/${currency.toLowerCase()}.png`}
-                  alt={currency}
-                  className="w-full h-full object-contain"
-                  onError={(e) => {
-                    e.currentTarget.src = `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/${currency.toLowerCase()}.svg`;
-                  }}
-                />
+                {CryptoIcons[currency.toUpperCase() as keyof typeof CryptoIcons] ? (
+                  <div className="w-8 h-8">
+                    {CryptoIcons[currency.toUpperCase() as keyof typeof CryptoIcons]()}
+                  </div>
+                ) : (
+                  <div className="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                    <span className="text-xs font-bold">{currency.toUpperCase().slice(0, 3)}</span>
+                  </div>
+                )}
               </div>
             )}
             <div>

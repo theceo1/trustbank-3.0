@@ -14,6 +14,7 @@ import { formatNumber } from '@/app/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { TradeDetails } from '@/app/types/trade';
+import { CryptoIcons } from "@/app/components/icons/CryptoIcons";
 
 interface QuickTradeProps {
   onTradePreview?: (trade: TradeDetails) => void;
@@ -249,15 +250,15 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                             {SUPPORTED_CURRENCIES.map((currency) => (
                               <SelectItem key={currency.value} value={currency.value}>
                                 <div className="flex items-center space-x-2">
-                                  <img 
-                                    src={`https://assets.coingecko.com/coins/images/1/${currency.value}.png`}
-                                    alt={currency.label}
-                                    className="w-5 h-5"
-                                    onError={(e) => {
-                                      const target = e.target as HTMLImageElement;
-                                      target.src = '/images/crypto/generic.svg';
-                                    }}
-                                  />
+                                  {CryptoIcons[currency.value.toUpperCase() as keyof typeof CryptoIcons] ? (
+                                    <div className="w-5 h-5">
+                                      {CryptoIcons[currency.value.toUpperCase() as keyof typeof CryptoIcons]()}
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                      <span className="text-xs font-bold">{currency.value.toUpperCase().slice(0, 3)}</span>
+                                    </div>
+                                  )}
                                   <span>{currency.label}</span>
                                 </div>
                               </SelectItem>
@@ -290,15 +291,15 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                             {SUPPORTED_CURRENCIES.map((currency) => (
                               <SelectItem key={currency.value} value={currency.value}>
                                 <div className="flex items-center space-x-2">
-                                  <img 
-                                    src={`https://assets.coingecko.com/coins/images/1/${currency.value}.png`}
-                                    alt={currency.label}
-                                    className="w-5 h-5"
-                                    onError={(e) => {
-                                      const target = e.target as HTMLImageElement;
-                                      target.src = '/images/crypto/generic.svg';
-                                    }}
-                                  />
+                                  {CryptoIcons[currency.value.toUpperCase() as keyof typeof CryptoIcons] ? (
+                                    <div className="w-5 h-5">
+                                      {CryptoIcons[currency.value.toUpperCase() as keyof typeof CryptoIcons]()}
+                                    </div>
+                                  ) : (
+                                    <div className="w-5 h-5 bg-gray-200 rounded-full flex items-center justify-center">
+                                      <span className="text-xs font-bold">{currency.value.toUpperCase().slice(0, 3)}</span>
+                                    </div>
+                                  )}
                                   <span>{currency.label}</span>
                                 </div>
                               </SelectItem>

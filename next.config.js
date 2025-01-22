@@ -8,7 +8,9 @@ const nextConfig = {
       'localhost',
       'coin-images.coingecko.com',
       'raw.githubusercontent.com',
-      'cryptologos.cc'
+      'cryptologos.cc',
+      'assets.coingecko.com',
+      'cdn.jsdelivr.net'
     ],
     remotePatterns: [
       {
@@ -22,6 +24,14 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'cryptologos.cc',
+      },
+      {
+        protocol: 'https',
+        hostname: 'assets.coingecko.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'cdn.jsdelivr.net',
       }
     ]
   },

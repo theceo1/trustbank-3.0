@@ -251,7 +251,17 @@ export class QuidaxClient {
 
         // Handle specific Quidax error messages
         if (responseData.errors) {
-          throw new Error(Object.values(responseData.errors).join(', '));
+          const errorMessage = Object.values(responseData.errors).join(', ');
+          // If this is a deposit address request and the error is about no address, return null
+          if (endpoint.includes('/address') && errorMessage.includes('No deposit address')) {
+            return { status: 'success', data: { address: null } } as T;
+          }
+          throw new Error(errorMessage);
+        }
+
+        // If this is a deposit address request and the error is about no address, return null
+        if (endpoint.includes('/address') && responseData.message?.includes('No deposit address')) {
+          return { status: 'success', data: { address: null } } as T;
         }
 
         throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
@@ -259,6 +269,10 @@ export class QuidaxClient {
 
       if (responseData.status === 'error') {
         console.error('[QuidaxClient] Quidax API returned error status:', responseData);
+        // If this is a deposit address request and the error is about no address, return null
+        if (endpoint.includes('/address') && responseData.message?.includes('No deposit address')) {
+          return { status: 'success', data: { address: null } } as T;
+        }
         throw new Error(responseData.message || 'Quidax API returned error status');
       }
 
