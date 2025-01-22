@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import supabase from '@/lib/supabase/client';  
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Modal } from "@/components/ui/modal";
 import { Mail, Phone, MapPin, MessageSquare, Loader2, Globe, Twitter, Instagram, Facebook } from 'lucide-react';
 import Link from 'next/link';
@@ -31,11 +31,11 @@ export default function ContactPage() {
       const locationData = await response.json();
       const userLocation = `${locationData.city}, ${locationData.region}, ${locationData.country}`;
 
-      const { error: supabaseError } = await supabase
+      const { error } = await getSupabaseClient()
         .from('contact_messages')
         .insert([{ name, email, message, location: userLocation, created_at: new Date().toISOString() }]);
 
-      if (supabaseError) throw supabaseError;
+      if (error) throw error;
 
       setIsModalOpen(true);
       setName('');

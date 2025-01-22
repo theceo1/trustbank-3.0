@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Download, Filter } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface Activity {
   id: string;
@@ -38,18 +38,14 @@ export function UserActivityLogs({ userId }: UserActivityLogsProps) {
   }, [userId, activityType]);
 
   const fetchActivities = async () => {
+    setIsLoading(true);
     try {
-      let query = supabase
-        .from('user_activity_logs')
+      const { data, error } = await getSupabaseClient()
+        .from('activity_logs')
         .select('*')
         .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
-      if (activityType !== 'all') {
-        query = query.eq('type', activityType);
-      }
-
-      const { data, error } = await query;
       if (error) throw error;
       setActivities(data || []);
     } catch (error) {

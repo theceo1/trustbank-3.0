@@ -61,6 +61,9 @@ export class TransactionHistoryService {
       amount: Number(dbTrade.amount),
       rate: Number(dbTrade.rate),
       total: Number(dbTrade.total),
+      price: Number(dbTrade.rate),
+      timestamp: dbTrade.created_at,
+      pair: `${dbTrade.currency.toLowerCase()}_ngn`,
       fees: {
         platform: Number(dbTrade.platform_fee),
         processing: 0,
@@ -69,8 +72,7 @@ export class TransactionHistoryService {
       status: dbTrade.status,
       payment_method: dbTrade.payment_method,
       reference: dbTrade.quidax_reference,
-      created_at: dbTrade.created_at,
-      updated_at: dbTrade.updated_at
+      created_at: dbTrade.created_at
     };
   }
 }

@@ -50,8 +50,7 @@ export function AccountBalance() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch("/api/wallet/balance", {
-        credentials: "include",
+      const response = await fetch("/api/wallet/users/me/wallets", {
         headers: {
           "Content-Type": "application/json",
         },
@@ -61,12 +60,23 @@ export function AccountBalance() {
         throw new Error("Failed to fetch balance");
       }
 
-      const data: ApiResponse = await response.json();
+      const data = await response.json();
       if (!data.success || !data.data) {
         throw new Error(data.message || "Failed to fetch balance");
       }
 
-      setBalanceData(data.data);
+      // Filter and process the wallet data
+      const processedData = data.data.map((wallet: any) => ({
+        currency: wallet.currency,
+        balance: wallet.balance || '0',
+        locked: wallet.locked || '0',
+        staked: wallet.staked || '0',
+        converted_balance: wallet.converted_balance || '0',
+        reference_currency: wallet.reference_currency || 'NGN',
+        is_crypto: wallet.is_crypto || false
+      }));
+
+      setBalanceData(processedData);
     } catch (err) {
       console.error("Error fetching balance:", err);
       setError("Unable to fetch balance");

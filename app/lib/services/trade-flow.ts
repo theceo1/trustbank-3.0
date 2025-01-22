@@ -29,12 +29,16 @@ export class TradeFlow {
 
       // Calculate fees and total
       const trade: TradeDetails = {
+        id: `TRADE_${Date.now()}_${Math.random().toString(36).substring(7)}`,
         user_id: details.user_id,
         type: details.type,
         currency: details.currency,
         amount: details.amount,
+        price: Number(rate),
         rate: Number(rate),
         total: total + fee,
+        timestamp: new Date().toISOString(),
+        pair: `${details.currency.toLowerCase()}_ngn`,
         fees: {
           platform: fee * 0.8, // 80% of fee is platform fee
           processing: fee * 0.2, // 20% of fee is processing fee

@@ -8,15 +8,9 @@ interface TransferParams {
 
 async function transferUSDT({ fromUserId, toUserId, amount }: TransferParams) {
   try {
-    const quidaxService = QuidaxService.getInstance();
-
     // Check source wallet balance
     console.log('Checking source USDT balance...');
-    const sourceResponse = await quidaxService.getWalletBalance(fromUserId, 'usdt');
-    if (!sourceResponse.ok) {
-      throw new Error('Failed to fetch source wallet balance');
-    }
-    const sourceWallet = await sourceResponse.json();
+    const sourceWallet = await QuidaxService.getWallet(fromUserId, 'usdt');
     console.log('Source USDT balance:', sourceWallet.data[0]?.balance || '0');
 
     // Verify sufficient balance
@@ -28,36 +22,24 @@ async function transferUSDT({ fromUserId, toUserId, amount }: TransferParams) {
 
     // Transfer USDT
     console.log('Initiating USDT transfer...');
-    const transferResponse = await quidaxService.transfer(
+    const transferResponse = await QuidaxService.transfer(
       fromUserId,
       toUserId,
       amount,
       'usdt'
     );
-
-    if (!transferResponse.ok) {
-      throw new Error('Failed to transfer USDT');
-    }
-    const transfer = await transferResponse.json();
-    console.log('Transfer completed:', transfer.data);
+    console.log('Transfer completed:', transferResponse.data);
 
     // Check final balances
     console.log('Checking final balances...');
-    const finalSourceResponse = await quidaxService.getWalletBalance(fromUserId, 'usdt');
-    const finalDestResponse = await quidaxService.getWalletBalance(toUserId, 'usdt');
-
-    if (!finalSourceResponse.ok || !finalDestResponse.ok) {
-      throw new Error('Failed to fetch final balances');
-    }
-
-    const finalSourceWallet = await finalSourceResponse.json();
-    const finalDestWallet = await finalDestResponse.json();
+    const finalSourceWallet = await QuidaxService.getWallet(fromUserId, 'usdt');
+    const finalDestWallet = await QuidaxService.getWallet(toUserId, 'usdt');
 
     console.log('Final source USDT balance:', finalSourceWallet.data[0]?.balance || '0');
     console.log('Final destination USDT balance:', finalDestWallet.data[0]?.balance || '0');
 
     return {
-      transfer: transfer.data,
+      transfer: transferResponse.data,
       finalBalances: {
         source: finalSourceWallet.data[0]?.balance || '0',
         destination: finalDestWallet.data[0]?.balance || '0'

@@ -1,7 +1,7 @@
 // app/lib/services/payment/WalletPaymentProcessor.ts
 import { BasePaymentProcessor, PaymentProcessorResult, PaymentInitDetails } from './BasePaymentProcessor';
 import { TradeDetails } from '@/app/types/trade';
-import { QuidaxWalletService } from '../quidax-wallet';
+import { QuidaxWalletService, getWalletService } from '@/app/lib/services/quidax-wallet';
 import { QuidaxService } from '../quidax';
 
 export class WalletPaymentProcessor extends BasePaymentProcessor {
@@ -9,7 +9,7 @@ export class WalletPaymentProcessor extends BasePaymentProcessor {
 
   constructor() {
     super();
-    this.walletService = QuidaxWalletService.getInstance();
+    this.walletService = getWalletService();
   }
 
   async validatePayment(details: TradeDetails): Promise<void> {

@@ -8,35 +8,32 @@ interface SwapParams {
 
 async function swapAndTransfer({ fromUserId, toUserId, amount }: SwapParams) {
   try {
-    const quidaxService = QuidaxService.getInstance();
-
     // Check source wallet balance
     console.log('Checking source wallet balance...');
-    const sourceResponse = await quidaxService.getWalletBalance(fromUserId, 'ngn');
-    if (!sourceResponse.ok) {
+    const sourceResponse = await QuidaxService.getWallet(fromUserId, 'ngn');
+    if (!sourceResponse.data) {
       throw new Error('Failed to fetch source wallet balance');
     }
-    const sourceWallet = await sourceResponse.json();
-    console.log('Source NGN balance:', sourceWallet.data[0]?.balance || '0');
+    const sourceWallet = sourceResponse.data;
+    console.log('Source NGN balance:', sourceWallet[0]?.balance || '0');
 
     // Create swap quotation
     console.log('Creating swap quotation...');
-    const quoteResponse = await quidaxService.createSwapQuotation({
+    const quote = await QuidaxService.createSwapQuotation({
       market: 'usdtngn',
       side: 'buy',
       amount,
       unit: 'ngn'
     });
 
-    if (!quoteResponse.ok) {
+    if (!quote.data) {
       throw new Error('Failed to get swap quotation');
     }
-    const quote = await quoteResponse.json();
     console.log('Swap quote received:', quote.data);
 
     // Execute the swap
     console.log('Executing swap...');
-    const swapResponse = await quidaxService.confirmSwap({
+    const swap = await QuidaxService.confirmSwap({
       quote_id: quote.data.id,
       market: 'usdtngn',
       side: 'buy',
@@ -44,57 +41,56 @@ async function swapAndTransfer({ fromUserId, toUserId, amount }: SwapParams) {
       unit: 'ngn'
     });
 
-    if (!swapResponse.ok) {
+    if (!swap.data) {
       throw new Error('Failed to execute swap');
     }
-    const swap = await swapResponse.json();
     console.log('Swap executed:', swap.data);
 
     // Check updated USDT balance
     console.log('Checking updated USDT balance...');
-    const updatedSourceResponse = await quidaxService.getWalletBalance(fromUserId, 'usdt');
-    if (!updatedSourceResponse.ok) {
+    const updatedSourceResponse = await QuidaxService.getWallet(fromUserId, 'usdt');
+    if (!updatedSourceResponse.data) {
       throw new Error('Failed to fetch updated USDT balance');
     }
-    const updatedSourceWallet = await updatedSourceResponse.json();
-    console.log('Updated USDT balance:', updatedSourceWallet.data[0]?.balance || '0');
+    const updatedSourceWallet = updatedSourceResponse.data;
+    console.log('Updated USDT balance:', updatedSourceWallet[0]?.balance || '0');
 
     // Transfer USDT to receiver
     console.log('Transferring USDT to receiver...');
-    const transferResponse = await quidaxService.transfer(
+    const transferResponse = await QuidaxService.transfer(
       fromUserId,
       toUserId,
-      swap.data.destination_amount,
+      swap.data.to_amount,
       'usdt'
     );
 
-    if (!transferResponse.ok) {
+    if (!transferResponse.data) {
       throw new Error('Failed to transfer USDT');
     }
-    const transfer = await transferResponse.json();
+    const transfer = transferResponse;
     console.log('Transfer completed:', transfer.data);
 
     // Final balance check
     console.log('Checking final balances...');
-    const finalSourceResponse = await quidaxService.getWalletBalance(fromUserId, 'usdt');
-    const finalDestResponse = await quidaxService.getWalletBalance(toUserId, 'usdt');
+    const finalSourceResponse = await QuidaxService.getWallet(fromUserId, 'usdt');
+    const finalDestResponse = await QuidaxService.getWallet(toUserId, 'usdt');
 
-    if (!finalSourceResponse.ok || !finalDestResponse.ok) {
+    if (!finalSourceResponse.data || !finalDestResponse.data) {
       throw new Error('Failed to fetch final balances');
     }
 
-    const finalSourceWallet = await finalSourceResponse.json();
-    const finalDestWallet = await finalDestResponse.json();
+    const finalSourceWallet = finalSourceResponse.data;
+    const finalDestWallet = finalDestResponse.data;
 
-    console.log('Final source USDT balance:', finalSourceWallet.data[0]?.balance || '0');
-    console.log('Final destination USDT balance:', finalDestWallet.data[0]?.balance || '0');
+    console.log('Final source USDT balance:', finalSourceWallet[0]?.balance || '0');
+    console.log('Final destination USDT balance:', finalDestWallet[0]?.balance || '0');
 
     return {
       swap: swap.data,
       transfer: transfer.data,
       finalBalances: {
-        source: finalSourceWallet.data[0]?.balance || '0',
-        destination: finalDestWallet.data[0]?.balance || '0'
+        source: finalSourceWallet[0]?.balance || '0',
+        destination: finalDestWallet[0]?.balance || '0'
       }
     };
   } catch (error) {

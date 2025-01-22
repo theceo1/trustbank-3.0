@@ -25,10 +25,11 @@ interface TradeReceiptProps {
 
 export function TradeReceipt({ trade }: TradeReceiptProps) {
   const statusColors = {
-    PENDING: "text-yellow-600",
-    PROCESSING: "text-yellow-600",
-    COMPLETED: "text-green-600",
-    FAILED: "text-red-600",
+    pending: "text-yellow-600",
+    processing: "text-yellow-600",
+    completed: "text-green-600",
+    failed: "text-red-600",
+    cancelled: "text-red-600"
   };
 
   return (
@@ -83,7 +84,7 @@ export function TradeReceipt({ trade }: TradeReceiptProps) {
           <div className="flex justify-between items-center">
             <span className="text-sm text-muted-foreground">Processing Fee (1.4%)</span>
             <span className="font-medium">
-              {formatCurrency(trade.fees.processing)}
+              {formatCurrency(trade.fees.processing || 0)}
             </span>
           </div>
           <div className="flex justify-between items-center font-medium">

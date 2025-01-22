@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxClient } from '@/lib/services/quidax-client';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,13 +29,14 @@ export async function GET(request: Request) {
 
     if (!currency) {
       return NextResponse.json(
-        { error: 'Currency is required' },
+        { error: 'Currency parameter is required' },
         { status: 400 }
       );
     }
 
     // Get networks from Quidax
-    const networks = await QuidaxService.getNetworks(currency);
+    const quidaxClient = QuidaxClient.getInstance();
+    const networks = await quidaxClient.getNetworks(currency);
 
     return NextResponse.json(networks);
   } catch (error) {

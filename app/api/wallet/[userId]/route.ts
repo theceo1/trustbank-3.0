@@ -45,7 +45,7 @@ export async function GET(
     // Get the user's wallets from Quidax
     const walletService = getWalletService();
     try {
-      const walletResponse = await walletService.getAllWallets(profile.quidax_id);
+      const walletResponse = await walletService.getWallets(profile.quidax_id);
       return NextResponse.json({
         status: 'success',
         data: walletResponse.data

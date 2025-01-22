@@ -21,7 +21,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   Table,
   TableBody,
@@ -45,7 +45,7 @@ export default function UserDetailsDialog({ user, onClose }: UserDetailsProps) {
   const handleSuspendUser = async () => {
     try {
       setIsLoading(true);
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('profiles')
         .update({ is_suspended: true })
         .eq('user_id', user.id);
@@ -153,7 +153,7 @@ function UserActivity({ userId }: { userId: string }) {
   // Fetch user activity data
   useEffect(() => {
     const fetchActivity = async () => {
-      const { data } = await supabase
+      const { data } = await getSupabaseClient()
         .from('user_activity_logs')
         .select('*')
         .eq('user_id', userId)
@@ -192,7 +192,7 @@ function UserReferrals({ userId }: { userId: string }) {
 
   useEffect(() => {
     const fetchReferrals = async () => {
-      const { data } = await supabase
+      const { data } = await getSupabaseClient()
         .from('profiles')
         .select('*')
         .eq('referred_by', userId);
@@ -254,7 +254,7 @@ function UserTransactions({ userId }: { userId: string }) {
 
   useEffect(() => {
     const fetchTransactions = async () => {
-      const { data } = await supabase
+      const { data } = await getSupabaseClient()
         .from('referral_transactions')
         .select('*')
         .eq('referrer_id', userId)

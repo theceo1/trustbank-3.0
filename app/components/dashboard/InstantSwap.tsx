@@ -9,6 +9,7 @@ import { ArrowDownUp, Loader2 } from "lucide-react";
 import { useToast } from "@/app/components/ui/use-toast";
 import { useAuth } from "@/app/context/AuthContext";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { AlertDescription } from "@/components/ui/alert";
 
 const SUPPORTED_CURRENCIES = [
   { symbol: 'btc', name: 'Bitcoin' },
@@ -312,7 +313,7 @@ export function InstantSwap() {
                 </span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-black">You'll Receive</span>
+                <span className="text-sm font-medium text-black">You&apos;ll Receive</span>
                 <span className="font-medium text-black">
                   {quote.to_amount} {toCurrency.toUpperCase()}
                 </span>

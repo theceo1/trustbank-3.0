@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxClient } from '@/lib/services/quidax-client';
 import { toast } from 'react-hot-toast';
 
 interface CryptoTransferProps {
@@ -26,34 +26,26 @@ export default function CryptoTransfer({
     const transferPromise = new Promise(async (resolve, reject) => {
       try {
         // Check sender's balance first
-        const balanceResponse = await QuidaxService.getWalletBalance(senderQuidaxId, currency);
-        if (!balanceResponse.ok) {
-          throw new Error('Failed to fetch sender balance');
-        }
-        const balance = await balanceResponse.json();
-        const currentBalance = parseFloat(balance.data[0]?.balance || '0');
+        const quidaxClient = QuidaxClient.getInstance();
+        const balanceResponse = await quidaxClient.getWalletBalance(senderQuidaxId, currency);
+        const availableBalance = parseFloat(balanceResponse.data.balance);
         const transferAmount = parseFloat(amount);
 
-        if (currentBalance < transferAmount) {
-          throw new Error(`Insufficient balance. Required: ${amount} ${currency.toUpperCase()}, Available: ${currentBalance} ${currency.toUpperCase()}`);
+        if (transferAmount > availableBalance) {
+          throw new Error('Insufficient balance');
         }
 
         // Perform transfer
-        const transferResponse = await QuidaxService.transfer(
+        const transferResponse = await quidaxClient.transfer(
           senderQuidaxId,
           receiverQuidaxId,
-          amount,
-          currency
+          currency,
+          amount
         );
 
-        if (!transferResponse.ok) {
-          const error = await transferResponse.json();
-          throw new Error(error.message || 'Transfer failed');
-        }
-
-        const result = await transferResponse.json();
-        onSuccess?.(result);
-        resolve(result);
+        toast.success('Transfer successful!');
+        onSuccess?.(transferResponse.data);
+        resolve(transferResponse.data);
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Transfer failed';
         onError?.(error as Error);

@@ -12,7 +12,11 @@ export class QuidaxWalletService {
   }
 
   async getWallet(userId: string, currency: string): Promise<QuidaxResponse<QuidaxWallet[]>> {
-    return this.client.getWallet(userId, currency);
+    const response = await this.client.fetchUserWallets(userId);
+    if (response.status === 'success' && Array.isArray(response.data)) {
+      response.data = response.data.filter(wallet => wallet.currency.toLowerCase() === currency.toLowerCase());
+    }
+    return response;
   }
 
   async getDepositAddress(userId: string, currency: string): Promise<QuidaxResponse<{ address: string; tag?: string }>> {

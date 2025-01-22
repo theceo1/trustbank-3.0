@@ -88,7 +88,7 @@ export function TradePreview({
             <div className="flex justify-between items-center">
               <span className="text-sm text-gray-500">Network Fee (1%)</span>
               <span className="font-medium">
-                {formatCurrency(tradeDetails.fees.processing)}
+                {formatCurrency(tradeDetails.fees.processing || 0)}
               </span>
             </div>
             <div className="flex justify-between items-center font-medium">

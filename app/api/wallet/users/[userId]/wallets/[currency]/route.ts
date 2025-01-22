@@ -2,49 +2,63 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxClient } from '@/app/lib/quidax';
 
 export async function GET(
   request: Request,
   { params }: { params: { userId: string; currency: string } }
 ) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-
-    // Check if user is authenticated
+    const supabase = createRouteHandlerClient({ cookies });
     const { data: { session } } = await supabase.auth.getSession();
+
     if (!session) {
-      return new NextResponse('Unauthorized', { status: 401 });
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     // Verify user is accessing their own wallet
     if (session.user.id !== params.userId) {
-      return new NextResponse('Forbidden', { status: 403 });
+      return NextResponse.json(
+        { error: 'Forbidden' },
+        { status: 403 }
+      );
     }
 
     // Get user's Quidax ID
-    const { data: userProfile, error: profileError } = await supabase
+    const { data: profile } = await supabase
       .from('user_profiles')
-      .select('quidax_id')
-      .eq('user_id', params.userId)
+      .select('quidax_user_id')
+      .eq('user_id', session.user.id)
       .single();
 
-    if (profileError) {
-      console.error('Error fetching user profile:', profileError);
-      return new NextResponse('Error fetching user profile', { status: 500 });
+    if (!profile?.quidax_user_id) {
+      return NextResponse.json(
+        { error: 'User has no trading account' },
+        { status: 404 }
+      );
     }
 
-    if (!userProfile?.quidax_id) {
-      return new NextResponse('User has no linked Quidax account', { status: 404 });
-    }
-
-    // Get wallet balance
-    const wallet = await QuidaxService.getWalletBalance(userProfile.quidax_id, params.currency);
+    // Initialize Quidax client
+    const quidax = new QuidaxClient();
     
-    return NextResponse.json(wallet);
+    // Get wallet balance from Quidax
+    const response = await quidax.get(`/users/me/wallets/${params.currency.toLowerCase()}`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch wallet balance from Quidax');
+    }
+
+    const data = await response.json();
+
+    return NextResponse.json({ data });
   } catch (error) {
     console.error('Error fetching wallet:', error);
-    return new NextResponse('Internal Server Error', { status: 500 });
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    );
   }
 } 

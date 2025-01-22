@@ -15,7 +15,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { processReferralData } from "../utils/dataProcessing";
 import { TimeframeType } from '../hooks/useAnalyticsData';
 
@@ -45,7 +45,7 @@ export default function ReferralAnalytics({ data, timeframe }: ReferralAnalytics
   const fetchReferralAnalytics = useCallback(async () => {
     try {
       // Fetch referral performance data
-      const { data: referrals } = await supabase
+      const { data: referrals } = await getSupabaseClient()
         .from('profiles')
         .select(`
           referral_code,

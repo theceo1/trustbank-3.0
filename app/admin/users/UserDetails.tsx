@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { UserCheck, UserX } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
+import { toast } from "react-hot-toast";
 
 interface Profile {
   id: string;
@@ -30,7 +31,7 @@ export default function UserDetails({ userId }: UserDetailsProps) {
   useEffect(() => {
     const fetchUserDetails = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await getSupabaseClient()
           .from('profiles')
           .select('*')
           .eq('id', userId)
@@ -58,7 +59,7 @@ export default function UserDetails({ userId }: UserDetailsProps) {
 
   const toggleUserStatus = async () => {
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('profiles')
         .update({ is_active: !user.is_active })
         .eq('id', user.id);
@@ -67,6 +68,36 @@ export default function UserDetails({ userId }: UserDetailsProps) {
       setUser({ ...user, is_active: !user.is_active });
     } catch (error) {
       console.error('Error updating user status:', error);
+    }
+  };
+
+  const handleSuspend = async () => {
+    try {
+      const { error } = await getSupabaseClient()
+        .from('profiles')
+        .update({ is_suspended: true })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      toast.success('User suspended successfully');
+    } catch (error) {
+      console.error('Error suspending user:', error);
+      toast.error('Failed to suspend user');
+    }
+  };
+
+  const handleUnsuspend = async () => {
+    try {
+      const { error } = await getSupabaseClient()
+        .from('profiles')
+        .update({ is_suspended: false })
+        .eq('id', user.id);
+
+      if (error) throw error;
+      toast.success('User unsuspended successfully');
+    } catch (error) {
+      console.error('Error unsuspending user:', error);
+      toast.error('Failed to unsuspend user');
     }
   };
 

@@ -8,11 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Shield, Clock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
-import { formatCurrency, formatCryptoAmount } from "@/app/lib/utils";
-import type { TradeQuotation } from "@/app/types/trade";
+import { formatCurrency } from "@/app/lib/utils";
+import { formatCryptoAmount } from "@/app/lib/utils/format";
+import type { TradeQuote } from "@/app/types/trade";
 
 interface TradePreviewProps {
-  quotation: TradeQuotation;
+  quotation: TradeQuote;
   onConfirm: () => Promise<void>;
   onCancel: () => void;
   isLoading?: boolean;
@@ -67,20 +68,20 @@ export function TradePreview({
           <div className="space-y-4 p-4 bg-green-50 dark:bg-green-950/20 rounded-xl border border-green-100 dark:border-green-900">
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Amount</span>
-              <span className="text-lg font-semibold">
-                {formatCryptoAmount(quotation.amount)} {quotation.fromCurrency}
+              <span className="font-medium">
+                {formatCryptoAmount(quotation.from_amount, 8)} {quotation.from_currency.toUpperCase()}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Rate</span>
-              <span className="text-lg font-semibold text-green-600">
+              <span className="font-medium">
                 {formatCurrency(quotation.rate)}
               </span>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-sm text-muted-foreground">You&apos;ll receive</span>
-              <span className="text-lg font-semibold">
-                {formatCurrency(quotation.estimatedAmount)}
+              <p className="text-sm text-gray-500">You&apos;ll receive</p>
+              <span className="font-medium">
+                {formatCurrency(quotation.to_amount)}
               </span>
             </div>
           </div>

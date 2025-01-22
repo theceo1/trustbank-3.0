@@ -24,7 +24,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Plus, Edit2, Save, Trash2 } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface ReferralTier {
   tier_name: string;
@@ -42,7 +42,7 @@ export default function ReferralSettings() {
 
   const fetchTiers = useCallback(async () => {
     try {
-      const { data, error } = await supabase
+      const { data, error } = await getSupabaseClient()
         .from('referral_tiers')
         .select('*')
         .order('min_referrals', { ascending: true });
@@ -67,7 +67,7 @@ export default function ReferralSettings() {
 
   const handleSaveTier = async (tier: ReferralTier) => {
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('referral_tiers')
         .upsert({
           tier_name: tier.tier_name,
@@ -102,7 +102,7 @@ export default function ReferralSettings() {
     if (!confirm('Are you sure you want to delete this tier?')) return;
 
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('referral_tiers')
         .delete()
         .eq('tier_name', tierName);

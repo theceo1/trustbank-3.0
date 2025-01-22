@@ -1,17 +1,17 @@
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxService, QuidaxWallet } from '@/app/lib/services/quidax';
 
 async function checkUSDTBalance(userId: string) {
   try {
-    const quidaxService = QuidaxService.getInstance();
-    const response = await quidaxService.getWalletBalance(userId, 'usdt');
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch USDT balance');
+    // Use static method directly
+    const response = await QuidaxService.getWallets(userId);
+    const usdtWallet = response.data?.find((wallet: QuidaxWallet) => wallet.currency.toLowerCase() === 'usdt');
+    
+    if (!usdtWallet) {
+      throw new Error('USDT wallet not found');
     }
 
-    const data = await response.json();
-    console.log('USDT Balance:', data);
-    return data;
+    console.log('USDT Balance:', usdtWallet);
+    return usdtWallet;
   } catch (error) {
     console.error('Error checking USDT balance:', error);
     throw error;

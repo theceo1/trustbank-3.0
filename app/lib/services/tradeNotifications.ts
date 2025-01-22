@@ -15,7 +15,8 @@ export class TradeNotifications {
       [TradeStatus.COMPLETED]: `Your ${trade.type} trade for ${trade.amount} ${trade.currency} has been completed`,
       [TradeStatus.FAILED]: `Your trade has failed. Please check your dashboard for details`,
       [TradeStatus.PROCESSING]: `Your trade is being processed`,
-      [TradeStatus.PENDING]: `Your trade is pending`
+      [TradeStatus.PENDING]: `Your trade is pending`,
+      [TradeStatus.CANCELLED]: `Your trade has been cancelled`
     };
 
     const message = messages[trade.status];

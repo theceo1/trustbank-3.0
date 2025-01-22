@@ -7,16 +7,9 @@ async function getAdminWallet(currency: string) {
       throw new Error('QUIDAX_ADMIN_ID environment variable is required');
     }
 
-    const quidaxService = QuidaxService.getInstance();
-    const response = await quidaxService.getWalletBalance(adminId, currency);
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch ${currency} wallet balance`);
-    }
-
-    const data = await response.json();
-    console.log(`${currency.toUpperCase()} Wallet Balance:`, data);
-    return data;
+    const response = await QuidaxService.getWallet(adminId, currency);
+    console.log(`${currency.toUpperCase()} Wallet Balance:`, response.data);
+    return response.data;
   } catch (error) {
     console.error('Error fetching admin wallet:', error);
     throw error;

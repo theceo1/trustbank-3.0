@@ -22,7 +22,8 @@ export function PaymentProcessor({ trade, onComplete }: PaymentProcessorProps) {
     [TradeStatus.PENDING]: 25,
     [TradeStatus.PROCESSING]: 50,
     [TradeStatus.COMPLETED]: 100,
-    [TradeStatus.FAILED]: 0
+    [TradeStatus.FAILED]: 0,
+    [TradeStatus.CANCELLED]: 0
   }), []);
 
   useEffect(() => {

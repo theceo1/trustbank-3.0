@@ -8,7 +8,7 @@ export async function POST(request: Request) {
   try {
     const cookieStore = cookies();
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore });
-    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey as string);
 
     // Get current session
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -64,10 +64,7 @@ export async function POST(request: Request) {
     }
 
     // Confirm swap quotation
-    const response = await quidaxClient.confirmSwapQuotation({
-      user_id: profile.quidax_id,
-      quotation_id
-    });
+    const response = await quidaxClient.confirmSwapQuotation(profile.quidax_id, quotation_id);
 
     return NextResponse.json({
       status: 'success',

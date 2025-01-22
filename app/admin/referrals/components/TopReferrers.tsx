@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Download, Search, Trophy } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface Referrer {
   user_id: string;
@@ -44,8 +44,7 @@ export default function TopReferrers() {
 
   const fetchReferrers = useCallback(async () => {
     try {
-      let query = supabase
-        .from('profiles')
+      let query = getSupabaseClient().from('profiles')
         .select('*')
         .gt('referral_count', 0)
         .order(sortBy as any, { ascending: false });

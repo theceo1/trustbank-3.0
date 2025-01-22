@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { formatNumber } from '@/app/lib/utils';
 import { debug } from '@/app/lib/utils/debug';
-import { TradeQuotation } from '@/app/types/trade';
+import { TradeQuote } from '@/app/types/trade';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { getSupabaseClient } from '@/app/lib/supabase/client';
 
@@ -35,7 +35,7 @@ export function Trade() {
   const [walletBalance, setWalletBalance] = useState<number>(0);
   const [selectedCurrency, setSelectedCurrency] = useState<string>('USDT');
   const [amount, setAmount] = useState<string>('');
-  const [quotation, setQuotation] = useState<TradeQuotation | null>(null);
+  const [quotation, setQuotation] = useState<TradeQuote | null>(null);
   const [isReviewing, setIsReviewing] = useState(false);
   const [quotationTimer, setQuotationTimer] = useState<number>(0);
   const [isLoadingBalance, setIsLoadingBalance] = useState(false);

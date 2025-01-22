@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxClient } from '@/lib/services/quidax-client';
 import { TradeTransaction } from '@/app/lib/services/tradeTransaction';
 import { PaymentProcessorFactory } from '@/app/lib/services/payment/PaymentProcessorFactory';
 import { handleApiError } from '@/app/lib/utils/errorHandling';
@@ -10,10 +10,10 @@ export async function POST(request: NextRequest) {
   try {
     const signature = request.headers.get('x-quidax-signature');
     const payload = await request.json();
-    const quidaxService = QuidaxService.getInstance();
+    const quidaxClient = QuidaxClient.getInstance();
 
     // Verify webhook signature
-    if (!quidaxService.verifyWebhookSignature(payload, signature || undefined)) {
+    if (!quidaxClient.verifyWebhookSignature(payload, signature || undefined)) {
       return NextResponse.json(
         { error: 'Invalid webhook signature' },
         { status: 401 }

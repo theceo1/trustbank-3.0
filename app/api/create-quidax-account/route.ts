@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/lib/services/quidax';
+import { QuidaxService, QuidaxUser } from '@/lib/services/quidax';
 
 export async function POST() {
   try {
@@ -41,21 +41,21 @@ export async function POST() {
     const lastName = lastNameParts.join(' ') || firstName;
 
     // Create Quidax account
-    const quidaxUser = await QuidaxService.createSubAccount({
+    const quidaxResponse = await QuidaxService.createSubAccount({
       email: profile.email || user.email,
       first_name: firstName,
       last_name: lastName,
       country: 'NG'
     });
 
-    if (!quidaxUser?.id) {
+    if (!quidaxResponse?.data?.id) {
       throw new Error('Failed to create Quidax account');
     }
 
     // Update user profile with Quidax ID
     const { error: updateError } = await supabase
       .from('user_profiles')
-      .update({ quidax_id: quidaxUser.id })
+      .update({ quidax_id: quidaxResponse.data.id })
       .eq('user_id', user.id);
 
     if (updateError) {
@@ -68,7 +68,7 @@ export async function POST() {
 
     return NextResponse.json({
       status: 'success',
-      data: { quidax_user_id: quidaxUser.id }
+      data: { quidax_user_id: quidaxResponse.data.id }
     });
   } catch (error) {
     console.error('Error creating Quidax account:', error);

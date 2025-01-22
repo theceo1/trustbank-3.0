@@ -37,7 +37,7 @@ import {
   Clock,
   AlertCircle 
 } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { format } from "date-fns";
 import { TransactionsSkeleton } from "@/app/components/skeletons/TransactionsSkeleton";
 import { TransactionService } from "@/app/lib/services/transaction";

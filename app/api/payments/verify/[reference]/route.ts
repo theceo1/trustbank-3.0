@@ -19,7 +19,7 @@ export async function GET(
       }, { status: 400 });
     }
 
-    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey as string);
 
     // Get trade status from Quidax
     const response = await quidaxClient.getTransactionStatus(reference);

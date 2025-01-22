@@ -53,7 +53,11 @@ export function WalletOverview() {
 
     try {
       setLoading(true);
-      const response = await fetch('/api/wallet/balance');
+      const response = await fetch('/api/wallet/users/me/wallets', {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch wallets' }));
@@ -61,14 +65,14 @@ export function WalletOverview() {
         throw new Error(errorData.error || `Failed to fetch wallets: ${response.status}`);
       }
 
-      const data: ApiResponse = await response.json();
+      const data = await response.json();
       if (!data.success || !data.data || !Array.isArray(data.data)) {
         console.error('Invalid wallet data:', data);
         throw new Error('Invalid wallet data received');
       }
 
       // Filter out wallets with zero balance for cleaner UI
-      const nonZeroWallets = data.data.filter(wallet => 
+      const nonZeroWallets = data.data.filter((wallet: WalletBalance) => 
         parseFloat(wallet.balance) > 0 || parseFloat(wallet.locked) > 0 || parseFloat(wallet.staked) > 0
       );
       setWallets(nonZeroWallets);

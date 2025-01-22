@@ -1,19 +1,22 @@
 //app/lib/services/profile.ts
 
 import { createClient } from '@supabase/supabase-js';
-import { generateReferralCode } from '../../utils/referral';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxClient } from './quidax-client';
+import { generateReferralCode } from '@/app/utils/referral';
 
 export class ProfileService {
   private static getClient() {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    return createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+  }
 
-    if (!supabaseUrl || !supabaseKey) {
-      throw new Error('Supabase configuration is missing');
+  private static getQuidaxClient() {
+    if (!process.env.QUIDAX_SECRET_KEY) {
+      throw new Error('Quidax API key not configured');
     }
-
-    return createClient(supabaseUrl, supabaseKey);
+    return new QuidaxClient(process.env.QUIDAX_SECRET_KEY);
   }
 
   static async createProfile(userId: string, email: string) {
@@ -44,23 +47,24 @@ export class ProfileService {
           const uniqueEmail = `${email.split('@')[0]}.${Date.now()}@trustbank.tech`;
           
           console.log('Creating Quidax sub-account for existing profile:', { fullName, uniqueEmail });
-          const quidaxUser = await QuidaxService.createSubAccount({
+          const quidaxClient = this.getQuidaxClient();
+          const quidaxResponse = await quidaxClient.createSubAccount({
             email: uniqueEmail,
             first_name: fullName,
             last_name: fullName,
             country: 'ng'  // Use lowercase ISO country code
           });
 
-          console.log('Quidax sub-account created:', quidaxUser);
+          console.log('Quidax sub-account created:', quidaxResponse);
 
-          if (!quidaxUser?.id) {
+          if (!quidaxResponse?.data?.id) {
             throw new Error('Failed to create Quidax account: No ID returned');
           }
 
           const { data: updatedProfile, error: updateError } = await supabase
             .from('user_profiles')
             .update({ 
-              quidax_id: quidaxUser.id,
+              quidax_id: quidaxResponse.data.id,
               metadata: {
                 quidax: {
                   quidax_email: uniqueEmail,
@@ -94,16 +98,17 @@ export class ProfileService {
       
       console.log('Creating Quidax sub-account for new profile:', { fullName, uniqueEmail });
       // Create Quidax sub-account
-      const quidaxUser = await QuidaxService.createSubAccount({
+      const quidaxClient = this.getQuidaxClient();
+      const quidaxResponse = await quidaxClient.createSubAccount({
         email: uniqueEmail,
         first_name: fullName,
         last_name: fullName,
         country: 'ng'  // Use lowercase ISO country code
       });
 
-      console.log('Quidax sub-account created:', quidaxUser);
+      console.log('Quidax sub-account created:', quidaxResponse);
 
-      if (!quidaxUser?.id) {
+      if (!quidaxResponse?.data?.id) {
         throw new Error('Failed to create Quidax account: No ID returned');
       }
 
@@ -117,7 +122,7 @@ export class ProfileService {
           user_id: userId,
           email,
           full_name: fullName,
-          quidax_id: quidaxUser.id,
+          quidax_id: quidaxResponse.data.id,
           referral_code: referralCode,
           kyc_status: 'pending',
           kyc_level: 0,
@@ -148,14 +153,12 @@ export class ProfileService {
         .single();
 
       if (profileError) {
-        console.error('Failed to create profile:', profileError);
         throw profileError;
       }
 
-      console.log('Profile created:', profile);
       return profile;
     } catch (error) {
-      console.error('Error in profile creation:', error);
+      console.error('Error creating profile:', error);
       throw error;
     }
   }

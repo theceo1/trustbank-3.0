@@ -23,7 +23,7 @@ export async function GET(request: Request) {
     const quote = market.slice(-3);
 
     console.log(`[TradeRate] Getting rate for market: ${market} (${base}/${quote})`);
-    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
+    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey as string);
     const response = await quidaxClient.getRate(base, quote);
 
     return NextResponse.json({

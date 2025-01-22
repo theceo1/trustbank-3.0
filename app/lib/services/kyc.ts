@@ -95,51 +95,57 @@ export class KYCService {
         return true;
       }
       
-      const response = await fetch('/api/verify', {
+      // Call Dojah API for NIN verification
+      const response = await fetch('/api/verify/nin', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'AppId': process.env.NEXT_PUBLIC_DOJAH_APP_ID!,
+          'Authorization': process.env.DOJAH_API_SECRET!
         },
         body: JSON.stringify({
           nin,
-          selfieImage: base64Image,
-          metadata: {
-            user_id: userId,
-            verification_type: 'nin'
-          }
+          selfie_image: base64Image
         })
       });
 
       const data = await response.json();
       
-      if (!response.ok || !data.success) {
+      if (!response.ok || !data.entity?.selfie_verification?.match) {
         // Log failed attempt
         await this.submitVerification(userId, 'nin', {
           status: 'failed',
-          error: data.message || 'NIN verification failed',
+          error: 'NIN verification failed - Selfie mismatch',
           attempt_at: new Date().toISOString()
         });
 
         toast({
           title: "Verification Failed",
-          description: data.message || "Failed to verify your identity. Please try again.",
+          description: "Failed to verify your identity. Please ensure your selfie matches your NIN photo.",
           variant: "destructive"
         });
 
-        throw new Error(data.message || 'NIN verification failed');
+        throw new Error('NIN verification failed - Selfie mismatch');
       }
 
       // Update user's KYC status in user_profiles table
       const { error } = await this.supabase
         .from('user_profiles')
         .update({
-          kyc_level: 1,
-          kyc_status: 'pending',
-          verification_ref: data.reference,
+          kyc_level: KYCTier.BASIC,
+          kyc_status: 'unverified',
+          verification_ref: data.entity.nin,
           kyc_documents: {
             nin: nin,
             submitted_at: new Date().toISOString(),
-            verification_data: data.data
+            verification_data: {
+              first_name: data.entity.first_name,
+              last_name: data.entity.last_name,
+              middle_name: data.entity.middle_name,
+              gender: data.entity.gender,
+              phone_number: data.entity.phone_number,
+              date_of_birth: data.entity.date_of_birth
+            }
           }
         })
         .eq('user_id', userId);
@@ -157,14 +163,14 @@ export class KYCService {
       // Log successful verification attempt
       await this.submitVerification(userId, 'nin', {
         status: 'success',
-        reference: data.reference,
+        reference: data.entity.nin,
         verified_at: new Date().toISOString(),
-        verification_data: data.data
+        verification_data: data.entity
       });
 
       toast({
-        title: "Verification Submitted",
-        description: "Your identity verification has been submitted successfully. We will notify you once the verification is complete.",
+        title: "Verification Successful",
+        description: "Your identity has been verified successfully.",
       });
 
       return true;
@@ -246,7 +252,7 @@ export class KYCService {
             .insert([{
               user_id: userId,
               kyc_level: KYCTier.NONE,
-              kyc_status: 'pending',
+              kyc_status: 'unverified',
               is_verified: false,
               kyc_documents: {},
               daily_limit: KYC_LIMITS[KYCTier.NONE].dailyLimit,
@@ -258,7 +264,7 @@ export class KYCService {
           if (createError) throw createError;
           return {
             currentTier: KYCTier.NONE,
-            status: 'pending',
+            status: 'unverified',
             documents: {}
           };
         }
@@ -274,7 +280,7 @@ export class KYCService {
       console.error('KYC fetch error:', error);
       return {
         currentTier: KYCTier.NONE,
-        status: 'pending',
+        status: 'unverified',
         documents: {}
       };
     }

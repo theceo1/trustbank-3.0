@@ -1,27 +1,25 @@
 "use client";
 
-import { History, Loader2, AlertCircle, LinkIcon, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft, ArrowRightLeft } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { formatCurrency, cn } from "@/lib/utils";
-import { motion } from "framer-motion";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
-import WithdrawModal from "@/app/components/wallet/modals/WithdrawModal";
-import DepositModal from "@/app/components/wallet/modals/DepositModal";
-import TransferModal from "@/app/components/wallet/modals/TransferModal";
+import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { formatCurrency } from "@/lib/utils";
+import { ArrowDown, ArrowUp, ArrowRightLeft, TrendingUp } from "lucide-react";
+import DepositModal from "./wallet/modals/DepositModal";
+import WithdrawModal from "./wallet/modals/WithdrawModal";
+import TransferModal from "./wallet/modals/TransferModal";
 
-export type WalletAction = 'deposit' | 'withdraw' | 'trade' | 'transfer';
-
-interface WalletData {
-  currency: string;
-  balance: string;
-  locked: string;
-  percentageChange: number;
-}
+type WalletAction = 'deposit' | 'withdraw' | 'transfer' | 'trade';
 
 interface WalletCardProps {
-  wallet: WalletData;
+  wallet: {
+    currency: string;
+    balance: string;
+    locked: string;
+    percentageChange?: number;
+  };
   onAction?: (action: WalletAction) => void;
 }
 
@@ -31,9 +29,7 @@ export default function WalletCard({ wallet, onAction }: WalletCardProps) {
   const formattedLocked = parseFloat(locked) > 0 ? formatCurrency(parseFloat(locked), currency) : null;
   const router = useRouter();
   
-  const [showDepositModal, setShowDepositModal] = useState(false);
-  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
-  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [activeModal, setActiveModal] = useState<WalletAction | null>(null);
 
   const handleAction = (action: WalletAction) => {
     if (onAction) {
@@ -41,20 +37,16 @@ export default function WalletCard({ wallet, onAction }: WalletCardProps) {
       return;
     }
 
-    switch (action) {
-      case 'deposit':
-        setShowDepositModal(true);
-        break;
-      case 'withdraw':
-        setShowWithdrawModal(true);
-        break;
-      case 'transfer':
-        setShowTransferModal(true);
-        break;
-      case 'trade':
-        router.push(`/trade/${currency.toLowerCase()}`);
-        break;
+    if (action === 'trade') {
+      router.push(`/trade/${currency.toLowerCase()}`);
+      return;
     }
+
+    setActiveModal(action);
+  };
+
+  const handleCloseModal = () => {
+    setActiveModal(null);
   };
 
   return (
@@ -66,57 +58,66 @@ export default function WalletCard({ wallet, onAction }: WalletCardProps) {
       >
         <Card className="relative overflow-hidden bg-[#00A651]/5" data-testid={`wallet-card-${currency.toLowerCase()}`}>
           <CardContent className="p-6">
-            <div className="space-y-4">
+            <div className="flex flex-col space-y-4">
               <div className="flex items-center justify-between">
                 <div className="flex items-center space-x-2">
-                  <div className="text-2xl font-bold">{currency}</div>
-                  {percentageChange !== 0 && (
-                    <span className={`text-sm ${percentageChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                      {percentageChange > 0 ? '+' : ''}{percentageChange}%
+                  <span className="text-lg font-semibold">{currency.toUpperCase()}</span>
+                  {percentageChange !== undefined && (
+                    <span className={`text-sm ${percentageChange >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                      {percentageChange >= 0 ? '+' : ''}{percentageChange}%
                     </span>
+                  )}
+                </div>
+                <div className="text-right">
+                  <div className="text-lg font-bold">{formattedBalance}</div>
+                  {formattedLocked && (
+                    <div className="text-sm text-muted-foreground">
+                      {formattedLocked} locked
+                    </div>
                   )}
                 </div>
               </div>
 
-              <div className="text-3xl font-bold tracking-tight">
-                {formattedBalance}
-              </div>
-
-              {formattedLocked && (
-                <div className="text-sm text-muted-foreground">
-                  Locked: {formattedLocked}
-                </div>
-              )}
-
-              <div className="flex items-center space-x-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1 hover:bg-[#00A651] hover:text-white transition-colors"
-                  onClick={() => setShowDepositModal(true)}
+                  className="bg-green-50 hover:bg-green-100 border-green-200 text-green-700"
+                  onClick={() => handleAction('deposit')}
                 >
-                  <ArrowDownLeft className="h-4 w-4 mr-1" />
+                  <ArrowDown className="mr-2 h-4 w-4" />
                   Deposit
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="flex-1 hover:bg-[#00A651] hover:text-white transition-colors"
-                  onClick={() => setShowWithdrawModal(true)}
+                  className="bg-red-50 hover:bg-red-100 border-red-200 text-red-700"
+                  onClick={() => handleAction('withdraw')}
                 >
-                  <ArrowUpRight className="h-4 w-4 mr-1" />
+                  <ArrowUp className="mr-2 h-4 w-4" />
                   Withdraw
                 </Button>
                 {currency.toLowerCase() !== 'ngn' && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 hover:bg-[#00A651] hover:text-white transition-colors"
-                    onClick={() => setShowTransferModal(true)}
-                  >
-                    <ArrowRightLeft className="h-4 w-4 mr-1" />
-                    Transfer
-                  </Button>
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-blue-50 hover:bg-blue-100 border-blue-200 text-blue-700"
+                      onClick={() => handleAction('transfer')}
+                    >
+                      <ArrowRightLeft className="mr-2 h-4 w-4" />
+                      Transfer
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="bg-purple-50 hover:bg-purple-100 border-purple-200 text-purple-700"
+                      onClick={() => handleAction('trade')}
+                    >
+                      <TrendingUp className="mr-2 h-4 w-4" />
+                      Trade
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
@@ -125,22 +126,22 @@ export default function WalletCard({ wallet, onAction }: WalletCardProps) {
       </motion.div>
 
       <DepositModal
-        isOpen={showDepositModal}
-        onClose={() => setShowDepositModal(false)}
+        isOpen={activeModal === 'deposit'}
+        onClose={handleCloseModal}
         currency={currency}
       />
       
       <WithdrawModal
-        isOpen={showWithdrawModal}
-        onClose={() => setShowWithdrawModal(false)}
+        isOpen={activeModal === 'withdraw'}
+        onClose={handleCloseModal}
         currency={currency}
         balance={parseFloat(balance)}
       />
 
       {currency.toLowerCase() !== 'ngn' && (
         <TransferModal
-          isOpen={showTransferModal}
-          onClose={() => setShowTransferModal(false)}
+          isOpen={activeModal === 'transfer'}
+          onClose={handleCloseModal}
           currency={currency}
           balance={parseFloat(balance)}
         />

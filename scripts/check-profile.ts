@@ -83,14 +83,14 @@ async function checkProfile() {
         country: 'NG'
       });
 
-      if (!quidaxUser?.id) {
+      if (!quidaxUser?.data?.id) {
         throw new Error('Failed to create Quidax account');
       }
 
       // Update profile with Quidax ID
       const { error: updateError } = await supabaseClient
         .from('user_profiles')
-        .update({ quidax_id: quidaxUser.id })
+        .update({ quidax_id: quidaxUser.data.id })
         .eq('user_id', user.id);
 
       if (updateError) {
@@ -98,7 +98,7 @@ async function checkProfile() {
         return;
       }
 
-      console.log('Successfully created Quidax account:', quidaxUser.id);
+      console.log('Successfully created Quidax account:', quidaxUser.data.id);
     } else {
       // Verify existing Quidax account
       const quidaxUser = await QuidaxService.getUser(profile.quidax_id);

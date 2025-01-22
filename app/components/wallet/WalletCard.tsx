@@ -53,18 +53,38 @@ export default function WalletCard({
       try {
         setIsLoadingChart(true);
         const response = await fetch(`/api/market/history?market=${currency.toLowerCase()}ngn&period=24h`);
-        if (!response.ok) throw new Error('Failed to fetch chart data');
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => null);
+          console.error('Chart data fetch error:', {
+            status: response.status,
+            statusText: response.statusText,
+            error: errorData
+          });
+          throw new Error(errorData?.message || `Failed to fetch chart data: ${response.statusText}`);
+        }
+        
         const data = await response.json();
         
-        if (data.status === 'success' && Array.isArray(data.data)) {
-          setChartData(data.data);
-          // Set current price from the last data point
-          if (data.data.length > 0) {
-            setCurrentPrice(data.data[data.data.length - 1].value);
-          }
+        if (data.status !== 'success' || !Array.isArray(data.data)) {
+          console.error('Invalid chart data format:', data);
+          throw new Error('Invalid chart data format received');
+        }
+        
+        if (data.data.length === 0) {
+          console.warn('No chart data available for', currency);
+          return;
+        }
+
+        setChartData(data.data);
+        // Set current price from the last data point
+        if (data.data.length > 0) {
+          setCurrentPrice(data.data[data.data.length - 1].value);
         }
       } catch (error) {
         console.error('Error fetching chart data:', error);
+        // Don't set error state to avoid showing error UI for chart issues
+        // The rest of the wallet card can still be functional
       } finally {
         setIsLoadingChart(false);
       }
@@ -119,11 +139,11 @@ export default function WalletCard({
             {currency.toLowerCase() !== 'ngn' && (
               <div className="relative w-8 h-8">
                 <img
-                  src={`/images/crypto/${currency.toLowerCase()}.svg`}
+                  src={`https://assets.coingecko.com/coins/images/1/${currency.toLowerCase()}.png`}
                   alt={currency}
                   className="w-full h-full object-contain"
                   onError={(e) => {
-                    e.currentTarget.src = `/images/crypto/generic.svg`;
+                    e.currentTarget.src = `https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons/svg/color/${currency.toLowerCase()}.svg`;
                   }}
                 />
               </div>

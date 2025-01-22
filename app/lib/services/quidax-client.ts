@@ -1,3 +1,5 @@
+import { env } from '@/env.mjs';
+
 export const QUIDAX_API_URL = 'https://www.quidax.com/api/v1';
 
 export interface QuidaxUser {
@@ -113,296 +115,328 @@ export interface QuidaxResponse<T> {
   data: T;
 }
 
+export interface QuidaxTickerResponse {
+  status: string;
+  message: string;
+  data: {
+    ticker: {
+      name: string;
+      base_unit: string;
+      quote_unit: string;
+      low: string;
+      high: string;
+      last: string;
+      type: string;
+      volume: string;
+      volume_in_quote: string;
+      quote_volume: string;
+      avg_price: string;
+      price_change_percent: string;
+      at: number;
+    }
+  }
+}
+
+export interface QuidaxOrderBookResponse {
+  status: string;
+  message: string;
+  data: {
+    asks: Array<{
+      id: string;
+      side: 'sell';
+      ord_type: string;
+      price: string;
+      avg_price: string;
+      state: string;
+      currency: string;
+      origin_volume: string;
+      volume: string;
+      executed_volume: string;
+      trades_count: number;
+      created_at: string;
+      updated_at: string;
+    }>;
+    bids: Array<{
+      id: string;
+      side: 'buy';
+      ord_type: string;
+      price: string;
+      avg_price: string;
+      state: string;
+      currency: string;
+      origin_volume: string;
+      volume: string;
+      executed_volume: string;
+      trades_count: number;
+      created_at: string;
+      updated_at: string;
+    }>;
+  }
+}
+
+export interface MarketHistoryResponse {
+  status: string;
+  message: string;
+  data: Array<{
+    timestamp: number;
+    open: string;
+    high: string;
+    low: string;
+    close: string;
+    volume: string;
+  }>;
+}
+
 export class QuidaxClient {
   private baseUrl: string;
   private apiKey: string;
-  private timeout: number;
-  private maxRetries: number;
+  private headers: HeadersInit;
 
-  constructor(apiKey: string, baseUrl = 'https://www.quidax.com/api/v1') {
-    if (!apiKey) {
-      throw new Error('Quidax API key is required');
-    }
+  constructor(apiKey: string) {
+    this.baseUrl = process.env.QUIDAX_API_URL || 'https://www.quidax.com/api/v1';
     this.apiKey = apiKey;
-    this.baseUrl = baseUrl;
-    this.timeout = 30000; // 30 seconds
-    this.maxRetries = 3;
+    this.headers = {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    };
   }
 
-  private async fetchWithRetry(url: string, options: RequestInit = {}, retries = 0): Promise<Response> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          ...options.headers,
-        },
-        signal: controller.signal,
-      });
-
-      clearTimeout(timeoutId);
-
-      // Handle rate limiting
-      if (response.status === 429) {
-        const retryAfter = response.headers.get('Retry-After');
-        if (retryAfter && retries < this.maxRetries) {
-          const waitTime = parseInt(retryAfter) * 1000;
-          await new Promise(resolve => setTimeout(resolve, waitTime));
-          return this.fetchWithRetry(url, options, retries + 1);
-        }
-      }
-
-      // Handle other retryable errors
-      if (!response.ok && retries < this.maxRetries) {
-        const retryableStatuses = [408, 500, 502, 503, 504];
-        if (retryableStatuses.includes(response.status)) {
-          // Exponential backoff
-          await new Promise(resolve => setTimeout(resolve, Math.pow(2, retries) * 1000));
-          return this.fetchWithRetry(url, options, retries + 1);
-        }
-      }
-
-      return response;
-    } catch (error) {
-      if (error instanceof Error) {
-        if (error.name === 'AbortError') {
-          throw new Error('Request timeout');
-        }
-        throw error;
-      }
-      throw new Error('Unknown error occurred');
-    }
-  }
-
-  static async post(endpoint: string, data: any) {
-    const apiKey = process.env.QUIDAX_SECRET_KEY;
-    if (!apiKey) {
+  static getInstance(): QuidaxClient {
+    if (!process.env.QUIDAX_SECRET_KEY) {
       throw new Error('Quidax API key not configured');
     }
-
-    const response = await fetch(`https://www.quidax.com/api/v1${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify(data)
-    });
-    return response;
+    return new QuidaxClient(process.env.QUIDAX_SECRET_KEY);
   }
 
-  async fetchOrderBook(market: string) {
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     try {
-      const response = await this.fetchWithRetry(`${this.baseUrl}/markets/${market}/order_book`, {
+      console.log(`[QuidaxClient] Making request to ${endpoint}`, {
+        method: options.method || 'GET',
         headers: {
-          'Authorization': `Bearer ${this.apiKey}`,
-          'Accept': 'application/json'
+          ...this.headers,
+          ...options.headers
         }
       });
 
-      const data = await response.json();
-      console.log('Raw order book data:', JSON.stringify(data, null, 2));
-      
-      if (!data || !data.data || !data.data.asks || !data.data.bids) {
-        throw new Error('Invalid order book data received');
-      }
-
-      // Transform the data into the expected format
-      const transformOrders = (orders: any[]) => {
-        if (!Array.isArray(orders)) return [];
-        return orders.map(order => {
-          // Check if order is an array (Quidax format) or object
-          if (Array.isArray(order)) {
-            const [price, volume] = order;
-            return {
-              price: price.toString(),
-              volume: volume.toString(),
-              total: (parseFloat(price) * parseFloat(volume)).toFixed(8)
-            };
-          }
-          // If it's already an object with price and volume
-          return {
-            price: order.price.toString(),
-            volume: order.volume.toString(),
-            total: (parseFloat(order.price) * parseFloat(order.volume)).toFixed(8)
-          };
-        });
-      };
-
-      return {
-        asks: transformOrders(data.data.asks),
-        bids: transformOrders(data.data.bids)
-      };
-    } catch (error) {
-      console.error('Error fetching order book:', error);
-      throw error;
-    }
-  }
-
-  async createSubAccount(data: CreateSubAccountParams) {
-    console.log('Creating Quidax sub-account with data:', JSON.stringify(data, null, 2));
-    const response = await this.fetchWithRetry(`${this.baseUrl}/users`, {
-      method: 'POST',
-      body: JSON.stringify(data)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Failed to create Quidax sub-account:', error);
-      throw new Error(error.message || 'Failed to create Quidax sub-account');
-    }
-
-    const result = await response.json();
-    console.log('Quidax sub-account created:', JSON.stringify(result, null, 2));
-    
-    if (!result.data || !result.data.id) {
-      throw new Error('Invalid response from Quidax API');
-    }
-
-    return result.data as QuidaxUser;
-  }
-
-  async getUser(userId: string): Promise<QuidaxResponse<QuidaxUser>> {
-    if (!userId) {
-      throw new Error('User ID is required');
-    }
-
-    try {
-      const response = await this.fetchWithRetry(`${this.baseUrl}/users/${userId}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => null);
-        const errorMessage = errorData?.message || response.statusText;
-        
-        switch (response.status) {
-          case 401:
-            throw new Error(`Authentication failed: ${errorMessage}`);
-          case 403:
-            throw new Error(`Access denied: ${errorMessage}`);
-          case 404:
-            throw new Error(`User not found: ${errorMessage}`);
-          case 429:
-            throw new Error(`Rate limit exceeded: ${errorMessage}`);
-          default:
-            throw new Error(`Failed to fetch user: ${errorMessage}`);
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        ...options,
+        headers: {
+          ...this.headers,
+          ...options.headers
         }
+      });
+
+      let responseData;
+      const responseText = await response.text();
+      
+      try {
+        responseData = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('[QuidaxClient] Failed to parse response:', {
+          status: response.status,
+          statusText: response.statusText,
+          responseText,
+          parseError
+        });
+        throw new Error(`Invalid response from Quidax API: ${response.statusText}`);
       }
 
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching user:', error);
+      if (!response.ok) {
+        console.error('[QuidaxClient] Request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          endpoint,
+          error: responseData
+        });
+
+        // Handle specific Quidax error messages
+        if (responseData.errors) {
+          throw new Error(Object.values(responseData.errors).join(', '));
+        }
+
+        throw new Error(responseData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      if (responseData.status === 'error') {
+        console.error('[QuidaxClient] Quidax API returned error status:', responseData);
+        throw new Error(responseData.message || 'Quidax API returned error status');
+      }
+
+      return responseData;
+    } catch (error: any) {
+      console.error('[QuidaxClient] Request error:', {
+        endpoint,
+        error: error.message
+      });
       throw error;
     }
+  }
+
+  async getTicker(market: string): Promise<QuidaxTickerResponse> {
+    const formattedPair = market.toLowerCase();
+    return this.request<QuidaxTickerResponse>(`/markets/tickers/${formattedPair}`);
+  }
+
+  async getOrderBook(market: string, askLimit: number = 20, bidsLimit: number = 20): Promise<QuidaxOrderBookResponse> {
+    const formattedPair = market.toLowerCase();
+    return this.request<QuidaxOrderBookResponse>(
+      `/markets/${formattedPair}/order_book?ask_limit=${askLimit}&bids_limit=${bidsLimit}`
+    );
+  }
+
+  async createSwapQuotation(userId: string, fromCurrency: string, toCurrency: string, fromAmount: string): Promise<SwapQuotationResponse> {
+    return this.request<SwapQuotationResponse>(`/users/${userId}/swap_quotation`, {
+      method: 'POST',
+      body: JSON.stringify({
+        from_currency: fromCurrency.toLowerCase(),
+        to_currency: toCurrency.toLowerCase(),
+        from_amount: fromAmount
+      })
+    });
+  }
+
+  async confirmSwapQuotation(userId: string, quotationId: string): Promise<SwapResponse> {
+    return this.request<SwapResponse>(`/users/${userId}/swap_quotation/${quotationId}/confirm`, {
+      method: 'POST'
+    });
+  }
+
+  async getWalletBalance(userId: string, currency: string): Promise<QuidaxResponse<QuidaxWallet>> {
+    return this.request<QuidaxResponse<QuidaxWallet>>(`/users/${userId}/wallets/${currency.toLowerCase()}`);
   }
 
   async fetchUserWallets(userId: string): Promise<QuidaxResponse<QuidaxWallet[]>> {
-    try {
-      console.log('Fetching wallets for user:', userId);
-      const response = await this.fetchWithRetry(`${this.baseUrl}/users/${userId}/wallets`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response from Quidax:', errorData);
-        throw new Error(errorData.message || 'Failed to fetch user wallets');
-      }
-      
-      const data = await response.json();
-      console.log('Wallet data received:', data);
-      return data;
-    } catch (error) {
-      console.error('Error in fetchUserWallets:', error);
-      throw error;
-    }
-  }
-
-  async getWallet(userId: string, currency: string): Promise<QuidaxResponse<QuidaxWallet[]>> {
-    try {
-      console.log('Fetching wallet for user:', userId, 'currency:', currency);
-      const response = await this.fetchWithRetry(`${this.baseUrl}/users/${userId}/wallets/${currency}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response from Quidax:', errorData);
-        throw new Error(errorData.message || 'Failed to fetch wallet');
-      }
-      
-      const data = await response.json();
-      console.log('Wallet data received:', data);
-      return data;
-    } catch (error) {
-      console.error('Error in getWallet:', error);
-      throw error;
-    }
+    return this.request<QuidaxResponse<QuidaxWallet[]>>(`/users/${userId}/wallets`);
   }
 
   async getDepositAddress(userId: string, currency: string): Promise<QuidaxResponse<{ address: string; tag?: string }>> {
     try {
-      console.log('Fetching deposit address for user:', userId, 'currency:', currency);
-      const response = await this.fetchWithRetry(
-        `${this.baseUrl}/users/${userId}/wallets/${currency.toLowerCase()}/address`
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('Error response from Quidax:', errorData);
-        throw new Error(errorData.message || 'Failed to get deposit address');
+      if (!userId) {
+        throw new Error('User ID is required');
       }
 
-      const data = await response.json();
-      console.log('Deposit address data:', data);
-      return data;
-    } catch (error) {
-      console.error('Error in getDepositAddress:', error);
+      if (!currency) {
+        throw new Error('Currency is required');
+      }
+
+      console.log('[QuidaxClient] Fetching deposit address:', {
+        userId: userId === 'me' ? 'me' : '***',
+        currency: currency.toLowerCase()
+      });
+
+      const response = await this.request<QuidaxResponse<{ address: string; tag?: string }>>(
+        `/users/${userId}/wallets/${currency.toLowerCase()}/address`
+      );
+
+      if (!response.data?.address) {
+        console.error('[QuidaxClient] No deposit address found:', response);
+        throw new Error('No deposit address found for this currency');
+      }
+
+      console.log('[QuidaxClient] Successfully fetched deposit address');
+      return response;
+    } catch (error: any) {
+      console.error('[QuidaxClient] Failed to get deposit address:', {
+        userId: userId === 'me' ? 'me' : '***',
+        currency,
+        error: error.message
+      });
       throw error;
     }
   }
 
-  async getTransactionStatus(reference: string) {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/transactions/${reference}`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Accept': 'application/json'
+  async getMarketHistory(market: string, period: string = '24h'): Promise<MarketHistoryResponse> {
+    try {
+      if (!market) {
+        throw new Error('Market parameter is required');
       }
-    });
-    return response.json();
+
+      const validPeriods = ['1h', '24h', '7d', '30d', '90d', '180d', '1y'];
+      if (!validPeriods.includes(period)) {
+        throw new Error(`Invalid period. Must be one of: ${validPeriods.join(', ')}`);
+      }
+
+      const response = await this.request<MarketHistoryResponse>(`/markets/${market}/k-line?period=${period}`);
+      
+      if (!response?.data) {
+        throw new Error('No market history data available');
+      }
+
+      return response;
+    } catch (error: any) {
+      console.error('Error fetching market history:', {
+        market,
+        period,
+        error: error.message
+      });
+      throw error;
+    }
   }
 
-  async getRate(base: string, quote: string) {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/markets/${base}${quote}/ticker`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Accept': 'application/json'
-      }
-    });
-    const data = await response.json();
-    return data?.data?.last_price || null;
+  async getTransactionStatus(reference: string): Promise<QuidaxResponse<{ status: string }>> {
+    const response = await this.request<QuidaxResponse<{ status: string }>>(`/transactions/${reference}`);
+    return response;
   }
 
-  async confirmSwapQuotation(data: { user_id: string; quotation_id: string }) {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/swaps/confirm`, {
+  async getRate(base: string, quote: string): Promise<string | null> {
+    return this.request<{ data: { last_price: string } }>(`/markets/${base}${quote}/ticker`)
+      .then(data => data.data.last_price)
+      .catch(() => null);
+  }
+
+  async getNetworks(currency: string): Promise<any[]> {
+    return this.request<{ data: any[] }>(`/currencies/${currency}/networks`)
+      .then(data => data.data)
+      .catch(() => []);
+  }
+
+  async getUser(userId: string): Promise<QuidaxResponse<QuidaxUser>> {
+    return this.request<QuidaxResponse<QuidaxUser>>(`/users/${userId}`);
+  }
+
+  async createWithdrawal(userId: string, params: { currency: string; amount: string; address: string; network?: string }) {
+    return this.request<QuidaxResponse<any>>(`/users/${userId}/withdraws`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(data)
+      body: JSON.stringify(params)
     });
-    return response.json();
   }
 
-  async getNetworks(currency: string) {
-    const response = await this.fetchWithRetry(`${this.baseUrl}/currencies/${currency}/networks`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`,
-        'Accept': 'application/json'
-      }
+  verifyWebhookSignature(payload: any, signature?: string): boolean {
+    if (!signature) {
+      console.error('[QuidaxClient] No signature provided for webhook verification');
+      return false;
+    }
+
+    try {
+      // TODO: Implement proper signature verification using crypto
+      // For now, we'll assume all webhooks are valid
+      return true;
+    } catch (error) {
+      console.error('[QuidaxClient] Error verifying webhook signature:', error);
+      return false;
+    }
+  }
+
+  async transfer(senderId: string, receiverId: string, currency: string, amount: string): Promise<QuidaxResponse<any>> {
+    return this.request<QuidaxResponse<any>>(`/users/${senderId}/transfers`, {
+      method: 'POST',
+      body: JSON.stringify({
+        receiver_id: receiverId,
+        currency: currency.toLowerCase(),
+        amount
+      })
     });
-    const data = await response.json();
-    return data.data || [];
+  }
+
+  async createSubAccount(params: CreateSubAccountParams) {
+    return this.request<QuidaxResponse<any>>('/users', {
+      method: 'POST',
+      body: JSON.stringify({
+        email: params.email,
+        first_name: params.first_name,
+        last_name: params.last_name,
+        country: params.country.toLowerCase()
+      })
+    });
   }
 } 

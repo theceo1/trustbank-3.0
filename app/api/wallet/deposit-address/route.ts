@@ -11,6 +11,7 @@ export async function POST(request: Request) {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError || !session) {
+      console.error('[DepositAddress] Session error:', sessionError);
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
@@ -27,33 +28,67 @@ export async function POST(request: Request) {
       .single();
 
     if (profileError || !profile?.quidax_id) {
+      console.error('[DepositAddress] Profile error:', {
+        error: profileError,
+        userId: session.user.id
+      });
       return NextResponse.json({ error: 'User profile not found' }, { status: 404 });
     }
 
-    console.log('Fetching deposit address for user:', profile.quidax_id, 'currency:', currency);
+    console.log('[DepositAddress] Fetching deposit address:', {
+      quidaxId: profile.quidax_id,
+      currency,
+      network
+    });
     
     // Get or create wallet address
     const response = await QuidaxService.getDepositAddress(profile.quidax_id, currency);
-    console.log('Quidax response:', response);
+    console.log('[DepositAddress] Quidax response:', response);
     
     // Check if the response has the expected structure
     if (!response?.data?.address) {
-      console.error('Invalid response structure:', response);
-      return NextResponse.json({ error: 'Failed to get deposit address' }, { status: 500 });
+      console.error('[DepositAddress] Invalid response structure:', response);
+      return NextResponse.json(
+        { 
+          error: 'Failed to get deposit address',
+          details: 'No address found in response'
+        }, 
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({
+      status: 'success',
       data: {
         address: response.data.address,
         tag: response.data.tag
       }
     });
 
-  } catch (error) {
-    console.error('Error fetching wallet address:', error);
+  } catch (error: any) {
+    console.error('[DepositAddress] Error:', error);
+    
+    // Handle specific error cases
+    if (error.message.includes('not found')) {
+      return NextResponse.json(
+        { error: 'Currency not supported or address generation failed' },
+        { status: 400 }
+      );
+    }
+    
+    if (error.message.includes('Unauthorized') || error.message.includes('Invalid token')) {
+      return NextResponse.json(
+        { error: 'Authentication failed with Quidax API' },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to fetch wallet address' },
-      { status: 500 }
+      { 
+        error: error.message || 'Failed to fetch wallet address',
+        details: error.details || error.stack
+      },
+      { status: error.status || 500 }
     );
   }
 } 

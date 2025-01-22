@@ -9,7 +9,7 @@ import { Modal } from "@/app/components/ui/modal";
 import { Badge } from "@/components/ui/badge";
 import { Target, Users, Shield, Rocket, Mail, ArrowRight } from "lucide-react";
 import Image from 'next/image';
-import supabase from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { Check } from 'lucide-react';
 
 export default function MissionPage() {
@@ -27,31 +27,19 @@ export default function MissionPage() {
     }));
   }, [controls]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubscribe = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
 
-    try {
-      const { data, error } = await supabase
-        .from('newsletter_subscribers')
-        .upsert({ 
-          email,
-          source: 'mission_page',
-          preferences: { interests: ['company_updates', 'mission'] },
-          metadata: { subscribed_from: 'mission' }
-        }, 
-        { onConflict: 'email' });
+    const { error } = await getSupabaseClient()
+      .from('newsletter_subscribers')
+      .insert([{ email }]);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setIsModalOpen(true);
-      setEmail('');
-    } catch (error) {
-      setError('An error occurred. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+    setIsModalOpen(true);
+    setEmail('');
   };
 
   const missionPoints = [
@@ -132,7 +120,7 @@ export default function MissionPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubscribe} className="space-y-4">
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground" />
                   <Input

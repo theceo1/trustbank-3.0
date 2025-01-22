@@ -51,6 +51,16 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
     bankName: "Providus Bank",
   };
 
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setAddress(null);
+      setError(null);
+      setCopied(false);
+      setSelectedNetwork(null);
+    }
+  }, [isOpen]);
+
   useEffect(() => {
     const fetchWalletAddress = async () => {
       if (currency.toLowerCase() === 'ngn') {
@@ -81,7 +91,6 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
         });
 
         const data = await response.json();
-        console.log('Deposit address response:', data); // Debug log
 
         if (!response.ok) {
           throw new Error(data.error || "Failed to fetch wallet address");
@@ -95,6 +104,11 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
       } catch (error) {
         console.error("Error fetching wallet address:", error);
         setError(error instanceof Error ? error.message : "Failed to fetch wallet address");
+        toast({
+          title: "Error",
+          description: "Failed to fetch deposit address. Please try again.",
+          variant: "destructive",
+        });
       } finally {
         setIsLoading(false);
       }
@@ -103,7 +117,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
     if (isOpen) {
       fetchWalletAddress();
     }
-  }, [currency, isOpen, selectedNetwork]);
+  }, [currency, isOpen, selectedNetwork, toast]);
 
   const handleCopy = async (text: string) => {
     try {
@@ -183,7 +197,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                       {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                     </Button>
                   </div>
-                  <div className="text-sm">{bankDetails.accountNumber}</div>
+                  <div className="text-sm font-mono">{bankDetails.accountNumber}</div>
                 </div>
 
                 <div className="space-y-2">
@@ -269,7 +283,7 @@ export default function DepositModal({ isOpen, currency, onClose }: DepositModal
                         {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                       </Button>
                     </div>
-                    <div className="text-sm break-all">{address}</div>
+                    <div className="text-sm font-mono break-all">{address}</div>
                   </div>
                 </div>
               ) : null}

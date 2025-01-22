@@ -16,7 +16,7 @@ import {
   Shield, DollarSign, Check 
 } from "lucide-react";
 import BackButton from "../../../components/ui/back-button";
-import supabase from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 const blogPosts = [
   {
@@ -122,7 +122,7 @@ export default function BlogPage() {
     setError(null);
 
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('newsletter_subscribers')
         .insert([
           {

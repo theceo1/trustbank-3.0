@@ -22,7 +22,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Search, MoreVertical, UserPlus } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { useAdminAuth } from "../context/AdminAuthContext";
 import UserDetailsDialog from "./components/UserDetailsDialog";
 
@@ -47,14 +47,27 @@ export default function UsersPage() {
   const { hasPermission } = useAdminAuth();
   const { toast } = useToast();
 
-  const fetchUsers = useCallback(async () => {
-    const { data, error } = await supabase.from('users').select('*');
-    if (error) {
+  const fetchUsers = async () => {
+    setIsLoading(true);
+    try {
+      const { data: users, error } = await getSupabaseClient()
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setUsers(users);
+    } catch (error) {
       console.error('Error fetching users:', error);
-      return;
+      toast({
+        title: "Error",
+        description: "Failed to fetch users. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setUsers(data as User[]);
-  }, []);
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -72,7 +85,7 @@ export default function UsersPage() {
     }
 
     try {
-      const { error } = await supabase
+      const { error } = await getSupabaseClient()
         .from('profiles')
         .update({ is_verified: true })
         .eq('user_id', userId);
@@ -111,7 +124,7 @@ export default function UsersPage() {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
+      const { error } = await getSupabaseClient().auth.admin.deleteUser(userId);
       if (error) throw error;
 
       toast({

@@ -9,11 +9,12 @@ import { Button } from '@/app/components/ui/button';
 import { RefreshCw } from 'lucide-react';
 
 const statusColors: Record<TradeStatus, string> = {
-  PENDING: 'text-yellow-600',
-  PROCESSING: 'text-yellow-600',
-  COMPLETED: 'text-green-600',
-  FAILED: 'text-red-600'
-} as const;
+  pending: 'text-yellow-600',
+  processing: 'text-yellow-600',
+  completed: 'text-green-600',
+  failed: 'text-red-600',
+  cancelled: 'text-red-600'
+};
 
 export function TradeHistory() {
   const [trades, setTrades] = useState<TradeDetails[]>([]);

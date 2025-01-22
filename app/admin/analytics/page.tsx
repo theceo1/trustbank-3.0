@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState } from "react";
@@ -29,7 +28,7 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { Download, Calendar } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { DateRangePicker } from "./components/DateRangePicker";
 import { UserAnalytics, ReferralAnalytics, TransactionAnalytics } from './components';
 import { processTimeSeriesData, processReferralData } from './utils/dataProcessing';

@@ -1,35 +1,46 @@
 import { NextResponse } from 'next/server';
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
-import { cookies } from 'next/headers';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const cookieStore = cookies();
-    const supabase = createRouteHandlerClient({ 
-      cookies: () => cookieStore 
-    });
-    
+    const supabase = createClientComponentClient();
     const { data: { session } } = await supabase.auth.getSession();
 
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    if (!session) {
+      return NextResponse.json(
+        { status: 'error', message: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const { data: trades, error } = await supabase
-      .from('trades')
-      .select('*')
-      .eq('user_id', session.user.id)
-      .order('created_at', { ascending: false });
+    // Fetch swap transactions from Quidax
+    const response = await fetch(
+      'https://www.quidax.com/api/v1/users/me/swap_transactions',
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.QUIDAX_SECRET_KEY}`
+        }
+      }
+    );
 
-    if (error) throw error;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch trade history from Quidax');
+    }
 
-    return NextResponse.json(trades);
-  } catch (error: any) {
-    console.error('Trade history fetch error:', error);
+    const data = await response.json();
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('[API] Trade history error:', error);
     return NextResponse.json(
-      { error: error.message || 'Failed to fetch trade history' },
+      { 
+        status: 'error', 
+        message: error instanceof Error ? error.message : 'Failed to fetch trade history' 
+      },
       { status: 500 }
     );
   }

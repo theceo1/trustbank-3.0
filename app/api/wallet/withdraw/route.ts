@@ -3,6 +3,7 @@ import { QuidaxService } from '@/app/lib/services/quidax';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
 import { ProfileService } from '@/app/lib/services/profile';
+import { QuidaxClient } from '@/app/lib/services/quidax-client';
 
 export async function POST(req: Request) {
   try {
@@ -67,8 +68,9 @@ export async function POST(req: Request) {
     // Initiate the blockchain withdrawal
     try {
       // Get current wallet balance to validate withdrawal amount
-      const walletBalance = await QuidaxService.getWalletBalance(profile.quidax_id, currency.toLowerCase());
-      const availableBalance = parseFloat(walletBalance.balance);
+      const quidaxClient = QuidaxClient.getInstance();
+      const walletResponse = await quidaxClient.getWalletBalance(profile.quidax_id, currency.toLowerCase());
+      const availableBalance = parseFloat(walletResponse.data.balance);
       const withdrawalAmount = parseFloat(amount);
 
       console.log('Balance check:', {
@@ -144,38 +146,18 @@ export async function POST(req: Request) {
         );
       }
 
-      const withdrawal = await QuidaxService.createWithdrawal({
-        user_id: profile.quidax_id,
+      // Create withdrawal
+      const withdrawalResponse = await quidaxClient.createWithdrawal(profile.quidax_id, {
         currency: currency.toLowerCase(),
-        amount: amount.toString(),
-        fund_uid: address,
-        network: network,
-        transaction_note: `Withdrawal to ${address}`,
-        narration: 'External wallet withdrawal'
+        amount,
+        address,
+        network
       });
-
-      if (!withdrawal?.id) {
-        throw new Error('Failed to initiate withdrawal');
-      }
-
-      // Update transaction with withdrawal ID
-      await supabase
-        .from('transactions')
-        .update({ 
-          external_id: withdrawal.id,
-          status: withdrawal.status.toLowerCase(),
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', transaction.id);
 
       return NextResponse.json({
         status: 'success',
         message: 'Withdrawal initiated successfully',
-        data: {
-          withdrawal_id: withdrawal.id,
-          status: withdrawal.status,
-          transaction_id: transaction.id
-        }
+        data: withdrawalResponse.data
       });
 
     } catch (withdrawError: any) {

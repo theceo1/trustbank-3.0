@@ -78,8 +78,9 @@ async function swapUSDTToNGN(config: SwapConfig) {
 
     log('💰 Initial USDT Balance:', {
       balance: initialBalance.balance || '0',
-      pending: initialBalance.pending_balance || '0',
-      total: initialBalance.total_balance || '0'
+      pending_debit: initialBalance.pending_debit || '0',
+      pending_credit: initialBalance.pending_credit || '0',
+      total: initialBalance.total || '0'
     });
 
     if (Number(initialBalance.balance) < Number(config.amount)) {

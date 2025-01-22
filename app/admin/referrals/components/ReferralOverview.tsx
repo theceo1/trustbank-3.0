@@ -7,7 +7,7 @@ import {
   Users, TrendingUp, Award, DollarSign, 
   ArrowUpRight, ArrowDownRight 
 } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import {
   LineChart,
   Line,
@@ -43,19 +43,19 @@ export default function ReferralOverview() {
     const fetchStats = async () => {
       try {
         // Fetch total referrals
-        const { data: totalData } = await supabase
+        const { data: totalData } = await getSupabaseClient()
           .from('profiles')
           .select('referral_count')
           .not('referral_count', 'eq', 0);
 
         // Fetch active referrers (users with at least one referral)
-        const { data: activeData } = await supabase
+        const { data: activeData } = await getSupabaseClient()
           .from('profiles')
           .select('count')
           .gt('referral_count', 0);
 
         // Fetch total earnings
-        const { data: earningsData } = await supabase
+        const { data: earningsData } = await getSupabaseClient()
           .from('referral_transactions')
           .select('amount')
           .eq('status', 'COMPLETED');
@@ -64,7 +64,7 @@ export default function ReferralOverview() {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const { data: dailyData } = await supabase
+        const { data: dailyData } = await getSupabaseClient()
           .from('profiles')
           .select('created_at')
           .gte('created_at', thirtyDaysAgo.toISOString())

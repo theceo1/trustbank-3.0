@@ -15,7 +15,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { COLORS, processUserData } from "../utils/dataProcessing";
 import { TimeframeType } from '../hooks/useAnalyticsData';
 import { TimeSeriesData } from '../types';
@@ -37,7 +37,7 @@ const UserAnalytics: FC<UserAnalyticsProps> = ({ data, timeframe }) => {
 
   const fetchUserAnalytics = useCallback(async () => {
     try {
-      const { data: users } = await supabase
+      const { data: users } = await getSupabaseClient()
         .from('profiles')
         .select('*');
 

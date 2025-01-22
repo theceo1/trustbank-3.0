@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface ReferralProfile {
@@ -23,7 +23,7 @@ export default function ReferralsPage() {
   useEffect(() => {
     const fetchTopReferrers = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await getSupabaseClient()
           .from('profiles')
           .select('*')
           .order('referral_count', { ascending: false })

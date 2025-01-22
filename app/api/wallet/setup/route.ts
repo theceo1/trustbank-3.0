@@ -2,7 +2,7 @@
 import { NextResponse } from 'next/server';
 import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs';
 import { cookies } from 'next/headers';
-import { QuidaxService } from '@/app/lib/services/quidax';
+import { QuidaxClient } from '@/app/lib/services/quidax';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,7 +33,8 @@ export async function POST() {
 
     // If user has a Quidax ID, verify account exists
     if (profile.quidax_id) {
-      const quidaxUser = await QuidaxService.getSubAccount(profile.quidax_id);
+      const quidaxClient = QuidaxClient.getInstance();
+      const quidaxUser = await quidaxClient.getUser(profile.quidax_id);
       
       return NextResponse.json({
         status: 'success',
@@ -88,7 +89,8 @@ export async function GET() {
     }
 
     // Verify Quidax account exists
-    const quidaxUser = await QuidaxService.getSubAccount(profile.quidax_id);
+    const quidaxClient = QuidaxClient.getInstance();
+    const quidaxUser = await quidaxClient.getUser(profile.quidax_id);
 
     return NextResponse.json({
       status: 'success',

@@ -1,27 +1,24 @@
 import { NextResponse } from 'next/server';
-import { QuidaxClient } from '@/app/lib/services/quidax-client';
-import { QUIDAX_CONFIG } from '@/app/lib/config/quidax';
+import { QuidaxClient } from '@/app/lib/quidax';
 
 export async function GET(
   request: Request,
   { params }: { params: { market: string } }
 ) {
   try {
-    const market = params.market;
-    const quidaxClient = new QuidaxClient(QUIDAX_CONFIG.apiKey);
-    const orderBook = await quidaxClient.fetchOrderBook(market);
+    const quidax = new QuidaxClient();
+    const response = await quidax.get(`/markets/${params.market}/order_book?ask_limit=20&bids_limit=20`);
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch order book');
+    }
 
-    return NextResponse.json({
-      status: 'success',
-      data: orderBook
-    });
+    const data = await response.json();
+    return NextResponse.json(data);
   } catch (error) {
-    console.error('[API] Order book error:', error);
+    console.error('Error fetching order book:', error);
     return NextResponse.json(
-      { 
-        status: 'error', 
-        message: error instanceof Error ? error.message : 'Failed to fetch order book' 
-      },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }

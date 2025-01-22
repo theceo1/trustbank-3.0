@@ -13,12 +13,10 @@ interface PriceChartProps {
 }
 
 export function PriceChart({ data, height = 400, timeFrame, isLoading = false }: PriceChartProps) {
-  console.log('PriceChart props:', { dataLength: data.length, timeFrame, isLoading });
-
   if (isLoading) {
     return (
       <div className="w-full h-[400px] flex items-center justify-center bg-muted/10 rounded-lg">
-        <p>Loading chart data...</p>
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -26,8 +24,7 @@ export function PriceChart({ data, height = 400, timeFrame, isLoading = false }:
   if (!data || data.length === 0) {
     return (
       <div className="w-full h-[400px] flex items-center justify-center bg-muted/10 rounded-lg">
-        <p>No data available</p>
-        <pre className="text-xs mt-2">Debug: {JSON.stringify({ data, timeFrame }, null, 2)}</pre>
+        <p className="text-muted-foreground">No data available</p>
       </div>
     );
   }
@@ -87,13 +84,14 @@ export function PriceChart({ data, height = 400, timeFrame, isLoading = false }:
           <Tooltip
             content={({ active, payload }) => {
               if (active && payload?.[0]) {
+                const data = payload[0].payload;
                 return (
                   <div className="bg-background border rounded-lg p-2 shadow-lg">
                     <p className="text-sm font-medium">
-                      {format(new Date(payload[0].payload.timestamp), 'PPp')}
+                      {format(new Date(data.timestamp), 'PPp')}
                     </p>
                     <p className="text-sm text-green-500">
-                      ${Number(payload[0].value).toLocaleString(undefined, {
+                      ${Number(data.price).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2
                       })}

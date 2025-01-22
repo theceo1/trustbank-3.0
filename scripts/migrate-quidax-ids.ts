@@ -94,7 +94,7 @@ async function migrateQuidaxIds() {
         // Update user profile with Quidax ID
         const { error: updateError } = await supabase
           .from('user_profiles')
-          .update({ quidax_id: quidaxUser.id })
+          .update({ quidax_id: quidaxUser.data.id })
           .eq('user_id', user.user_id);
 
         if (updateError) {
@@ -102,7 +102,7 @@ async function migrateQuidaxIds() {
           continue;
         }
 
-        log(`✅ Successfully updated ${authUser.email} with Quidax ID: ${quidaxUser.id}`);
+        log(`✅ Successfully updated ${authUser.email} with Quidax ID: ${quidaxUser.data.id}`);
 
       } catch (userError) {
         log(`Failed to process user ${user.user_id}:`, userError);

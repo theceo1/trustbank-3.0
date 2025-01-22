@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Modal } from "@/app/components/ui/modal";
 import { LineChart, Check, Eye, Globe, Mail, Target } from 'lucide-react';
 import Image from 'next/image';
-import supabase from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 
 const visionPoints = [
   {
@@ -59,38 +59,19 @@ export default function VisionPage() {
     }));
   }, [controls]);
 
-  const handleSubscribe = async (e: React.FormEvent) => {
+  const handleSubscribe = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError(null);
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get('email') as string;
 
-    try {
-      // Simple insert without upsert
-      const { error } = await supabase
-        .from('newsletter_subscribers')
-        .insert([
-          {
-            email,
-            source: 'vision_page',
-            preferences: { interests: ['company_vision', 'updates'] },
-            metadata: { subscribed_from: 'vision' }
-          }
-        ]);
+    const { error } = await getSupabaseClient()
+      .from('newsletter_subscribers')
+      .insert([{ email }]);
 
-      if (error) throw error;
+    if (error) throw error;
 
-      setIsModalOpen(true);
-      setEmail('');
-    } catch (error: any) {
-      console.error('Subscription error:', error);
-      if (error.code === '23505') { // Unique violation error code
-        setError('This email is already subscribed to our newsletter.');
-      } else {
-        setError('An error occurred. Please try again.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    setIsModalOpen(true);
+    setEmail('');
   };
 
   return (

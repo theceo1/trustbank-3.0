@@ -43,13 +43,16 @@ export default function TransferPage() {
       // Fetch balances for major cryptocurrencies
       const currencies = ['usdt', 'btc', 'eth'];
       const balancePromises = currencies.map(async (currency) => {
-        const response = await QuidaxService.getWalletBalance(userProfile?.quidax_id || '', currency);
-        if (!response.ok) return null;
-        const data = await response.json();
-        return {
-          currency: currency.toUpperCase(),
-          balance: data.data[0]?.balance || '0'
-        };
+        try {
+          const response = await QuidaxService.getWallet(userProfile?.quidax_id || '', currency);
+          return {
+            currency: currency.toUpperCase(),
+            balance: response.data[0]?.balance || '0'
+          };
+        } catch (error) {
+          console.error(`Error fetching ${currency} balance:`, error);
+          return null;
+        }
       });
 
       const results = await Promise.all(balancePromises);
@@ -124,7 +127,7 @@ export default function TransferPage() {
                   
                   <div className="mb-4">
                     <label htmlFor="receiverQuidaxId" className="block text-sm font-medium text-gray-700">
-                      Receiver's Quidax ID
+                      Receiver&apos;s Quidax ID
                     </label>
                     <input
                       type="text"
@@ -132,7 +135,7 @@ export default function TransferPage() {
                       value={receiverQuidaxId}
                       onChange={(e) => setReceiverQuidaxId(e.target.value)}
                       className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                      placeholder="Enter receiver's Quidax ID"
+                      placeholder="Enter receiver&apos;s Quidax ID"
                       required
                     />
                   </div>

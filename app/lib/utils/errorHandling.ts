@@ -10,7 +10,7 @@ export function handleApiError(error: unknown) {
   if (error instanceof QuidaxError) {
     return NextResponse.json(
       { status: 'error', message: error.message, code: error.code },
-      { status: error.statusCode }
+      { status: 500 }
     );
   }
 

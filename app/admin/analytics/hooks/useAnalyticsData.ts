@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from '@tanstack/react-query';
-import supabase from '@/lib/supabase/client';
+import { getSupabaseClient } from '@/lib/supabase/client';
 import { DateRange } from 'react-day-picker';
 import { 
   processUserData, 
@@ -26,17 +26,17 @@ export function useAnalyticsData({ dateRange, timeframe }: AnalyticsDataOptions)
 
       // Fetch data from Supabase
       const [usersData, referralsData, transactionsData] = await Promise.all([
-        supabase
+        getSupabaseClient()
           .from('users')
           .select('*')
           .gte('created_at', dateRange.from.toISOString())
           .lte('created_at', dateRange.to.toISOString()),
-        supabase
+        getSupabaseClient()
           .from('referrals')
           .select('*')
           .gte('created_at', dateRange.from.toISOString())
           .lte('created_at', dateRange.to.toISOString()),
-        supabase
+        getSupabaseClient()
           .from('transactions')
           .select('*')
           .gte('created_at', dateRange.from.toISOString())

@@ -18,7 +18,8 @@ const STATUS_STEPS = {
   [TradeStatus.PENDING]: 25,
   [TradeStatus.PROCESSING]: 75,
   [TradeStatus.COMPLETED]: 100,
-  [TradeStatus.FAILED]: 100
+  [TradeStatus.FAILED]: 100,
+  [TradeStatus.CANCELLED]: 100
 };
 
 const STATUS_CONFIG = {
@@ -45,6 +46,12 @@ const STATUS_CONFIG = {
     color: "text-red-500",
     bgColor: "bg-red-500/10",
     message: "Trade failed. Please try again."
+  },
+  [TradeStatus.CANCELLED]: {
+    icon: AlertCircle,
+    color: "text-gray-500",
+    bgColor: "bg-gray-500/10",
+    message: "Trade was cancelled."
   }
 };
 
@@ -132,6 +139,7 @@ export function TradeStatusMonitor({ tradeId, initialStatus, onStatusChange }: T
           {status === TradeStatus.PROCESSING && "Processing... Please wait"}
           {status === TradeStatus.COMPLETED && "Trade completed successfully"}
           {status === TradeStatus.FAILED && "Please contact support if you need assistance"}
+          {status === TradeStatus.CANCELLED && "Trade has been cancelled"}
         </div>
       </motion.div>
     </Card>

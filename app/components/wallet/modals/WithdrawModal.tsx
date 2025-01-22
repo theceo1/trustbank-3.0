@@ -69,6 +69,18 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
     fetchRate();
   }, [currency]);
 
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setAmount("");
+      setAmountInCrypto(0);
+      setAddress("");
+      setShowPreview(false);
+      setShowLargeWithdrawalConfirm(false);
+      setExpiryTime(0);
+    }
+  }, [isOpen]);
+
   const handleAmountChange = (value: string) => {
     // Remove any non-numeric characters except decimal point
     const cleanValue = value.replace(/[^0-9.]/g, '');
@@ -117,15 +129,6 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
   const handleWithdraw = async () => {
     try {
       setIsLoading(true);
-      console.log('Withdrawal Request:', {
-        currency: currency.toUpperCase(),
-        amount: currency.toLowerCase() === 'ngn' ? amount : amountInCrypto.toString(),
-        amountInNGN: (parseFloat(amount) * rate).toString(),
-        rate,
-        balance,
-        address,
-      });
-
       const response = await fetch("/api/wallet/withdraw", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -137,11 +140,6 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
       });
 
       const data = await response.json();
-      console.log('Withdrawal Response:', {
-        status: response.status,
-        ok: response.ok,
-        data,
-      });
 
       if (!response.ok) {
         let errorMessage = data.error || "Failed to process withdrawal";
@@ -149,37 +147,17 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
         
         // Show specific error messages with proper formatting
         if (data.error === 'Insufficient balance') {
-          if (data.details) {
-            const { available, requested, currency } = data.details;
-            console.log('Balance Check:', {
-              available,
-              requested,
-              currency,
-              difference: Number(available) - Number(requested)
-            });
-            errorMessage = `Insufficient balance. Available: ${Number(available).toFixed(8)} ${currency}, Requested: ${Number(requested).toFixed(8)} ${currency}`;
-          } else {
-            errorMessage = `Insufficient balance. Available: ${balance.toFixed(8)} ${currency.toUpperCase()}, Requested: ${amount} ${currency.toUpperCase()}`;
-          }
+          errorMessage = `Insufficient balance. Available: ${formatCurrency(balance, currency)}, Requested: ${formatCurrency(amountInCrypto, currency)}`;
           toastTitle = "Insufficient Balance";
         } else if (data.error === 'Invalid wallet address') {
           errorMessage = 'Please enter a valid wallet address';
           toastTitle = "Invalid Address";
         } else if (data.error === 'Amount is below minimum withdrawal limit') {
-          interface WithdrawalDetails {
-            minimum: number;
-            currency: string;
-          }
-          const defaultDetails: WithdrawalDetails = {
-            minimum: 0.000001,
-            currency: currency.toUpperCase()
-          };
-          const details: WithdrawalDetails = data.details || defaultDetails;
-          errorMessage = `Minimum withdrawal amount is ${details.minimum} ${details.currency}`;
+          const minAmount = currency.toLowerCase() === 'btc' ? 0.0001 : 0.01;
+          errorMessage = `Minimum withdrawal amount is ${minAmount} ${currency.toUpperCase()}`;
           toastTitle = "Invalid Amount";
         }
 
-        // Show the toast before throwing the error
         toast.error(toastTitle, {
           description: errorMessage,
           duration: 5000,
@@ -188,22 +166,13 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
         throw new Error(errorMessage);
       }
 
-      // Show success toast with transaction ID
       toast.success("Withdrawal Initiated", {
-        description: `Your withdrawal of ${amountInCrypto.toFixed(8)} ${currency.toUpperCase()} has been initiated. Transaction ID: ${data.data.transaction_id}`,
-      });
-
-      // Add a second toast to inform about transaction tracking
-      toast.info("Track Your Transaction", {
-        description: "You can view the status of your withdrawal in the Transaction History.",
+        description: `Your withdrawal of ${formatCurrency(amountInCrypto, currency)} has been initiated.`,
       });
 
       onClose();
     } catch (error) {
       console.error('Withdrawal error:', error);
-      toast.error("Withdrawal Failed", {
-        description: error instanceof Error ? error.message : "Failed to process withdrawal. Please try again.",
-      });
     } finally {
       setIsLoading(false);
       setShowPreview(false);
@@ -515,7 +484,7 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
                 <Alert className="bg-green-50 border-green-200">
                   <Info className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-600">
-                    NGN withdrawal feature is coming soon! We're working hard to bring you seamless bank withdrawals.
+                    NGN withdrawal feature is coming soon! We&apos;re working hard to bring you seamless bank withdrawals.
                   </AlertDescription>
                 </Alert>
                 <div className="flex justify-end">
@@ -534,7 +503,12 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
       </Dialog>
 
       {/* Large Withdrawal Confirmation Dialog */}
-      <Dialog open={showLargeWithdrawalConfirm} onOpenChange={setShowLargeWithdrawalConfirm}>
+      <Dialog 
+        open={showLargeWithdrawalConfirm} 
+        onOpenChange={(open) => {
+          if (!open) setShowLargeWithdrawalConfirm(false);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Confirm Large Withdrawal</DialogTitle>
@@ -579,17 +553,32 @@ export default function WithdrawModal({ isOpen, currency, balance, onClose }: Wi
       </Dialog>
 
       {/* Withdrawal Preview Dialog */}
-      <WithdrawPreview
-        amount={amountInCrypto.toString()}
-        currency={currency}
-        address={address}
-        onConfirm={handleWithdraw}
-        onCancel={() => setShowPreview(false)}
-        loading={isLoading}
-        expiryTime={expiryTime}
-        rate={rate}
-        amountInCrypto={amountInCrypto}
-      />
+      <Dialog 
+        open={showPreview} 
+        onOpenChange={(open) => {
+          if (!open) setShowPreview(false);
+        }}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Confirm Withdrawal</DialogTitle>
+            <DialogDescription>
+              Please review your withdrawal details carefully before proceeding
+            </DialogDescription>
+          </DialogHeader>
+          <WithdrawPreview
+            amount={amountInCrypto.toString()}
+            currency={currency}
+            address={address}
+            onConfirm={handleWithdraw}
+            onCancel={() => setShowPreview(false)}
+            loading={isLoading}
+            expiryTime={expiryTime}
+            rate={rate}
+            amountInCrypto={amountInCrypto}
+          />
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { TradeReceipt } from "./TradeReceipt";
+import TradeReceipt from "./TradeReceipt";
 import { TradeDetails } from "@/app/types/trade";
 import { Loader2 } from "lucide-react";
 
@@ -18,7 +18,7 @@ export function TradeConfirmation({
 }: TradeConfirmationProps) {
   return (
     <div className="space-y-6">
-      <TradeReceipt trade={trade} />
+      <TradeReceipt trade={trade} onClose={onCancel} />
       
       <div className="flex gap-4">
         <Button

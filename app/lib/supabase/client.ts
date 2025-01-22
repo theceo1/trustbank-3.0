@@ -28,5 +28,9 @@ export function getSupabaseClient() {
   return browserClient;
 }
 
+// Initialize and export the admin client by default
+const supabase = getAdminClient();
+export default supabase;
+
 // Alias for backward compatibility
 export const getClient = getAdminClient; 

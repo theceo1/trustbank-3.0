@@ -63,7 +63,7 @@ export function TradeReceipt({ isOpen, onClose, trade }: TradeReceiptProps) {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-gray-500">Network Fee</span>
                 <span className="font-medium">
-                  {formatCurrency(trade.fees.processing)}
+                  {formatCurrency(trade.fees.processing || 0)}
                 </span>
               </div>
               <div className="flex justify-between items-center font-medium">

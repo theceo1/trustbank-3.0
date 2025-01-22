@@ -1,56 +1,79 @@
 import { NextResponse } from "next/server";
+import { QuidaxClient } from '@/lib/services/quidax-client';
 
 export const runtime = "edge";
 export const preferredRegion = ["iad1"];
+export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  
   try {
-    const url = new URL(request.url);
-    const market = url.searchParams.get('market')?.toLowerCase();
-    const period = url.searchParams.get('period') || '24h';
+    const market = searchParams.get('market');
+    const period = searchParams.get('period') || '24h';
 
     if (!market) {
       return NextResponse.json(
-        { success: false, message: 'Market parameter is required' },
+        { status: 'error', message: 'Market parameter is required' },
         { status: 400 }
       );
     }
 
-    // Fetch k-line data from Quidax
-    const response = await fetch(
-      `https://www.quidax.com/api/v1/markets/${market}/k?period=${period}`,
-      {
-        headers: {
-          'Accept': 'application/json',
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error('Failed to fetch market history');
-    }
-
-    const data = await response.json();
+    // Format market parameter (e.g., btcngn -> btc_ngn)
+    const formattedMarket = market.replace(/([a-z]+)([a-z]{3})$/, '$1_$2');
     
-    if (data.status !== 'success' || !data.data) {
-      throw new Error('Invalid response from Quidax API');
+    console.log('Fetching market history:', { market: formattedMarket, period });
+    
+    const quidax = QuidaxClient.getInstance();
+    const data = await quidax.getMarketHistory(formattedMarket, period);
+    
+    if (!data) {
+      console.error('No data returned from Quidax API');
+      return NextResponse.json(
+        { status: 'error', message: 'No data available' },
+        { status: 404 }
+      );
     }
-
-    // Transform the data to match our expected format
-    const transformedData = data.data.map((item: any) => ({
-      time: item[0] / 1000, // Convert timestamp to seconds
-      value: parseFloat(item[4]) // Use closing price
-    }));
 
     return NextResponse.json({
-      success: true,
-      data: transformedData
+      status: 'success',
+      data,
+      message: 'Market history fetched successfully'
     });
-  } catch (error) {
-    console.error('Failed to fetch market history:', error);
+  } catch (error: any) {
+    console.error('Error fetching market history:', {
+      error: error.message,
+      stack: error.stack,
+      market: searchParams.get('market'),
+      period: searchParams.get('period')
+    });
+    
     return NextResponse.json(
-      { success: false, message: 'Failed to fetch market history' },
+      { 
+        status: 'error', 
+        message: error.message || 'Failed to fetch market history',
+        error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      },
       { status: 500 }
     );
   }
+}
+
+function generateMockHistoryData() {
+  const data = [];
+  const now = Date.now();
+  const basePrice = 45000; // Base price for mock data
+  
+  // Generate 24 hours of data points (1 per hour)
+  for (let i = 0; i < 24; i++) {
+    const time = now - (i * 60 * 60 * 1000); // Go back i hours
+    const randomChange = (Math.random() - 0.5) * 1000; // Random price change
+    
+    data.unshift({
+      timestamp: time,
+      price: basePrice + randomChange
+    });
+  }
+  
+  return data;
 } 

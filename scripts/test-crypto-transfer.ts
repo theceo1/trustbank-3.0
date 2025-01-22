@@ -23,21 +23,35 @@ async function testCryptoTransfer(sender: TestUser, receiver: TestUser, amount: 
 
     // Step 1: Check sender's initial balance
     log('💰 Checking sender initial balance...');
-    const senderInitialBalance = await QuidaxService.getWalletBalance(sender.quidax_id, currency);
-    if (!senderInitialBalance.ok) {
-      throw new Error('Failed to fetch sender initial balance');
+    const senderInitialBalance = await QuidaxService.getWallet(sender.quidax_id, currency);
+    if (!senderInitialBalance.data[0]) {
+      throw new Error(`No ${currency} wallet found for user ${sender.quidax_id}`);
     }
-    const senderBalance = await senderInitialBalance.json();
-    log(`Sender initial balance: ${senderBalance.data[0]?.balance || '0'} ${currency.toUpperCase()}`);
+    const senderBalance = senderInitialBalance.data[0];
+    log('Sender initial balance:', {
+      currency,
+      balance: senderBalance.balance || '0',
+      locked: senderBalance.locked || '0',
+      pending_debit: senderBalance.pending_debit || '0',
+      pending_credit: senderBalance.pending_credit || '0',
+      total: senderBalance.total || '0'
+    });
 
     // Step 2: Check receiver's initial balance
     log('💰 Checking receiver initial balance...');
-    const receiverInitialBalance = await QuidaxService.getWalletBalance(receiver.quidax_id, currency);
-    if (!receiverInitialBalance.ok) {
-      throw new Error('Failed to fetch receiver initial balance');
+    const receiverInitialBalance = await QuidaxService.getWallet(receiver.quidax_id, currency);
+    if (!receiverInitialBalance.data[0]) {
+      throw new Error(`No ${currency} wallet found for user ${receiver.quidax_id}`);
     }
-    const receiverBalance = await receiverInitialBalance.json();
-    log(`Receiver initial balance: ${receiverBalance.data[0]?.balance || '0'} ${currency.toUpperCase()}`);
+    const receiverBalance = receiverInitialBalance.data[0];
+    log('Receiver initial balance:', {
+      currency,
+      balance: receiverBalance.balance || '0',
+      locked: receiverBalance.locked || '0',
+      pending_debit: receiverBalance.pending_debit || '0',
+      pending_credit: receiverBalance.pending_credit || '0',
+      total: receiverBalance.total || '0'
+    });
 
     // Step 3: Perform the transfer
     log('💸 Initiating transfer...');
@@ -48,41 +62,53 @@ async function testCryptoTransfer(sender: TestUser, receiver: TestUser, amount: 
       currency
     );
 
-    if (!transferResponse.ok) {
-      const error = await transferResponse.json();
-      throw new Error(`Transfer failed: ${error.message || 'Unknown error'}`);
+    if (transferResponse.status !== 'success') {
+      throw new Error(`Transfer failed: ${transferResponse.message || 'Unknown error'}`);
     }
 
-    const transfer = await transferResponse.json();
-    log('Transfer response:', transfer);
+    log('Transfer response:', transferResponse.data);
 
     // Step 4: Check final balances
     log('💰 Checking final balances...');
-    const senderFinalBalance = await QuidaxService.getWalletBalance(sender.quidax_id, currency);
-    const receiverFinalBalance = await QuidaxService.getWalletBalance(receiver.quidax_id, currency);
+    const senderFinalBalance = await QuidaxService.getWallet(sender.quidax_id, currency);
+    const receiverFinalBalance = await QuidaxService.getWallet(receiver.quidax_id, currency);
 
-    if (!senderFinalBalance.ok || !receiverFinalBalance.ok) {
+    if (!senderFinalBalance.data[0] || !receiverFinalBalance.data[0]) {
       throw new Error('Failed to fetch final balances');
     }
 
-    const finalSenderBalance = await senderFinalBalance.json();
-    const finalReceiverBalance = await receiverFinalBalance.json();
+    const finalSenderBalance = senderFinalBalance.data[0];
+    const finalReceiverBalance = receiverFinalBalance.data[0];
 
     log('Final balances:');
-    log(`Sender: ${finalSenderBalance.data[0]?.balance || '0'} ${currency.toUpperCase()}`);
-    log(`Receiver: ${finalReceiverBalance.data[0]?.balance || '0'} ${currency.toUpperCase()}`);
+    log('Sender:', {
+      currency,
+      balance: finalSenderBalance.balance || '0',
+      locked: finalSenderBalance.locked || '0',
+      pending_debit: finalSenderBalance.pending_debit || '0',
+      pending_credit: finalSenderBalance.pending_credit || '0',
+      total: finalSenderBalance.total || '0'
+    });
+    log('Receiver:', {
+      currency,
+      balance: finalReceiverBalance.balance || '0',
+      locked: finalReceiverBalance.locked || '0',
+      pending_debit: finalReceiverBalance.pending_debit || '0',
+      pending_credit: finalReceiverBalance.pending_credit || '0',
+      total: finalReceiverBalance.total || '0'
+    });
 
     return {
       success: true,
-      transfer: transfer.data,
+      transfer: transferResponse.data,
       balances: {
         sender: {
-          initial: senderBalance.data[0]?.balance || '0',
-          final: finalSenderBalance.data[0]?.balance || '0'
+          initial: senderBalance.balance || '0',
+          final: finalSenderBalance.balance || '0'
         },
         receiver: {
-          initial: receiverBalance.data[0]?.balance || '0',
-          final: finalReceiverBalance.data[0]?.balance || '0'
+          initial: receiverBalance.balance || '0',
+          final: finalReceiverBalance.balance || '0'
         }
       }
     };
@@ -124,4 +150,5 @@ if (require.main === module) {
     });
 }
 
-export { testCryptoTransfer, TestUser }; 
+export { testCryptoTransfer };
+export type { TestUser }; 

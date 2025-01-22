@@ -7,7 +7,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Search, UserCheck, UserX } from "lucide-react";
-import supabase from "@/lib/supabase/client";
+import { getSupabaseClient } from "@/lib/supabase/client";
 
 interface User {
   id: string;
@@ -25,12 +25,11 @@ export default function UserList() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (error) throw error;
+        const { data, error } = await getSupabaseClient().from('profiles').select('*');
+        if (error) {
+          console.error('Error fetching users:', error);
+          return;
+        }
         setUsers(data || []);
       } catch (error) {
         console.error('Error fetching users:', error);

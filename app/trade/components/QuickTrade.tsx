@@ -1,19 +1,33 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+"use client";
+
+import { useState, useEffect, forwardRef, useCallback } from "react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { ArrowDownUp, Loader2, AlertTriangle, Info } from "lucide-react";
-import { useToast } from "@/app/hooks/use-toast";
+import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/app/context/AuthContext";
 import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
-import { formatNumber } from '@/app/lib/utils';
+import { formatNumber } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { TradeDetails } from '@/app/types/trade';
+import { TradeDetails, TradeStatus } from '@/app/types/trade';
+import { PaymentMethodType } from '@/app/types/payment';
 
-const SUPPORTED_CURRENCIES = [
+interface QuickTradeProps {
+  onTradePreview?: (trade: TradeDetails) => void;
+}
+
+interface Currency {
+  value: string;
+  label: string;
+  maxLimit: number;
+  minLimit: number;
+}
+
+const SUPPORTED_CURRENCIES: Currency[] = [
   { value: 'btc', label: 'Bitcoin (BTC)', maxLimit: 1, minLimit: 0.0001 },
   { value: 'eth', label: 'Ethereum (ETH)', maxLimit: 10, minLimit: 0.001 },
   { value: 'usdt', label: 'Tether (USDT)', maxLimit: 10000, minLimit: 1 },
@@ -21,9 +35,13 @@ const SUPPORTED_CURRENCIES = [
   { value: 'ngn', label: 'Nigerian Naira (NGN)', maxLimit: 5000000, minLimit: 100 },
 ];
 
-interface QuickTradeProps {
-  onTradePreview?: (trade: TradeDetails) => void;
-}
+const QUIDAX_USER_ID = '157fa815-214e-4ecd-8a25-448fe4815ff1';
+
+// Forward ref wrapper for Select components
+const SelectWrapper = forwardRef((props: any, ref) => (
+  <Select {...props} />
+));
+SelectWrapper.displayName = 'SelectWrapper';
 
 export function QuickTrade({ onTradePreview }: QuickTradeProps) {
   const { toast } = useToast();
@@ -47,50 +65,29 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error('No authentication session available');
       
-      const profileResponse = await fetch('/api/profile', {
+      const response = await fetch(`/api/wallet/balance?currency=${fromCurrency.toLowerCase()}`, {
         headers: {
           'Authorization': `Bearer ${session.access_token}`,
           'Content-Type': 'application/json'
         }
       });
       
-      if (!profileResponse.ok) throw new Error('Failed to fetch profile');
-      
-      const profileData = await profileResponse.json();
-      if (!profileData?.quidax_user_id) {
-        const createResponse = await fetch('/api/create-quidax-account', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        });
-        
-        if (!createResponse.ok) throw new Error('Failed to create trading account');
-        const newProfile = await createResponse.json();
-        profileData.quidax_user_id = newProfile.data.quidax_user_id;
+      if (!response.ok) {
+        throw new Error('Failed to fetch wallet balance');
       }
-      
-      const walletResponse = await fetch(
-        `/api/wallet/users/${profileData.quidax_user_id}/wallets/${fromCurrency.toLowerCase()}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${session.access_token}`,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-      
-      if (walletResponse.ok) {
-        const data = await walletResponse.json();
+
+      const data = await response.json();
+      if (data.status === 'success') {
         setWalletBalance(Number(data.data.balance) || 0);
+      } else {
+        throw new Error(data.message || 'Failed to fetch wallet balance');
       }
     } catch (error) {
       console.error('Check balance error:', error);
       setWalletBalance(0);
       toast({
         title: "Error",
-        description: "Unable to fetch balance. Please try again later.",
+        description: error instanceof Error ? error.message : "Unable to fetch balance",
         variant: "destructive"
       });
     } finally {
@@ -257,9 +254,10 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
         pair: `${fromCurrency.toUpperCase()}/${toCurrency.toUpperCase()}`,
         currency: fromCurrency,
         rate: parseFloat(quote.quoted_price),
-        status: 'completed',
-        payment_method: 'swap',
+        status: TradeStatus.COMPLETED,
+        payment_method: 'wallet' as PaymentMethodType,
         created_at: new Date().toISOString(),
+        user_id: user.id,
         fees: {
           platform: parseFloat(amount) * 0.016,
           processing: parseFloat(amount) * 0.014,
@@ -337,15 +335,16 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
   );
 
   return (
-    <Card className="w-full bg-white dark:bg-gray-800 shadow-lg">
+    <Card className="w-full bg-orange-200 dark:bg-orange-900/50 border-none shadow-lg">
       <CardHeader>
-        <CardTitle className="text-xl font-bold text-gray-900 dark:text-white">Quick Trade</CardTitle>
+        <CardTitle className="text-xl font-semibold dark:text-white">Quick Trade</CardTitle>
+        <CardDescription className="dark:text-gray-300">Instantly buy or sell crypto</CardDescription>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="buy" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-gray-100 dark:bg-gray-700">
-            <TabsTrigger value="buy" className="data-[state=active]:bg-green-500 data-[state=active]:text-white">Buy</TabsTrigger>
-            <TabsTrigger value="sell" className="data-[state=active]:bg-red-500 data-[state=active]:text-white">Sell</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-2 bg-orange-300/50 dark:bg-orange-800/50">
+            <TabsTrigger value="buy" className="data-[state=active]:bg-white dark:data-[state=active]:bg-orange-950/60 dark:text-white">Buy</TabsTrigger>
+            <TabsTrigger value="sell" className="data-[state=active]:bg-white dark:data-[state=active]:bg-orange-950/60 dark:text-white">Sell</TabsTrigger>
           </TabsList>
           <TabsContent value="buy" className="space-y-4">
             <div className="space-y-4 mt-4">
@@ -354,18 +353,29 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Select value={fromCurrency} onValueChange={setFromCurrency}>
+                        <SelectWrapper value={fromCurrency} onValueChange={setFromCurrency}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select currency" />
                           </SelectTrigger>
                           <SelectContent>
                             {SUPPORTED_CURRENCIES.map((currency) => (
                               <SelectItem key={currency.value} value={currency.value}>
-                                {currency.label}
+                                <div className="flex items-center space-x-2">
+                                  <img 
+                                    src={`https://assets.coingecko.com/coins/images/1/${currency.value}.png`}
+                                    alt={currency.label}
+                                    className="w-5 h-5"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.src = '/images/crypto/generic.svg';
+                                    }}
+                                  />
+                                  <span>{currency.label}</span>
+                                </div>
                               </SelectItem>
                             ))}
                           </SelectContent>
-                        </Select>
+                        </SelectWrapper>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Select the currency you want to trade from</p>
@@ -376,11 +386,7 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                 <Button 
                   variant="outline" 
                   size="icon"
-                  onClick={() => {
-                    const temp = fromCurrency;
-                    setFromCurrency(toCurrency);
-                    setToCurrency(temp);
-                  }}
+                  onClick={switchCurrencies}
                 >
                   <ArrowDownUp className="h-4 w-4" />
                 </Button>
@@ -388,18 +394,29 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Select value={toCurrency} onValueChange={setToCurrency}>
+                        <SelectWrapper value={toCurrency} onValueChange={setToCurrency}>
                           <SelectTrigger>
                             <SelectValue placeholder="Select currency" />
                           </SelectTrigger>
                           <SelectContent>
                             {SUPPORTED_CURRENCIES.map((currency) => (
                               <SelectItem key={currency.value} value={currency.value}>
-                                {currency.label}
+                                <div className="flex items-center space-x-2">
+                                  <img 
+                                    src={`https://assets.coingecko.com/coins/images/1/${currency.value}.png`}
+                                    alt={currency.label}
+                                    className="w-5 h-5"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.src = '/images/crypto/generic.svg';
+                                    }}
+                                  />
+                                  <span>{currency.label}</span>
+                                </div>
                               </SelectItem>
                             ))}
                           </SelectContent>
-                        </Select>
+                        </SelectWrapper>
                       </TooltipTrigger>
                       <TooltipContent>
                         <p>Select the currency you want to trade to</p>
@@ -455,10 +472,14 @@ export function QuickTrade({ onTradePreview }: QuickTradeProps) {
               </Button>
             </div>
           </TabsContent>
-          {/* Similar content for sell tab */}
+          <TabsContent value="sell" className="space-y-4">
+            {/* Similar content as buy tab but with reversed currency selection */}
+            <div className="space-y-4 mt-4">
+              {/* Copy the buy tab content here and adjust for sell */}
+            </div>
+          </TabsContent>
         </Tabs>
       </CardContent>
-
       {renderLargeTradeWarning()}
     </Card>
   );

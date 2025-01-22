@@ -8,7 +8,7 @@ export class WalletService {
   static async getUserBalance(userId: string): Promise<number> {
     try {
       const walletService = getWalletService();
-      const response = await walletService.getAllWallets(userId);
+      const response = await walletService.getWallets(userId);
       
       // Sum up the balances from all wallets
       const totalBalance = response.data.reduce((sum: number, wallet: any) => {

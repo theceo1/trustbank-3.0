@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { UnifiedTradeService } from '@/app/lib/services/unifiedTrade';
 import { getCurrentUser } from '@/app/lib/session';
-import { TradeStatus } from '@/app/types/trade';
+import { TradeStatus } from '@/types/trade';
 
 export async function GET(request: Request) {
   const segments = request.url.split('/');
@@ -39,7 +39,8 @@ export async function PATCH(request: Request) {
     const body = await request.json();
     const { status, metadata } = body;
 
-    if (!Object.values(TradeStatus).includes(status)) {
+    const validStatuses = ['pending', 'processing', 'completed', 'failed', 'cancelled'] as const;
+    if (!validStatuses.includes(status as typeof validStatuses[number])) {
       return NextResponse.json({ error: 'Invalid trade status' }, { status: 400 });
     }
 

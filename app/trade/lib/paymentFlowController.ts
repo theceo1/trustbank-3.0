@@ -11,8 +11,8 @@ export class PaymentFlowController {
 
     // Map fees to expected structure
     const mappedFees = {
-      service: tradeDetails.fees.platform + tradeDetails.fees.processing,
-      network: tradeDetails.fees.processing
+      service: tradeDetails.fees.platform + (tradeDetails.fees.processing || 0),
+      network: tradeDetails.fees.processing || 0
     };
 
     // Validate trade status and details
@@ -29,7 +29,7 @@ export class PaymentFlowController {
       total: tradeDetails.total,
       fees: {
         platform: tradeDetails.fees.platform,
-        processing: tradeDetails.fees.processing,
+        processing: tradeDetails.fees.processing || 0,
         total: tradeDetails.fees.total
       },
       payment_method: tradeDetails.payment_method as PaymentMethodType

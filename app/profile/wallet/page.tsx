@@ -5,7 +5,7 @@ import { useAuth } from '@/app/context/AuthContext';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { History, Loader2, AlertCircle, LinkIcon, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft, ArrowRight } from "lucide-react";
+import { History, Loader2, AlertCircle, LinkIcon, TrendingUp, Wallet, ArrowUpRight, ArrowDownLeft, ArrowRight, ArrowDownUp } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import Link from 'next/link';
 import WalletCard from "@/components/wallet/WalletCard";
@@ -16,6 +16,10 @@ import { useSession } from "next-auth/react";
 import { toast } from "sonner";
 import WalletGrid from "@/components/wallet/WalletGrid";
 import { Header } from "@/components/Header";
+import { ErrorBoundary } from '@/app/components/error-boundary';
+import Announcements from '@/components/dashboard/Announcements';
+import { ReferralProgram } from '@/components/profile/ReferralProgram';
+import TransactionHistory from '@/components/payment/TransactionHistory';
 
 // Core currencies we want to display
 const CORE_CURRENCIES = ['ngn', 'btc', 'eth', 'usdt', 'usdc', 'bnb'];
@@ -66,8 +70,14 @@ export default function WalletPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [errorType, setErrorType] = useState<'setup' | 'kyc' | null>(null);
+  const [profile, setProfile] = useState<any>(null);
+  const [referralStats, setReferralStats] = useState({
+    totalReferrals: 0,
+    activeReferrals: 0,
+    totalEarnings: 0,
+    pendingEarnings: 0
+  });
   const [favoriteWallets, setFavoriteWallets] = useState<string[]>(() => {
-    // Initialize from localStorage if available
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('favoriteWallets');
       return saved ? JSON.parse(saved) : [];
@@ -103,7 +113,7 @@ export default function WalletPage() {
       }
       
       // Fetch wallet balances
-      const balanceResponse = await fetch('/api/wallet/balance');
+      const balanceResponse = await fetch('/api/wallet/users/me/wallets');
       if (!balanceResponse.ok) {
         const data = await balanceResponse.json();
         throw new Error(data.error || 'Unable to fetch wallet balances');
@@ -212,16 +222,59 @@ export default function WalletPage() {
     <div className="min-h-screen bg-background">
       <main className="container mx-auto px-4 py-8">
         <div className="space-y-8">
-          <Card className="bg-green-600/5">
+          {/* Portfolio Overview */}
+          <Card className="bg-green-600 dark:bg-green-600">
             <CardHeader>
-              <CardTitle>Total Portfolio Value</CardTitle>
-              <CardDescription>Your total assets across all currencies</CardDescription>
+              <CardTitle className="text-white">Total Portfolio Value</CardTitle>
+              <CardDescription className="text-white/80">Your total assets across all currencies</CardDescription>
             </CardHeader>
             <CardContent>
-              <h2 className="text-4xl font-bold">₦{formatCurrency(totalBalance, 'ngn')}</h2>
+              <h2 className="text-4xl font-bold text-white">₦{formatCurrency(totalBalance, 'ngn')}</h2>
             </CardContent>
           </Card>
 
+          {/* Quick Actions */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Quick Actions</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button className="w-full bg-green-600 hover:bg-green-700">
+                  <ArrowDownLeft className="mr-2 h-4 w-4" />
+                  Send/Receive
+                </Button>
+                <Button className="w-full bg-green-600 hover:bg-green-700">
+                  <TrendingUp className="mr-2 h-4 w-4" />
+                  Trade
+                </Button>
+                <Button className="w-full bg-green-600 hover:bg-green-700">
+                  <History className="mr-2 h-4 w-4" />
+                  Transaction History
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Referral Program */}
+            <Card className="md:col-span-2 bg-gradient-to-br from-green-600/10 to-transparent border-green-600/20">
+              <CardHeader>
+                <CardTitle className="text-lg">Referral Program</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ErrorBoundary>
+                  <ReferralProgram 
+                    referralCode={profile?.referral_code === undefined ? null : profile.referral_code}
+                    referralStats={referralStats}
+                    onGenerateCode={async () => {
+                      toast.info("Referral code generation will be available soon.");
+                    }}
+                  />
+                </ErrorBoundary>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Wallets Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {wallets.map((wallet) => (
               <WalletCard
@@ -234,6 +287,18 @@ export default function WalletPage() {
               />
             ))}
           </div>
+
+          {/* Transaction History */}
+          <Card className="bg-white dark:bg-gray-800/50 border-none shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-xl font-semibold dark:text-white">Recent Transactions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ErrorBoundary>
+                <TransactionHistory limit={5} />
+              </ErrorBoundary>
+            </CardContent>
+          </Card>
         </div>
       </main>
     </div>

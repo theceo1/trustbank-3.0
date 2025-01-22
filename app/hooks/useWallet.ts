@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/app/context/AuthContext';
 import supabase from '@/lib/supabase/client';
 import { RealtimeChannel } from '@supabase/supabase-js';
+import { REALTIME_LISTEN_TYPES } from '@supabase/realtime-js';
 
 export interface Wallet {
   id: string;
@@ -72,16 +73,16 @@ export function useWallet() {
       channel = supabase
         .channel(`wallets:${user.id}`)
         .on(
-          'postgres_changes',
+          REALTIME_LISTEN_TYPES.POSTGRES_CHANGES,
           {
             event: '*',
             schema: 'public',
             table: 'wallets',
             filter: `user_id=eq.${user.id}`
           },
-          (payload: { new: Wallet; old: Wallet; eventType: 'INSERT' | 'UPDATE' | 'DELETE' }) => {
-            console.log('Wallet update:', payload);
-            setWallet(payload.new);
+          (payload) => {
+            console.log('Change received!', payload);
+            fetchWallet();
           }
         )
         .subscribe();

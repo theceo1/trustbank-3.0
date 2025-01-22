@@ -34,9 +34,11 @@ export const formatCurrency = (
     });
   };
   
-  export function formatCryptoAmount(amount: string | number | undefined | null, decimals: number = 8): string {
-    if (amount === undefined || amount === null) return '0';
+  export function formatCryptoAmount(amount: string | number, decimals: number = 8): string {
     const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount;
-    if (isNaN(numAmount)) return '0';
-    return numAmount.toFixed(decimals).replace(/\.?0+$/, '');
+    if (isNaN(numAmount) || numAmount === null) return '0';
+    return numAmount.toLocaleString(undefined, {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
   }

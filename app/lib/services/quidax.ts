@@ -61,4 +61,63 @@ export class QuidaxService {
   static async confirmSwap(params: any) {
     return QuidaxSwapService.confirmSwap(params.userId, params.quotationId);
   }
+
+  static async transfer(senderId: string, receiverId: string, amount: string, currency: string) {
+    const client = new QuidaxClient(process.env.QUIDAX_SECRET_KEY || '');
+    return client.transfer(senderId, receiverId, currency, amount);
+  }
+
+  static verifyWebhookSignature(webhook: any, signature?: string): boolean {
+    if (!signature) {
+      // If no signature is provided, we'll skip verification in development
+      if (process.env.NODE_ENV === 'development') {
+        return true;
+      }
+      return false;
+    }
+
+    try {
+      // TODO: Implement actual signature verification logic using the Quidax webhook secret
+      // This should use crypto to verify HMAC signature
+      // For now, we'll return true in development and require proper implementation in production
+      if (process.env.NODE_ENV === 'development') {
+        return true;
+      }
+      
+      // In production, we should verify the signature
+      const webhookSecret = process.env.QUIDAX_WEBHOOK_SECRET;
+      if (!webhookSecret) {
+        console.error('QUIDAX_WEBHOOK_SECRET is not configured');
+        return false;
+      }
+
+      // TODO: Implement proper signature verification
+      // const hmac = crypto.createHmac('sha256', webhookSecret);
+      // const calculatedSignature = hmac.update(JSON.stringify(webhook)).digest('hex');
+      // return calculatedSignature === signature;
+
+      return true; // Temporary return until proper verification is implemented
+    } catch (error) {
+      console.error('Error verifying webhook signature:', error);
+      return false;
+    }
+  }
+
+  static mapQuidaxStatus(status: string): string {
+    switch (status.toLowerCase()) {
+      case 'done':
+      case 'completed':
+        return 'completed';
+      case 'failed':
+      case 'rejected':
+        return 'failed';
+      case 'processing':
+      case 'confirming':
+        return 'processing';
+      case 'cancelled':
+        return 'cancelled';
+      default:
+        return 'pending';
+    }
+  }
 } 
