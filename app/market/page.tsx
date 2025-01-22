@@ -105,11 +105,11 @@ export default function MarketPage() {
   }, [prices, selectedCrypto]);
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-12 mt-16">
+    <div className="container mx-auto px-4 py-4 space-y-12">
       <section>
-        <div className="mb-6">
-          <h2 className="text-2xl font-bold mb-2">Market Overview</h2>
-          <p className="text-muted-foreground">Real-time cryptocurrency market statistics and trends</p>
+        <div className="mb-2">
+          <h2 className="text-lg font-bold mb-2">Market Overview</h2>
+          <p className="text-muted-foreground text-sm italic">Real-time cryptocurrency market statistics and trends</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <MarketStatCard
