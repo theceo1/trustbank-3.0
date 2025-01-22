@@ -146,35 +146,40 @@ export function Header() {
 
         {/* Mobile Navigation */}
         {isMenuOpen && (
-          <div className="fixed inset-0 z-50 md:hidden">
-            <div className="fixed inset-0 bg-black/60" onClick={() => setIsMenuOpen(false)} />
-            <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-white dark:bg-gray-950">
+          <div className="fixed inset-0 z-50 md:hidden animate-in fade-in duration-300">
+            <div 
+              className="fixed inset-0 bg-black/60 animate-in fade-in duration-200" 
+              onClick={() => setIsMenuOpen(false)} 
+            />
+            <div className="fixed inset-y-0 right-0 w-full max-w-sm bg-green-600 dark:bg-green-700 shadow-xl animate-in slide-in-from-right duration-300">
               {/* Menu Header */}
-              <div className="border-b border-gray-200 dark:border-gray-800">
+              <div className="border-b border-green-500 dark:border-green-600">
                 <div className="flex items-center justify-between p-4">
-                  <span className="text-lg font-semibold">Menu</span>
+                  <span className="text-lg font-semibold text-white">Menu</span>
                   <button
                     onClick={() => setIsMenuOpen(false)}
-                    className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="p-2 rounded-lg hover:bg-white/10 text-white"
                   >
                     <X className="h-6 w-6" />
                   </button>
                 </div>
                 {user && (
                   <div className="px-4 pb-4">
-                    <p className="text-sm text-gray-500">Welcome back</p>
-                    <p className="font-medium">{user.email?.split('@')[0]}</p>
+                    <p className="text-sm text-green-100">Hi 👋</p>
+                    <p className="font-medium text-white">
+                      {user.user_metadata?.full_name?.split(' ')[0] || 'User'}
+                    </p>
                   </div>
                 )}
               </div>
 
               {/* Menu Items */}
-              <div className="px-2 py-4">
+              <div className="px-2 py-4 overflow-y-auto bg-white dark:bg-gray-900">
                 {user ? (
                   <div className="space-y-1">
                     <Link
                       href="/dashboard"
-                      className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <LayoutDashboard className="h-5 w-5 mr-3" />
@@ -182,7 +187,7 @@ export function Header() {
                     </Link>
                     <Link
                       href="/market"
-                      className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <LineChart className="h-5 w-5 mr-3" />
@@ -190,7 +195,7 @@ export function Header() {
                     </Link>
                     <Link
                       href="/trade"
-                      className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <ArrowLeftRight className="h-5 w-5 mr-3" />
@@ -198,7 +203,7 @@ export function Header() {
                     </Link>
                     <Link
                       href="/calculator"
-                      className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <Calculator className="h-5 w-5 mr-3" />
@@ -209,7 +214,7 @@ export function Header() {
                   <div className="space-y-1">
                     <Link
                       href="/market"
-                      className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <LineChart className="h-5 w-5 mr-3" />
@@ -217,7 +222,7 @@ export function Header() {
                     </Link>
                     <Link
                       href="/calculator"
-                      className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                      className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                       onClick={() => setIsMenuOpen(false)}
                     >
                       <Calculator className="h-5 w-5 mr-3" />
@@ -231,7 +236,7 @@ export function Header() {
                 <div className="space-y-1">
                   <Link
                     href="/about/blog"
-                    className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <Newspaper className="h-5 w-5 mr-3" />
@@ -239,7 +244,7 @@ export function Header() {
                   </Link>
                   <Link
                     href="/about/mission"
-                    className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <Target className="h-5 w-5 mr-3" />
@@ -247,7 +252,7 @@ export function Header() {
                   </Link>
                   <Link
                     href="/about/vision"
-                    className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <Eye className="h-5 w-5 mr-3" />
@@ -255,7 +260,7 @@ export function Header() {
                   </Link>
                   <Link
                     href="/about/contact"
-                    className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                     onClick={() => setIsMenuOpen(false)}
                   >
                     <MessageSquare className="h-5 w-5 mr-3" />
@@ -269,7 +274,7 @@ export function Header() {
                     <div className="space-y-1">
                       <Link
                         href="/profile"
-                        className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                        className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         <UserIcon className="h-5 w-5 mr-3" />
@@ -277,7 +282,7 @@ export function Header() {
                       </Link>
                       <Link
                         href="/profile/verification"
-                        className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                        className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         <ShieldCheck className="h-5 w-5 mr-3" />
@@ -285,7 +290,7 @@ export function Header() {
                       </Link>
                       <Link
                         href="/profile/wallet"
-                        className="flex items-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                        className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 hover:text-green-600 dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-all duration-200"
                         onClick={() => setIsMenuOpen(false)}
                       >
                         <Wallet className="h-5 w-5 mr-3" />
@@ -307,7 +312,7 @@ export function Header() {
               </div>
 
               {/* Bottom Section */}
-              <div className="absolute bottom-0 left-0 right-0 border-t border-gray-200 dark:border-gray-800 p-4">
+              <div className="absolute bottom-0 left-0 right-0 border-t border-green-500 dark:border-green-600 p-4 bg-white dark:bg-gray-900">
                 {!user ? (
                   <div className="space-y-2">
                     <Button variant="outline" className="w-full" asChild>
@@ -327,11 +332,13 @@ export function Header() {
                       setTheme(theme === "dark" ? "light" : "dark");
                       setIsMenuOpen(false);
                     }}
-                    className="flex items-center justify-center w-full p-3 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800"
+                    className="flex items-center w-full p-3 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 transition-all duration-200"
                   >
-                    <Sun className="h-5 w-5 mr-3 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                    <Moon className="absolute h-5 w-5 mr-3 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                    <span>Toggle Theme</span>
+                    <div className="relative w-5 h-5 mr-3">
+                      <Sun className="absolute inset-0 rotate-0 scale-100 transition-all duration-200 dark:-rotate-90 dark:scale-0" />
+                      <Moon className="absolute inset-0 rotate-90 scale-0 transition-all duration-200 dark:rotate-0 dark:scale-100" />
+                    </div>
+                    <span className="text-gray-900 dark:text-gray-100">Toggle Theme</span>
                   </button>
                 )}
               </div>
